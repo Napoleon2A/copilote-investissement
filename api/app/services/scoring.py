@@ -106,7 +106,7 @@ def score_quality(fundamentals: dict) -> dict:
     return {"score": round(_clamp(score), 1), "reasons": reasons}
 
 
-def score_valuation(fundamentals: dict) -> dict:
+def score_valuation(fundamentals: dict, price_changes: Optional[dict] = None) -> dict:
     """
     Score valorisation — attractivité du prix actuel.
 
@@ -114,7 +114,7 @@ def score_valuation(fundamentals: dict) -> dict:
       - P/E trailing (trailingPE)
       - EV/EBITDA
       - PEG ratio
-      - Prix vs cible analystes
+      - Prix vs cible analystes (nécessite le prix courant depuis price_changes)
 
     Attention : la valorisation est contextuelle (secteur, cycle de taux).
     Ce score est une heuristique approximative, pas une vérité.
@@ -166,17 +166,18 @@ def score_valuation(fundamentals: dict) -> dict:
             score -= 0.5
             reasons.append(f"PEG élevé : {peg:.2f}")
 
-    # Distance vs cible analystes
+    # Distance vs cible analystes — utilise le prix depuis price_changes
     target = fundamentals.get("target_price")
-    current_from_info = fundamentals.get("current_price")
-    if target and current_from_info and current_from_info > 0:
-        upside = (target - current_from_info) / current_from_info
+    current_price = (price_changes or {}).get("current_price")
+    analyst_count = fundamentals.get("analyst_count")
+    if target and current_price and current_price > 0 and analyst_count:
+        upside = (target - current_price) / current_price
         if upside > 0.20:
             score += 1.0
-            reasons.append(f"Upside analystes : +{upside:.0%} vs cible")
+            reasons.append(f"Upside analystes : +{upside:.0%} vs cible ({analyst_count} analystes)")
         elif upside < -0.10:
             score -= 0.5
-            reasons.append(f"Downside analystes : {upside:.0%} vs cible")
+            reasons.append(f"Downside analystes : {upside:.0%} vs cible ({analyst_count} analystes)")
 
     if not reasons:
         reasons.append("Données de valorisation insuffisantes")
@@ -354,6 +355,20 @@ def score_risk(fundamentals: dict, price_changes: dict) -> dict:
         score -= 1.5
         reasons.append("Entreprise en perte — risque de dilution ou de refinancement")
 
+    # Taille de l'entreprise (small caps = moins de liquidité, plus de volatilité)
+    # Note : score risque élevé = FAIBLE risque, donc small cap = score réduit
+    market_cap = fundamentals.get("market_cap")
+    if market_cap is not None:
+        if market_cap < 300_000_000:       # < 300M = micro cap
+            score -= 1.5
+            reasons.append(f"Micro-cap ({market_cap/1e6:.0f}M) — liquidité et risque opérationnel élevés")
+        elif market_cap < 2_000_000_000:   # < 2B = small cap
+            score -= 0.5
+            reasons.append(f"Small-cap ({market_cap/1e6:.0f}M) — volatilité plus élevée")
+        elif market_cap > 50_000_000_000:  # > 50B = large cap
+            score += 0.5
+            reasons.append(f"Large-cap ({market_cap/1e9:.0f}B) — stabilité et liquidité élevées")
+
     if not reasons:
         reasons.append("Données de risque insuffisantes")
 
@@ -366,7 +381,7 @@ def compute_all_scores(fundamentals: dict, price_changes: dict) -> dict:
     Retourne un dict avec chaque score, ses raisons, et le composite.
     """
     quality = score_quality(fundamentals)
-    valuation = score_valuation(fundamentals)
+    valuation = score_valuation(fundamentals, price_changes)
     growth = score_growth(fundamentals)
     momentum = score_momentum(price_changes)
     risk = score_risk(fundamentals, price_changes)
