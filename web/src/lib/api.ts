@@ -86,6 +86,9 @@ export const addTransaction = (data: TransactionCreate) =>
     body: JSON.stringify(data),
   });
 
+export const deletePosition = (ticker: string) =>
+  request(`/portfolio/positions/${ticker}`, { method: "DELETE" });
+
 export const saveThesis = (ticker: string, data: ThesisCreate) =>
   request(`/portfolio/positions/${ticker}/thesis`, {
     method: "POST",

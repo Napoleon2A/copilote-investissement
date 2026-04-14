@@ -295,6 +295,42 @@ async def get_thesis(ticker: str, session: AsyncSession = Depends(get_session)):
     return thesis
 
 
+@router.delete("/positions/{ticker}")
+async def delete_position(ticker: str, session: AsyncSession = Depends(get_session)):
+    """
+    Supprime une position et son historique lié (thèse).
+    Utiliser pour corriger une erreur de saisie ou clôturer manuellement.
+    """
+    ticker = ticker.upper()
+    portfolio = await _get_or_create_portfolio(session)
+
+    company_result = await session.exec(select(Company).where(Company.ticker == ticker))
+    company = company_result.first()
+    if not company:
+        raise HTTPException(404, f"Entreprise '{ticker}' introuvable")
+
+    pos_result = await session.exec(
+        select(Position)
+        .where(Position.portfolio_id == portfolio.id)
+        .where(Position.company_id == company.id)
+    )
+    position = pos_result.first()
+    if not position:
+        raise HTTPException(404, f"Pas de position sur '{ticker}'")
+
+    # Supprimer la thèse liée si elle existe
+    thesis_result = await session.exec(
+        select(InvestmentThesis).where(InvestmentThesis.position_id == position.id)
+    )
+    thesis = thesis_result.first()
+    if thesis:
+        await session.delete(thesis)
+
+    await session.delete(position)
+    await session.commit()
+    return {"status": "ok", "message": f"Position {ticker} supprimée"}
+
+
 @router.get("/transactions")
 async def get_transactions(session: AsyncSession = Depends(get_session)):
     """Historique complet des transactions."""

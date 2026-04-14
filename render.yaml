@@ -1,0 +1,23 @@
+## render.yaml — Configuration déploiement Render
+## Pour déployer : https://dashboard.render.com → New → Blueprint → pointer ce repo
+
+services:
+  # ── Backend FastAPI ──────────────────────────────────────────
+  - type: web
+    name: copilote-investissement-api
+    runtime: python
+    rootDir: api
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./trading.db
+      - key: API_DEBUG
+        value: "false"
+      - key: APP_NAME
+        value: "Copilote Investissement API"
+    # Disk persistant pour la base SQLite
+    disk:
+      name: trading-db
+      mountPath: /opt/render/project/src/api
+      sizeGB: 1

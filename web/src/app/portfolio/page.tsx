@@ -5,7 +5,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { getPositions, addTransaction } from "@/lib/api";
+import { getPositions, addTransaction, deletePosition } from "@/lib/api";
 import type { PortfolioData } from "@/lib/api";
 import { ChangeCell } from "@/components/ui/ChangeCell";
 
@@ -22,6 +22,20 @@ export default function PortfolioPage() {
     note: "",
   });
   const [formError, setFormError] = useState("");
+  const [deletingTicker, setDeletingTicker] = useState<string | null>(null);
+
+  const handleDelete = async (ticker: string) => {
+    if (!confirm(`Supprimer la position ${ticker} ? Cette action est irréversible.`)) return;
+    setDeletingTicker(ticker);
+    try {
+      await deletePosition(ticker);
+      loadData();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Erreur lors de la suppression");
+    } finally {
+      setDeletingTicker(null);
+    }
+  };
 
   const loadData = () => {
     setLoading(true);
@@ -184,7 +198,7 @@ export default function PortfolioPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#2a2d3a] bg-[#1a1d27]">
-                {["Ticker", "Qté", "P. moyen", "Cours", "Valeur", "P&L", "P&L %", "Auj."].map((h) => (
+                {["Ticker", "Qté", "P. moyen", "Cours", "Valeur", "P&L", "P&L %", "Auj.", ""].map((h) => (
                   <th key={h} className="px-4 py-2 text-left text-xs font-medium text-slate-600 uppercase tracking-wide">
                     {h}
                   </th>
@@ -222,6 +236,16 @@ export default function PortfolioPage() {
                   </td>
                   <td className="px-4 py-2.5">
                     <ChangeCell value={pos.change_1d} />
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <button
+                      onClick={() => handleDelete(pos.ticker)}
+                      disabled={deletingTicker === pos.ticker}
+                      className="text-xs text-slate-600 hover:text-red-400 transition-colors disabled:opacity-40"
+                      title="Supprimer la position"
+                    >
+                      {deletingTicker === pos.ticker ? "…" : "✕"}
+                    </button>
                   </td>
                 </tr>
               ))}
