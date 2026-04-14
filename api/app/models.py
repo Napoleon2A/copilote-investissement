@@ -1,0 +1,202 @@
+"""
+Modèle de données — V1
+
+Entités : Company, Watchlist, WatchlistItem, Portfolio, Position, Transaction,
+          InvestmentThesis, UserIdea, IdeaRevision, PriceSnapshot, Alert
+"""
+from datetime import datetime, date
+from typing import Optional
+from sqlmodel import SQLModel, Field, Relationship
+
+
+# ─── Entreprise ───────────────────────────────────────────────────────────────
+
+class Company(SQLModel, table=True):
+    """Représente une entreprise cotée en bourse."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    ticker: str = Field(index=True, unique=True)       # ex: "AAPL"
+    name: str                                           # ex: "Apple Inc."
+    exchange: Optional[str] = None                     # "NASDAQ", "NYSE", "EPA"
+    sector: Optional[str] = None
+    industry: Optional[str] = None
+    country: Optional[str] = None
+    currency: Optional[str] = None
+    market_cap: Optional[float] = None
+    website: Optional[str] = None
+    description: Optional[str] = None
+    last_updated: Optional[datetime] = None
+
+    watchlist_items: list["WatchlistItem"] = Relationship(back_populates="company")
+    positions: list["Position"] = Relationship(back_populates="company")
+    user_ideas: list["UserIdea"] = Relationship(back_populates="company")
+    price_snapshots: list["PriceSnapshot"] = Relationship(back_populates="company")
+    alerts: list["Alert"] = Relationship(back_populates="company")
+
+
+# ─── Watchlist ────────────────────────────────────────────────────────────────
+
+class Watchlist(SQLModel, table=True):
+    """Liste de suivi nommée (ex: 'Tech US', 'Lignes détenues')."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    description: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    items: list["WatchlistItem"] = Relationship(back_populates="watchlist")
+
+
+class WatchlistItem(SQLModel, table=True):
+    """Lien entre une watchlist et une entreprise."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    watchlist_id: int = Field(foreign_key="watchlist.id")
+    company_id: int = Field(foreign_key="company.id")
+    note: Optional[str] = None
+    added_at: datetime = Field(default_factory=datetime.utcnow)
+
+    watchlist: Optional[Watchlist] = Relationship(back_populates="items")
+    company: Optional[Company] = Relationship(back_populates="watchlist_items")
+
+
+# ─── Portefeuille ─────────────────────────────────────────────────────────────
+
+class Portfolio(SQLModel, table=True):
+    """Portefeuille réel ou fictif."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(default="Mon portefeuille")
+    currency: str = Field(default="EUR")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    positions: list["Position"] = Relationship(back_populates="portfolio")
+    transactions: list["Transaction"] = Relationship(back_populates="portfolio")
+
+
+class Position(SQLModel, table=True):
+    """Position ouverte dans un portefeuille."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    portfolio_id: int = Field(foreign_key="portfolio.id")
+    company_id: int = Field(foreign_key="company.id")
+    quantity: float
+    avg_cost: float          # Prix moyen d'achat
+    currency: str = "EUR"
+    opened_at: datetime = Field(default_factory=datetime.utcnow)
+
+    portfolio: Optional[Portfolio] = Relationship(back_populates="positions")
+    company: Optional[Company] = Relationship(back_populates="positions")
+    thesis: Optional["InvestmentThesis"] = Relationship(back_populates="position")
+
+
+class Transaction(SQLModel, table=True):
+    """Historique des achats et ventes."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    portfolio_id: int = Field(foreign_key="portfolio.id")
+    company_id: int = Field(foreign_key="company.id")
+    type: str                # "buy" | "sell"
+    quantity: float
+    price: float
+    fees: float = 0.0
+    date: datetime = Field(default_factory=datetime.utcnow)
+    note: Optional[str] = None
+
+    portfolio: Optional[Portfolio] = Relationship(back_populates="transactions")
+
+
+# ─── Thèse d'investissement ───────────────────────────────────────────────────
+
+class InvestmentThesis(SQLModel, table=True):
+    """Thèse liée à une position — écrite avant ou après achat."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    position_id: int = Field(foreign_key="position.id", unique=True)
+    thesis: str
+    catalysts: Optional[str] = None
+    risks: Optional[str] = None
+    horizon: Optional[str] = None    # "court" | "moyen" | "long"
+    conviction: int = 3              # 1 à 5
+    invalidation_conditions: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+
+    position: Optional[Position] = Relationship(back_populates="thesis")
+
+
+# ─── Idées soumises par l'utilisateur ────────────────────────────────────────
+
+class UserIdea(SQLModel, table=True):
+    """
+    Idée soumise par l'utilisateur.
+    Le système produit un avis, le date, le révise si les faits changent.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    company_id: int = Field(foreign_key="company.id")
+    user_thesis: Optional[str] = None       # Ce que l'utilisateur pense
+    system_opinion: Optional[str] = None    # Avis généré par le système
+    pro_args: Optional[str] = None
+    con_args: Optional[str] = None
+    validation_conditions: Optional[str] = None
+    conviction: Optional[str] = None        # "faible" | "moyen" | "élevé"
+    action: Optional[str] = None            # "surveiller" | "initier" | "éviter" etc.
+    horizon: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+
+    company: Optional[Company] = Relationship(back_populates="user_ideas")
+    revisions: list["IdeaRevision"] = Relationship(back_populates="idea")
+
+
+class IdeaRevision(SQLModel, table=True):
+    """Historique des révisions d'avis — traçabilité intellectuelle."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    idea_id: int = Field(foreign_key="useridea.id")
+    previous_opinion: str
+    new_opinion: str
+    what_changed: str           # Ce qui a changé dans les faits
+    revised_at: datetime = Field(default_factory=datetime.utcnow)
+
+    idea: Optional[UserIdea] = Relationship(back_populates="revisions")
+
+
+# ─── Snapshot de prix ─────────────────────────────────────────────────────────
+
+class PriceSnapshot(SQLModel, table=True):
+    """
+    Snapshot journalier de prix.
+    Stocke aussi les métriques fondamentales clés pour éviter de recalculer.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    company_id: int = Field(foreign_key="company.id")
+    date: date
+    price: float
+    open: Optional[float] = None
+    high: Optional[float] = None
+    low: Optional[float] = None
+    volume: Optional[float] = None
+    change_pct: Optional[float] = None      # % variation vs veille
+    change_5d: Optional[float] = None
+    change_1m: Optional[float] = None
+    change_ytd: Optional[float] = None
+
+    # Fondamentaux clés au moment du snapshot
+    pe_ratio: Optional[float] = None
+    ev_ebitda: Optional[float] = None
+    fcf_yield: Optional[float] = None
+    market_cap: Optional[float] = None
+
+    fetched_at: datetime = Field(default_factory=datetime.utcnow)
+
+    company: Optional[Company] = Relationship(back_populates="price_snapshots")
+
+
+# ─── Alertes ──────────────────────────────────────────────────────────────────
+
+class Alert(SQLModel, table=True):
+    """Alerte sur un ticker — déclenchée par condition."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    company_id: int = Field(foreign_key="company.id")
+    type: str           # "price_above" | "price_below" | "change_pct" | "earnings"
+    condition_value: Optional[float] = None
+    message: Optional[str] = None
+    active: bool = True
+    triggered: bool = False
+    triggered_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    company: Optional[Company] = Relationship(back_populates="alerts")

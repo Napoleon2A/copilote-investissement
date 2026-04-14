@@ -1,0 +1,36 @@
+version: "3.9"
+
+# Stack simplifiée : API Python + Frontend Next.js
+# La DB est SQLite (fichier local dans api/) — zéro config nécessaire.
+
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: trading_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:///./trading.db
+      API_DEBUG: "true"
+    volumes:
+      - ./api:/app   # Le code est monté en direct → rechargement auto
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: trading_web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      - api
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+      - /app/.next
