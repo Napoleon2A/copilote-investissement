@@ -242,34 +242,33 @@ def generate_daily_brief(
                 items.append(item)
 
     # ── Opportunités détectées par le scanner ────────────────────────────────
-    # Le scanner analyse ~50 tickers et remonte les meilleures opportunités.
-    # On exclut les tickers déjà en portefeuille pour éviter les doublons.
+    # Toujours inclure au moins 2 opportunités système dans le brief.
+    # On exclut les tickers déjà connus de l'utilisateur.
     all_known = set(portfolio_tickers + watchlist_tickers + idea_tickers)
-    scan_slots = max(0, max_items - len(items))  # combien de slots il reste
-    if scan_slots > 0:
-        try:
-            opportunities = run_scan(
-                exclude_tickers=list(all_known),
-                max_results=min(3, scan_slots),  # max 3 opportunités système
-            )
-            for opp in opportunities:
-                opp["type"] = "opportunity"
-                opp["context"] = "system_scan"
-                opp["signals"] = opp.get("highlights", [])
-                opp["why_now"] = opp["highlights"][0] if opp.get("highlights") else ""
-                opp["priority"] = 0  # Priorité inférieure au portefeuille
-                opp["position"] = None
-                opp["generated_at"] = datetime.utcnow().isoformat()
-                items.append(opp)
-        except Exception as e:
-            logger.error(f"Erreur scanner: {e}")
+    try:
+        opportunities = run_scan(
+            exclude_tickers=list(all_known),
+            max_results=3,  # max 3 opportunités système
+        )
+        for opp in opportunities:
+            opp["type"] = "opportunity"
+            opp["context"] = "system_scan"
+            opp["signals"] = opp.get("highlights", [])
+            opp["why_now"] = opp["highlights"][0] if opp.get("highlights") else ""
+            opp["priority"] = 0  # Priorité inférieure au portefeuille
+            opp["position"] = None
+            opp["generated_at"] = datetime.utcnow().isoformat()
+            items.append(opp)
+    except Exception as e:
+        logger.error(f"Erreur scanner: {e}")
 
     # Trier par priorité décroissante et limiter
     items.sort(key=lambda x: x.get("priority", 0), reverse=True)
     top_items = items[:max_items]
 
-    # Résumé de marché minimal (indices via yfinance)
+    # Résumé de marché + contexte macro
     market_summary = _get_market_summary()
+    market_context = _get_market_context(market_summary)
 
     return {
         "date": datetime.utcnow().date().isoformat(),
@@ -277,11 +276,73 @@ def generate_daily_brief(
         "item_count": len(top_items),
         "items": top_items,
         "market_summary": market_summary,
+        "market_context": market_context,
         "disclaimer": (
             "Ce brief est généré automatiquement à titre informatif. "
             "Il ne constitue pas un conseil en investissement. "
             "Vérifiez toujours les données avant d'agir."
         ),
+    }
+
+
+def _get_market_context(market_summary: dict) -> dict:
+    """
+    Génère un contexte de marché lisible basé sur les indices.
+    Retourne un verdict court + le régime de risque détecté.
+    """
+    vix_data = market_summary.get("VIX", {})
+    sp500_data = market_summary.get("SP500", {})
+    vix = vix_data.get("price")
+    sp500_1d = sp500_data.get("change_1d")
+
+    # Régime de risque
+    if vix:
+        if vix > 35:
+            regime = "risk-off"
+            regime_label = "Peur élevée"
+            regime_advice = "Volatilité extrême — privilégier la patience et les achats progressifs"
+        elif vix > 25:
+            regime = "vigilance"
+            regime_label = "Vigilance"
+            regime_advice = "Volatilité élevée — positions de taille réduite recommandées"
+        elif vix < 14:
+            regime = "risk-on"
+            regime_label = "Marché complaisant"
+            regime_advice = "Faible peur — surveiller les retournements potentiels"
+        elif vix < 20:
+            regime = "calme"
+            regime_label = "Conditions favorables"
+            regime_advice = "Bonne visibilité — conditions normales pour agir"
+        else:
+            regime = "neutral"
+            regime_label = "Neutre"
+            regime_advice = "Conditions de marché normales"
+    else:
+        regime = "inconnu"
+        regime_label = "—"
+        regime_advice = ""
+
+    # Verdict court sur la séance
+    if sp500_1d is not None:
+        if sp500_1d > 1.5:
+            session_mood = f"Forte séance haussière : S&P 500 {sp500_1d:+.2f}%"
+        elif sp500_1d > 0.3:
+            session_mood = f"Séance positive : S&P 500 {sp500_1d:+.2f}%"
+        elif sp500_1d < -1.5:
+            session_mood = f"Forte pression baissière : S&P 500 {sp500_1d:+.2f}%"
+        elif sp500_1d < -0.3:
+            session_mood = f"Séance sous pression : S&P 500 {sp500_1d:+.2f}%"
+        else:
+            session_mood = f"Séance stable : S&P 500 {sp500_1d:+.2f}%"
+    else:
+        session_mood = "Données de séance non disponibles"
+
+    return {
+        "regime": regime,
+        "regime_label": regime_label,
+        "regime_advice": regime_advice,
+        "session_mood": session_mood,
+        "vix": vix,
     }
 
 

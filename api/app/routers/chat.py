@@ -87,6 +87,61 @@ CONCEPTS = {
         "mais aussi la plus sensible aux hypothèses. "
         "Une petite erreur sur le taux de croissance change massivement la valorisation."
     ),
+    "fcf": (
+        "Le FCF (Free Cash Flow) est le cash réellement généré après les investissements. "
+        "FCF = Cash opérationnel - Capex. "
+        "C'est l'un des meilleurs indicateurs de la santé réelle d'une entreprise. "
+        "FCF yield > 5% = très attractif. Une entreprise avec FCF négatif brûle du cash "
+        "et dépend des marchés pour se financer."
+    ),
+    "tarif": (
+        "Les tarifs douaniers (droits de douane) taxent les importations. "
+        "Impact sur les marchés : hausse des coûts pour les entreprises importatrices, "
+        "pression inflationniste, risque de guerre commerciale. "
+        "Secteurs exposés : tech hardware, automobile, retail, agriculture. "
+        "Secteurs potentiellement bénéficiaires : industriels domestiques, défense."
+    ),
+    "récession": (
+        "Une récession est définie techniquement par 2 trimestres consécutifs de PIB négatif. "
+        "Impact marché : repli des cycliques (banques, industriels), surperformance des défensifs "
+        "(santé, utilities, consommation de base). "
+        "Le VIX monte, les taux baissent généralement, le dollar peut se renforcer. "
+        "Historiquement, les récessions créent des opportunités d'achat si on a du cash disponible."
+    ),
+    "fed": (
+        "La Fed (Federal Reserve) est la banque centrale américaine. "
+        "Elle fixe les taux directeurs (Fed Funds Rate) qui influencent tout le marché. "
+        "Taux hausse → coût de financement plus cher → pression sur les actions de croissance et l'immobilier. "
+        "Taux baisse → liquidités abondantes → bénéfique pour les actifs risqués. "
+        "Les réunions FOMC ont lieu environ 8 fois par an — elles font bouger les marchés."
+    ),
+    "géopolitique": (
+        "Les événements géopolitiques (guerres, sanctions, élections) créent de la volatilité. "
+        "Impact typique : hausse du pétrole (conflits au Moyen-Orient), "
+        "fuite vers l'or et le dollar, pression sur les émergents. "
+        "Secteurs bénéficiaires dans les crises : défense (LMT, RTX, NOC), énergie, or (GDX). "
+        "Secteurs pénalisés : tech internationale, transport aérien, tourisme."
+    ),
+    "inflation": (
+        "L'inflation mesure la hausse générale des prix. "
+        "Haute inflation → la Fed remonte les taux → pression sur les valorisations. "
+        "Secteurs performants en inflation : énergie, matières premières, immobilier, banques. "
+        "Secteurs pénalisés : tech growth (valorisations actualisées à taux plus élevés), obligations. "
+        "Le CPI (Consumer Price Index) est publié mensuellement — c'est le chiffre clé à suivre."
+    ),
+    "earnings": (
+        "Les earnings (résultats trimestriels) sont les publications financières des entreprises. "
+        "Ils comprennent : chiffre d'affaires, bénéfice net, EPS (bénéfice par action), guidance. "
+        "Si les résultats dépassent les attentes des analystes = surprise positive → hausse. "
+        "Si en-dessous = déception → baisse parfois brutale (-5 à -20% en une séance). "
+        "Positionner avant les earnings = pari risqué. Attendre après = plus sûr mais moins rentable."
+    ),
+    "buyback": (
+        "Un buyback (rachat d'actions) = l'entreprise rachète ses propres actions sur le marché. "
+        "Effet mécanique : le nombre d'actions baisse → EPS augmente → prix par action monte. "
+        "Signal positif : la direction pense que l'action est sous-évaluée. "
+        "Apple, Microsoft et Google ont parmi les plus gros programmes de rachat au monde."
+    ),
 }
 
 
@@ -137,7 +192,36 @@ def _detect_intent(message: str) -> dict:
     """
     msg = message.lower()
 
-    # Détection de concept
+    # Détection de concept — inclut les alias communs
+    CONCEPT_ALIASES = {
+        "géopolitique": "géopolitique",
+        "geopolitique": "géopolitique",
+        "geopolit": "géopolitique",
+        "guerre": "géopolitique",
+        "conflit": "géopolitique",
+        "sanction": "géopolitique",
+        "tarif": "tarif",
+        "douane": "tarif",
+        "trade war": "tarif",
+        "récession": "récession",
+        "recession": "récession",
+        "inflation": "inflation",
+        "cpi": "inflation",
+        "fed ": "fed",
+        "federal reserve": "fed",
+        "taux directeur": "fed",
+        "fomc": "fed",
+        "earnings": "earnings",
+        "résultats": "earnings",
+        "trimestriel": "earnings",
+        "buyback": "buyback",
+        "rachat d'actions": "buyback",
+        "fcf": "fcf",
+        "free cash flow": "fcf",
+    }
+    for alias, concept_key in CONCEPT_ALIASES.items():
+        if alias in msg:
+            return {"intent": "concept", "concept": concept_key, "ticker": None}
     for concept in CONCEPTS:
         if concept in msg:
             return {"intent": "concept", "concept": concept, "ticker": None}

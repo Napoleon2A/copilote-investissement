@@ -100,6 +100,30 @@ def score_quality(fundamentals: dict) -> dict:
             score -= 1.0
             reasons.append(f"Endettement élevé : D/E = {de_ratio:.0f}%")
 
+    # Free cash flow — indicateur clé de la solidité réelle de l'entreprise.
+    # Une entreprise peut afficher des bénéfices comptables sans générer de cash.
+    # FCF positif = capacité à investir, racheter des actions ou rembourser la dette.
+    fcf = fundamentals.get("free_cashflow")
+    market_cap = fundamentals.get("market_cap")
+    if fcf is not None and market_cap and market_cap > 0:
+        fcf_yield = fcf / market_cap  # FCF Yield = FCF / Market Cap
+        if fcf_yield > 0.05:          # > 5% = très généreux en cash
+            score += 1.5
+            reasons.append(f"FCF yield élevé : {fcf_yield:.1%} — forte génération de cash")
+        elif fcf_yield > 0.02:        # > 2% = correct
+            score += 0.5
+            reasons.append(f"FCF positif : {fcf_yield:.1%} de rendement")
+        elif fcf_yield < -0.02:       # FCF négatif = brûle du cash
+            score -= 1.0
+            reasons.append(f"FCF négatif : entreprise en mode cash-burn")
+    elif fcf is not None:
+        if fcf > 0:
+            score += 0.5
+            reasons.append("FCF positif — génère du cash")
+        elif fcf < 0:
+            score -= 0.5
+            reasons.append("FCF négatif — consomme du cash")
+
     if not reasons:
         reasons.append("Données insuffisantes pour évaluer la qualité")
 

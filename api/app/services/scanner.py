@@ -17,6 +17,7 @@ from typing import Optional
 from datetime import datetime, timedelta
 from app.services.data_service import (
     get_price_changes, get_fundamentals, get_news, get_company_info,
+    get_earnings_calendar,
 )
 from app.services.scoring import compute_all_scores, get_score_label
 
@@ -282,7 +283,14 @@ def scan_ticker(ticker: str) -> Optional[dict]:
             return None  # Rien de notable à dire malgré le bon score
 
         # Action suggérée
-        if composite >= 7.5:
+        # buy_small = composite fort + qualité élevée + pas de news bearish active
+        # Seuil 7.5 car les valeurs de qualité ont souvent une valorisation tendue
+        # qui plafonne le composite même quand les fondamentaux sont excellents.
+        quality_score = scores["quality"]["score"]
+        news_bearish = news_analysis.get("sentiment") == "bearish"
+        if composite >= 7.5 and quality_score >= 6.5 and not news_bearish:
+            action, action_label = "buy_small", "Initier position"
+        elif composite >= 7.0:
             action, action_label = "read", "Approfondir"
         elif composite >= 6.5:
             action, action_label = "watch", "Surveiller"
@@ -299,6 +307,23 @@ def scan_ticker(ticker: str) -> Optional[dict]:
         # Récupérer le nom de la société
         info = get_company_info(ticker)
         name = info.get("longName") or info.get("shortName") or ticker
+
+        # Calendrier des earnings — alerte si résultats dans < 14 jours
+        earnings_alert = None
+        try:
+            cal = get_earnings_calendar(ticker)
+            earnings_str = cal.get("earnings_date")
+            if earnings_str and earnings_str != "None":
+                from datetime import date as _date
+                earnings_dt = _date.fromisoformat(str(earnings_str)[:10])
+                days_until = (earnings_dt - datetime.utcnow().date()).days
+                if 0 <= days_until <= 14:
+                    earnings_alert = f"Résultats dans {days_until}j ({earnings_dt.strftime('%d/%m')})"
+        except Exception:
+            pass
+
+        if earnings_alert and earnings_alert not in highlights:
+            highlights.insert(0, f"⚠ {earnings_alert}")
 
         return {
             "ticker": ticker,

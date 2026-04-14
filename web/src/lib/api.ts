@@ -135,12 +135,21 @@ export const reviseIdea = (id: number, whatChanged: string) =>
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export interface MarketContext {
+  regime: string;
+  regime_label: string;
+  regime_advice: string;
+  session_mood: string;
+  vix?: number;
+}
+
 export interface Brief {
   date: string;
   generated_at: string;
   item_count: number;
   items: BriefItem[];
   market_summary: Record<string, MarketIndex>;
+  market_context?: MarketContext;
   disclaimer: string;
 }
 

@@ -13,7 +13,7 @@ export const revalidate = 0;
 import { getBrief } from "@/lib/api";
 import { BriefItemCard } from "@/components/brief/BriefItemCard";
 import { MarketSummary } from "@/components/brief/MarketSummary";
-import type { Brief } from "@/lib/api";
+import type { Brief, MarketContext } from "@/lib/api";
 
 async function fetchBrief(): Promise<Brief | null> {
   try {
@@ -45,10 +45,14 @@ export default async function DashboardPage() {
   const portfolioItems = brief.items.filter((i) => i.type === "portfolio_alert");
   const watchlistItems = brief.items.filter((i) => i.type === "watchlist_signal");
   const ideaItems = brief.items.filter((i) => i.type === "idea_followup");
+  const opportunityItems = brief.items.filter((i) => i.type === "opportunity");
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <PageHeader date={brief.date} count={brief.item_count} />
+
+      {/* Contexte de marché */}
+      {brief.market_context && <MarketContextBanner ctx={brief.market_context} />}
 
       {/* Résumé de marché */}
       <MarketSummary data={brief.market_summary} />
@@ -90,10 +94,46 @@ export default async function DashboardPage() {
         </Section>
       )}
 
+      {/* Opportunités détectées par le scanner */}
+      {opportunityItems.length > 0 && (
+        <Section title="Opportunités détectées" emoji="🎯">
+          {opportunityItems.map((item, i) => (
+            <BriefItemCard key={i} item={item} />
+          ))}
+        </Section>
+      )}
+
       {/* Disclaimer */}
       <p className="text-xs text-slate-700 text-center pb-4">
         {brief.disclaimer}
       </p>
+    </div>
+  );
+}
+
+const REGIME_STYLES: Record<string, string> = {
+  "risk-on":   "border-green-500/25 bg-green-500/5 text-green-400",
+  "risk-off":  "border-red-500/25 bg-red-500/5 text-red-400",
+  "calme":     "border-blue-500/25 bg-blue-500/5 text-blue-400",
+  "vigilance": "border-yellow-500/25 bg-yellow-500/5 text-yellow-400",
+  "neutral":   "border-slate-500/25 bg-slate-500/5 text-slate-400",
+};
+
+function MarketContextBanner({ ctx }: { ctx: MarketContext }) {
+  const style = REGIME_STYLES[ctx.regime] ?? REGIME_STYLES.neutral;
+  return (
+    <div className={`rounded-lg border p-3 ${style}`}>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider opacity-70">Régime</span>
+          <span className="text-xs font-bold">{ctx.regime_label}</span>
+          {ctx.vix != null && (
+            <span className="text-xs opacity-60">· VIX {ctx.vix.toFixed(1)}</span>
+          )}
+        </div>
+        <span className="text-xs opacity-80">{ctx.session_mood}</span>
+      </div>
+      <p className="text-xs opacity-60 mt-1">{ctx.regime_advice}</p>
     </div>
   );
 }
