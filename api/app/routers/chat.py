@@ -255,6 +255,7 @@ def _detect_intent(message: str) -> dict:
 
 async def _handle_analysis(ticker: str) -> ChatResponse:
     """Analyse complète d'un ticker."""
+    from app.services.data_service import get_earnings_calendar
     changes = get_price_changes(ticker)
     if not changes:
         return ChatResponse(
@@ -266,7 +267,7 @@ async def _handle_analysis(ticker: str) -> ChatResponse:
     scores = compute_all_scores(fundamentals, changes)
     info = get_company_info(ticker)
     name = info.get("longName") or info.get("shortName") or ticker
-    news = get_news(ticker, count=3)
+    news = get_news(ticker, count=5)
 
     composite = scores["composite"]
     label = get_score_label(composite)
@@ -275,11 +276,17 @@ async def _handle_analysis(ticker: str) -> ChatResponse:
     price = changes.get("current_price", 0)
     change_1d = changes.get("change_1d")
     change_1m = changes.get("change_1m")
+    pct_from_high = changes.get("pct_from_52w_high")
 
     lines = [f"## {ticker} — {name}"]
-    lines.append(f"**Prix :** {price:.2f} | **Aujourd'hui :** {change_1d:+.2f}%" if change_1d else f"**Prix :** {price:.2f}")
-    if change_1m:
-        lines.append(f"**1 mois :** {change_1m:+.2f}%")
+    price_line = f"**Prix :** {price:.2f}"
+    if change_1d is not None:
+        price_line += f" | **Aujourd'hui :** {change_1d:+.2f}%"
+    if change_1m is not None:
+        price_line += f" | **1M :** {change_1m:+.1f}%"
+    if pct_from_high is not None and pct_from_high < -10:
+        price_line += f" | **vs 52W haut :** {pct_from_high:+.1f}%"
+    lines.append(price_line)
     lines.append(f"\n**Score composite : {composite}/10** ({label})")
 
     # Points forts et faibles
@@ -306,19 +313,42 @@ async def _handle_analysis(ticker: str) -> ChatResponse:
         for c in cons[:3]:
             lines.append(f"− {c}")
 
-    # News
+    # Earnings calendar — alerte si résultats imminents
+    try:
+        cal = get_earnings_calendar(ticker)
+        earnings_str = cal.get("earnings_date")
+        if earnings_str and str(earnings_str) != "None":
+            from datetime import date as _d, datetime as _dt
+            earnings_dt = _d.fromisoformat(str(earnings_str)[:10])
+            days_until = (earnings_dt - _dt.utcnow().date()).days
+            if 0 <= days_until <= 21:
+                lines.append(f"\n⚠ **Résultats dans {days_until}j** ({earnings_dt.strftime('%d/%m')}) — risque de volatilité, position à calibrer avec soin")
+    except Exception:
+        pass
+
+    # News récentes
     if news:
         lines.append("\n**Dernières actualités :**")
-        for n in news[:2]:
+        for n in news[:3]:
             lines.append(f"• {n.get('title', '')}")
 
-    # Verdict
-    if composite >= 7.5:
-        verdict = "Ce titre mérite d'être approfondi."
-    elif composite >= 6:
-        verdict = "À surveiller — pas urgent mais intéressant."
+    # Verdict actionnable
+    risk_score = scores["risk"]["score"]
+    if composite >= 7.5 and risk_score >= 5:
+        verdict = "Initier une petite position ou l'approfondir sérieusement."
+        action_key = "buy_small"
+    elif composite >= 7.0:
+        verdict = "À approfondir avant d'agir — score solide mais vérifier la thèse."
+        action_key = "read"
+    elif composite >= 6.0:
+        verdict = "À surveiller — intéressant mais pas d'urgence."
+        action_key = "watch"
+    elif composite >= 4:
+        verdict = "Score insuffisant pour initier une position actuellement."
+        action_key = "avoid"
     else:
-        verdict = "Score insuffisant pour agir — surveiller sans urgence."
+        verdict = "Profil défavorable — éviter ou alléger si en portefeuille."
+        action_key = "avoid"
 
     lines.append(f"\n**Verdict :** {verdict}")
 
@@ -329,6 +359,7 @@ async def _handle_analysis(ticker: str) -> ChatResponse:
             "ticker": ticker,
             "price": price,
             "change_1d": change_1d,
+            "action": action_key,
             "scores": {k: scores[k]["score"] if isinstance(scores[k], dict) else scores[k]
                        for k in ["quality", "valuation", "growth", "momentum", "risk", "composite"]},
             "news": [{"title": n.get("title"), "publisher": n.get("publisher")} for n in news[:3]],
@@ -337,8 +368,11 @@ async def _handle_analysis(ticker: str) -> ChatResponse:
 
 
 async def _handle_opportunities(ticker: Optional[str]) -> ChatResponse:
-    """Retourne les meilleures opportunités du moment."""
+    """Retourne les meilleures opportunités du moment, contextualisées par le régime macro."""
     opportunities = run_scan(max_results=5)
+    macro = run_macro_scan()
+    risk_regime = macro.get("risk_regime", "neutral")
+    vix = macro.get("vix")
 
     if not opportunities:
         return ChatResponse(
@@ -346,14 +380,32 @@ async def _handle_opportunities(ticker: Optional[str]) -> ChatResponse:
             text="Aucune opportunité claire détectée en ce moment. Le marché ne présente pas de signal fort au-dessus du seuil de score 6/10.",
         )
 
+    # Contexte macro en intro
+    regime_lines = {
+        "risk-on": "Marché risk-on (VIX bas) — conditions favorables pour initier des positions sur la croissance.",
+        "risk-off": "⚠ Marché risk-off — VIX élevé, préférer des positions réduites et des valeurs défensives.",
+        "calme": "Marché calme — bonne visibilité, conditions normales pour agir.",
+        "vigilance": "⚠ Volatilité modérée — calibrer la taille des positions avec prudence.",
+        "neutral": "Conditions de marché normales.",
+    }
+    regime_desc = regime_lines.get(risk_regime, "")
+    if vix:
+        regime_desc += f" VIX : {vix:.1f}."
+
     lines = ["## Meilleures opportunités détectées\n"]
+    if regime_desc:
+        lines.append(f"*{regime_desc}*\n")
+
     for i, opp in enumerate(opportunities, 1):
         t = opp["ticker"]
         score = opp["scores"]["composite"]
         action = opp["action_label"]
-        highlight = opp["highlights"][0] if opp["highlights"] else "—"
+        highlights = opp.get("highlights", [])
+        highlight = highlights[0] if highlights else "—"
         lines.append(f"**{i}. {t}** — {score}/10 → {action}")
         lines.append(f"   ↳ {highlight}")
+        if len(highlights) > 1:
+            lines.append(f"   ↳ {highlights[1]}")
         if opp.get("upside_vs_target"):
             lines.append(f"   ↳ Upside analystes : {opp['upside_vs_target']:+.1f}%")
         lines.append("")
