@@ -150,22 +150,50 @@ def generate_daily_brief(
             item["type"] = "portfolio_alert"
             items.append(item)
         else:
-            # Même sans données yfinance, on montre la ligne détenue dans le brief
-            items.append({
-                "ticker": ticker,
-                "type": "portfolio_alert",
-                "context": "portfolio",
-                "current_price": None,
-                "change_1d": None,
-                "change_1m": None,
-                "signals": ["Données de marché indisponibles pour ce ticker"],
-                "scores": {},
-                "action": "hold",
-                "action_label": ACTIONS["hold"],
-                "priority": 1,
-                "why_now": "Ligne détenue — données yfinance indisponibles (rate-limit ou marché fermé)",
-                "generated_at": datetime.utcnow().isoformat(),
-            })
+            # Données disponibles mais aucun signal fort — on affiche quand même
+            # la ligne avec prix courant et score, sans signal particulier
+            changes = get_price_changes(ticker)
+            if changes:
+                fundamentals = get_fundamentals(ticker)
+                scores = compute_all_scores(fundamentals, changes)
+                items.append({
+                    "ticker": ticker,
+                    "type": "portfolio_alert",
+                    "context": "portfolio",
+                    "current_price": changes.get("current_price"),
+                    "change_1d": changes.get("change_1d"),
+                    "change_1m": changes.get("change_1m"),
+                    "signals": ["Journée calme — aucun signal notable"],
+                    "scores": {
+                        "composite": scores["composite"],
+                        "quality": scores["quality"]["score"],
+                        "valuation": scores["valuation"]["score"],
+                        "momentum": scores["momentum"]["score"],
+                        "risk": scores["risk"]["score"],
+                    },
+                    "action": "hold",
+                    "action_label": ACTIONS["hold"],
+                    "priority": 1,
+                    "why_now": f"Ligne détenue — variation 1J : {changes.get('change_1d', 0):+.1f}%",
+                    "generated_at": datetime.utcnow().isoformat(),
+                })
+            else:
+                # Vraiment pas de données (rate-limit ou marché fermé)
+                items.append({
+                    "ticker": ticker,
+                    "type": "portfolio_alert",
+                    "context": "portfolio",
+                    "current_price": None,
+                    "change_1d": None,
+                    "change_1m": None,
+                    "signals": ["Données de marché indisponibles"],
+                    "scores": {},
+                    "action": "hold",
+                    "action_label": ACTIONS["hold"],
+                    "priority": 1,
+                    "why_now": "Ligne détenue — données yfinance indisponibles",
+                    "generated_at": datetime.utcnow().isoformat(),
+                })
 
     # Analyser la watchlist
     for ticker in watchlist_tickers:
