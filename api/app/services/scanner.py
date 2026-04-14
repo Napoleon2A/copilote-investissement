@@ -66,9 +66,10 @@ SCAN_UNIVERSE: dict[str, list[str]] = {
         "RTX", "LMT", "NOC", "GE", "CAT", "DE",
     ],
     # Europe — grandes capitalisations liquides
+    # Note : ASML est aussi dans Semi-conducteurs — on évite le doublon ici
     "Europe Large Caps": [
         "MC.PA", "AIR.PA", "OR.PA", "TTE.PA",
-        "ASML", "SAP",
+        "SAP", "NOVO-B.CO",
     ],
     # Small/Mid caps croissance — plus spéculatif, potentiel élevé
     "Growth / Spéculatif": [
@@ -324,6 +325,13 @@ def scan_ticker(ticker: str) -> Optional[dict]:
 
         if earnings_alert and earnings_alert not in highlights:
             highlights.insert(0, f"⚠ {earnings_alert}")
+
+        # Alerte si news bearish malgré bon score — risque de détérioration
+        if news_analysis.get("sentiment") == "bearish" and news_analysis.get("key_headlines"):
+            bearish_note = f"⚠ News négative : {news_analysis['key_headlines'][0][:70]}…"
+            # On l'ajoute seulement si pas déjà capturé via le signal type
+            if signal_type != "news_catalyst":
+                highlights.append(bearish_note)
 
         return {
             "ticker": ticker,

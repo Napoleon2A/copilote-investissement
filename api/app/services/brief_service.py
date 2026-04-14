@@ -12,7 +12,7 @@ Chaque item a un type, un message court et une action suggérée.
 """
 from datetime import datetime
 from typing import Optional
-from app.services.data_service import get_price_changes, get_fundamentals
+from app.services.data_service import get_price_changes, get_fundamentals, get_earnings_calendar
 from app.services.scoring import compute_all_scores, get_score_label
 from app.services.scanner import run_scan
 import logging
@@ -99,6 +99,21 @@ def _analyze_ticker_for_brief(ticker: str, context: str = "") -> Optional[dict]:
             signals.append(f"Risque élevé détecté (score={risk_score}/10)")
             action = "review_thesis"
             priority += 1
+
+        # ── Signal 6 : Résultats imminents ───────────────────────────────────
+        # Alerte si les résultats sont dans < 10 jours — risque de volatilité.
+        try:
+            cal = get_earnings_calendar(ticker)
+            earnings_str = cal.get("earnings_date")
+            if earnings_str and str(earnings_str) != "None":
+                from datetime import date as _date
+                earnings_dt = _date.fromisoformat(str(earnings_str)[:10])
+                days_until = (earnings_dt - datetime.utcnow().date()).days
+                if 0 <= days_until <= 10:
+                    signals.append(f"Résultats dans {days_until}j ({earnings_dt.strftime('%d/%m')}) — risque de volatilité")
+                    priority += 2  # Très prioritaire : action à décider avant les résultats
+        except Exception:
+            pass
 
         # Pas de signal notable → on n'inclut pas dans le brief
         if not signals:
