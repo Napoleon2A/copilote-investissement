@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChangeCell } from "@/components/ui/ChangeCell";
 import { ScoreBadge } from "@/components/ui/ScoreBadge";
-import type { BriefItem } from "@/lib/api";
+import type { BriefItem, BriefPosition } from "@/lib/api";
 
 const ACTION_COLORS: Record<string, string> = {
   watch: "text-blue-400",
@@ -59,6 +59,9 @@ export function BriefItemCard({ item }: { item: BriefItem }) {
         </p>
       )}
 
+      {/* P&L de la position (uniquement pour le portefeuille) */}
+      {item.position && <PositionPnl pos={item.position} />}
+
       {/* Signaux supplémentaires */}
       {item.signals.length > 1 && (
         <ul className="mt-2 space-y-0.5">
@@ -70,6 +73,23 @@ export function BriefItemCard({ item }: { item: BriefItem }) {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function PositionPnl({ pos }: { pos: BriefPosition }) {
+  const isPositive = pos.pnl >= 0;
+  const color = isPositive ? "text-green-400" : "text-red-400";
+  return (
+    <div className="mt-2 flex items-center gap-3 text-xs text-slate-500 border-t border-[#2a2d3a] pt-2">
+      <span>{pos.quantity} actions × {pos.avg_cost.toFixed(2)} {pos.currency}</span>
+      <span>→</span>
+      <span className={`font-mono font-medium ${color}`}>
+        {isPositive ? "+" : ""}{pos.pnl.toFixed(2)} {pos.currency}
+        {pos.pnl_pct != null && (
+          <span className="ml-1 opacity-70">({isPositive ? "+" : ""}{pos.pnl_pct.toFixed(1)}%)</span>
+        )}
+      </span>
     </div>
   );
 }

@@ -133,6 +133,7 @@ def generate_daily_brief(
     portfolio_tickers: list[str],
     watchlist_tickers: list[str],
     idea_tickers: list[str],
+    portfolio_positions: dict | None = None,
     max_items: int = 7,
 ) -> dict:
     """
@@ -140,14 +141,40 @@ def generate_daily_brief(
 
     Priorité : portefeuille > watchlist > idées utilisateur.
     Maximum max_items items dans le brief principal.
+
+    portfolio_positions : dict ticker → {quantity, avg_cost, currency}
+      Permet d'afficher le P&L réel dans le brief.
     """
     items = []
+    positions = portfolio_positions or {}
+
+    def _pnl_info(ticker: str, current_price: float | None) -> dict | None:
+        """Calcule le P&L d'une position si les données sont disponibles."""
+        pos = positions.get(ticker)
+        if not pos or not current_price:
+            return None
+        qty = pos["quantity"]
+        avg = pos["avg_cost"]
+        cost = qty * avg
+        value = qty * current_price
+        pnl = value - cost
+        pnl_pct = pnl / cost * 100 if cost > 0 else None
+        return {
+            "quantity": qty,
+            "avg_cost": avg,
+            "cost_basis": round(cost, 2),
+            "market_value": round(value, 2),
+            "pnl": round(pnl, 2),
+            "pnl_pct": round(pnl_pct, 2) if pnl_pct else None,
+            "currency": pos.get("currency", "USD"),
+        }
 
     # Analyser les positions du portefeuille en priorité
     for ticker in portfolio_tickers:
         item = _analyze_ticker_for_brief(ticker, context="portfolio")
         if item:
             item["type"] = "portfolio_alert"
+            item["position"] = _pnl_info(ticker, item.get("current_price"))
             items.append(item)
         else:
             # Données disponibles mais aucun signal fort — on affiche quand même
@@ -156,11 +183,12 @@ def generate_daily_brief(
             if changes:
                 fundamentals = get_fundamentals(ticker)
                 scores = compute_all_scores(fundamentals, changes)
+                current = changes.get("current_price")
                 items.append({
                     "ticker": ticker,
                     "type": "portfolio_alert",
                     "context": "portfolio",
-                    "current_price": changes.get("current_price"),
+                    "current_price": current,
                     "change_1d": changes.get("change_1d"),
                     "change_1m": changes.get("change_1m"),
                     "signals": ["Journée calme — aucun signal notable"],
@@ -175,6 +203,7 @@ def generate_daily_brief(
                     "action_label": ACTIONS["hold"],
                     "priority": 1,
                     "why_now": f"Ligne détenue — variation 1J : {changes.get('change_1d', 0):+.1f}%",
+                    "position": _pnl_info(ticker, current),
                     "generated_at": datetime.utcnow().isoformat(),
                 })
             else:
@@ -192,6 +221,7 @@ def generate_daily_brief(
                     "action_label": ACTIONS["hold"],
                     "priority": 1,
                     "why_now": "Ligne détenue — données yfinance indisponibles",
+                    "position": positions.get(ticker),
                     "generated_at": datetime.utcnow().isoformat(),
                 })
 

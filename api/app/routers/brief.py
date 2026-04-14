@@ -21,18 +21,25 @@ async def get_daily_brief(session: AsyncSession = Depends(get_session)):
 
     Retourne 3 à 7 items maximum, triés par priorité.
     """
-    # Tickers du portefeuille
+    # Tickers du portefeuille avec données de position (qty, avg_cost)
     portfolio_result = await session.exec(select(Portfolio))
     portfolio = portfolio_result.first()
 
     portfolio_tickers = []
+    portfolio_positions: dict[str, dict] = {}  # ticker → {qty, avg_cost}
     if portfolio:
         pos_result = await session.exec(
-            select(Company)
+            select(Company, Position)
             .join(Position, Position.company_id == Company.id)
             .where(Position.portfolio_id == portfolio.id)
         )
-        portfolio_tickers = [company.ticker for company in pos_result.all()]
+        for company, position in pos_result.all():
+            portfolio_tickers.append(company.ticker)
+            portfolio_positions[company.ticker] = {
+                "quantity": position.quantity,
+                "avg_cost": position.avg_cost,
+                "currency": position.currency,
+            }
 
     # Tickers des watchlists
     wl_result = await session.exec(
@@ -52,6 +59,7 @@ async def get_daily_brief(session: AsyncSession = Depends(get_session)):
         portfolio_tickers=portfolio_tickers,
         watchlist_tickers=watchlist_tickers,
         idea_tickers=idea_tickers,
+        portfolio_positions=portfolio_positions,
         max_items=7,
     )
     return brief

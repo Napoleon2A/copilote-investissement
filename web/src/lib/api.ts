@@ -127,6 +127,16 @@ export interface Brief {
   disclaimer: string;
 }
 
+export interface BriefPosition {
+  quantity: number;
+  avg_cost: number;
+  cost_basis: number;
+  market_value: number;
+  pnl: number;
+  pnl_pct: number | null;
+  currency: string;
+}
+
 export interface BriefItem {
   ticker: string;
   type: string;
@@ -140,6 +150,7 @@ export interface BriefItem {
   action_label: string;
   priority: number;
   why_now: string;
+  position?: BriefPosition | null;
 }
 
 export interface MarketIndex {
