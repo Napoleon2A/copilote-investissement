@@ -57,10 +57,14 @@ Ce système est à usage personnel. Ce n'est pas un conseil en investissement.
     lifespan=lifespan,
 )
 
-# CORS — autoriser le frontend Next.js à appeler l'API
+# CORS — origines autorisées : localhost en local + origines prod via env
+_cors_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+if settings.allowed_origins:
+    _cors_origins += [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

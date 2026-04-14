@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     # Base de données SQLite (fichier local, zéro config)
     database_url: str = "sqlite+aiosqlite:///./trading.db"
 
+    # CORS — origines autorisées (séparées par des virgules dans la var d'env)
+    # En local : localhost:3000 est toujours autorisé (hardcodé dans main.py)
+    # En prod : ajouter l'URL Vercel ici via ALLOWED_ORIGINS dans le .env
+    allowed_origins: str = ""
+
     # Providers de données
     market_data_provider: str = "yfinance"
 

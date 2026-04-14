@@ -6,6 +6,10 @@
  * - 3 à 7 signaux prioritaires (portefeuille + watchlist + idées)
  * - Chaque signal avec : pourquoi maintenant + action suggérée
  */
+// Force Next.js à re-fetcher à chaque requête (pas de cache statique)
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { getBrief } from "@/lib/api";
 import { BriefItemCard } from "@/components/brief/BriefItemCard";
 import { MarketSummary } from "@/components/brief/MarketSummary";
