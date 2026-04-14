@@ -15,7 +15,7 @@ import logging
 
 from app.database import init_db
 from app.config import get_settings
-from app.routers import companies, watchlist, portfolio, ideas, brief, scanner
+from app.routers import companies, watchlist, portfolio, ideas, brief, scanner, chat
 
 logging.basicConfig(
     level=logging.INFO,
@@ -77,6 +77,7 @@ app.include_router(portfolio.router)
 app.include_router(ideas.router)
 app.include_router(brief.router)
 app.include_router(scanner.router)
+app.include_router(chat.router)
 
 
 @app.get("/", tags=["health"])

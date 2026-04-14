@@ -11,7 +11,7 @@ from typing import Optional
 
 from app.database import get_session
 from app.models import Position, Portfolio, Company
-from app.services.scanner import run_scan, scan_ticker, SCAN_UNIVERSE
+from app.services.scanner import run_scan, scan_ticker, SCAN_UNIVERSE, run_macro_scan
 
 router = APIRouter(prefix="/scanner", tags=["scanner"])
 
@@ -71,6 +71,15 @@ async def get_universe():
             for sector, tickers in SCAN_UNIVERSE.items()
         },
     }
+
+
+@router.get("/macro")
+async def get_macro_scan():
+    """
+    Analyse macro : performance sectorielle, régime de risque, indices clés.
+    Retourne une vue d'ensemble du marché pour contextualiser les opportunités.
+    """
+    return run_macro_scan()
 
 
 @router.post("/custom")

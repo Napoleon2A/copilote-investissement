@@ -98,12 +98,22 @@ export const saveThesis = (ticker: string, data: ThesisCreate) =>
 export const getThesis = (ticker: string) =>
   request<InvestmentThesis>(`/portfolio/positions/${ticker}/thesis`);
 
+// ── Chat ──────────────────────────────────────────────────────────────────────
+
+export const chatWithBot = (message: string, context?: string) =>
+  request<ChatResponse>("/chat", {
+    method: "POST",
+    body: JSON.stringify({ message, context }),
+  });
+
 // ── Scanner ───────────────────────────────────────────────────────────────────
 
 export const getScanOpportunities = (maxResults = 10) =>
   request<{ count: number; opportunities: ScanOpportunity[] }>(
     `/scanner/opportunities?max_results=${maxResults}`
   );
+
+export const getMacroScan = () => request<MacroScan>("/scanner/macro");
 
 // ── Ideas ─────────────────────────────────────────────────────────────────────
 
@@ -374,14 +384,40 @@ export interface InvestmentThesis {
   updated_at?: string;
 }
 
+export interface ChatResponse {
+  type: string;
+  text: string;
+  data?: Record<string, unknown>;
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  text: string;
+  data?: Record<string, unknown>;
+}
+
+export interface MacroScan {
+  macro: Record<string, { price?: number; change_1d?: number; change_ytd?: number }>;
+  sectors: Record<string, { ticker: string; change_1d?: number; change_1m?: number; change_ytd?: number; pct_from_52w_high?: number }>;
+  outperformers: Array<{ sector: string; outperformance: number }>;
+  underperformers: Array<{ sector: string; underperformance: number }>;
+  risk_regime: string;
+  vix?: number;
+  scanned_at: string;
+}
+
 export interface ScanOpportunity {
   ticker: string;
+  name?: string;
   type: string;
+  signal_type?: string;
   sector_group?: string;
   current_price?: number;
   change_1d?: number;
   change_1m?: number;
+  change_3m?: number;
   change_ytd?: number;
+  pct_from_52w_high?: number;
   scores: {
     composite: number;
     composite_label: string;
@@ -394,8 +430,12 @@ export interface ScanOpportunity {
   highlights: string[];
   action: string;
   action_label: string;
+  news_sentiment?: string;
+  has_catalyst?: boolean;
+  key_headlines?: string[];
   upside_vs_target?: number | null;
   analyst_count?: number | null;
+  market_cap?: number | null;
 }
 
 export interface IdeaSummary {

@@ -10,13 +10,14 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { getScanOpportunities } from "@/lib/api";
-import type { ScanOpportunity } from "@/lib/api";
+import { getScanOpportunities, getMacroScan } from "@/lib/api";
+import type { ScanOpportunity, MacroScan } from "@/lib/api";
 import { ChangeCell } from "@/components/ui/ChangeCell";
 import { ScoreBadge } from "@/components/ui/ScoreBadge";
 
 export default function OpportunitiesPage() {
   const [data, setData] = useState<ScanOpportunity[]>([]);
+  const [macro, setMacro] = useState<MacroScan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [scannedAt, setScannedAt] = useState<Date | null>(null);
@@ -24,9 +25,13 @@ export default function OpportunitiesPage() {
   const runScan = () => {
     setLoading(true);
     setError("");
-    getScanOpportunities(10)
-      .then((res) => {
+    Promise.all([
+      getScanOpportunities(10),
+      getMacroScan().catch(() => null),
+    ])
+      .then(([res, macroRes]) => {
         setData(res.opportunities);
+        setMacro(macroRes);
         setScannedAt(new Date());
       })
       .catch(() => setError("Impossible de contacter le backend"))
@@ -61,6 +66,9 @@ export default function OpportunitiesPage() {
         </div>
       </div>
 
+      {/* Contexte macro */}
+      {macro && <MacroWidget macro={macro} />}
+
       {/* Avertissement */}
       <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-3 text-xs text-yellow-400">
         Ces opportunités sont détectées par les scores automatiques du système. Ce n&apos;est pas un conseil en investissement — toujours vérifier avant d&apos;agir.
@@ -94,6 +102,76 @@ export default function OpportunitiesPage() {
           {data.map((opp, i) => (
             <OpportunityCard key={opp.ticker} opp={opp} rank={i + 1} />
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const RISK_REGIME_LABELS: Record<string, { label: string; color: string; desc: string }> = {
+  "risk-on":   { label: "Risk-On",   color: "text-green-400 border-green-500/20 bg-green-500/5",  desc: "Appétit pour le risque élevé — actions de croissance favorisées" },
+  "risk-off":  { label: "Risk-Off",  color: "text-red-400 border-red-500/20 bg-red-500/5",        desc: "Fuite vers les actifs sûrs — prudence recommandée" },
+  "calme":     { label: "Calme",     color: "text-blue-400 border-blue-500/20 bg-blue-500/5",     desc: "Faible volatilité — bonnes conditions pour initier des positions" },
+  "vigilance": { label: "Vigilance", color: "text-yellow-400 border-yellow-500/20 bg-yellow-500/5", desc: "Volatilité modérée — surveiller les développements" },
+  "neutral":   { label: "Neutre",    color: "text-slate-400 border-slate-500/20 bg-slate-500/5",  desc: "Conditions normales" },
+};
+
+function MacroWidget({ macro }: { macro: MacroScan }) {
+  const regime = RISK_REGIME_LABELS[macro.risk_regime] || RISK_REGIME_LABELS.neutral;
+
+  return (
+    <div className="rounded-lg border border-[#2a2d3a] bg-[#1a1d27] p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xs font-medium text-slate-500 uppercase tracking-wider">Contexte macro</h2>
+        <span className={`text-xs px-2 py-0.5 rounded border ${regime.color}`}>
+          {regime.label}
+        </span>
+      </div>
+      <p className="text-xs text-slate-500">{regime.desc}</p>
+
+      {/* Indices clés */}
+      <div className="flex gap-5 flex-wrap">
+        {Object.entries(macro.macro).map(([name, data]) => {
+          const chg = data.change_1d;
+          return (
+            <div key={name}>
+              <p className="text-xs text-slate-600">{name}</p>
+              <p className="text-sm font-mono text-slate-300">
+                {data.price != null ? data.price.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) : "—"}
+                {chg != null && (
+                  <span className={`ml-1 text-xs ${chg > 0 ? "text-green-400" : "text-red-400"}`}>
+                    {chg > 0 ? "+" : ""}{chg.toFixed(1)}%
+                  </span>
+                )}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Secteurs */}
+      {(macro.outperformers.length > 0 || macro.underperformers.length > 0) && (
+        <div className="flex gap-6 text-xs pt-1 border-t border-[#2a2d3a]">
+          {macro.outperformers.length > 0 && (
+            <div>
+              <p className="text-slate-600 mb-1">Surperformants (YTD)</p>
+              {macro.outperformers.slice(0, 2).map((s) => (
+                <p key={s.sector} className="text-green-400">
+                  ▲ {s.sector.split("(")[0].trim()} (+{s.outperformance}%)
+                </p>
+              ))}
+            </div>
+          )}
+          {macro.underperformers.length > 0 && (
+            <div>
+              <p className="text-slate-600 mb-1">Sous-performants (YTD)</p>
+              {macro.underperformers.slice(0, 2).map((s) => (
+                <p key={s.sector} className="text-red-400">
+                  ▼ {s.sector.split("(")[0].trim()} ({s.underperformance}%)
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -165,6 +243,13 @@ function OpportunityCard({ opp, rank }: { opp: ScanOpportunity; rank: number }) 
             </li>
           ))}
         </ul>
+      )}
+
+      {/* News headline si catalyseur */}
+      {opp.has_catalyst && opp.key_headlines && opp.key_headlines.length > 0 && (
+        <div className="mt-2 px-2 py-1.5 rounded bg-indigo-500/5 border border-indigo-500/20 text-xs text-indigo-300">
+          📰 {opp.key_headlines[0].length > 90 ? opp.key_headlines[0].slice(0, 90) + "…" : opp.key_headlines[0]}
+        </div>
       )}
 
       {/* Upside analystes */}
