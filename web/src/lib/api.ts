@@ -98,6 +98,13 @@ export const saveThesis = (ticker: string, data: ThesisCreate) =>
 export const getThesis = (ticker: string) =>
   request<InvestmentThesis>(`/portfolio/positions/${ticker}/thesis`);
 
+// ── Scanner ───────────────────────────────────────────────────────────────────
+
+export const getScanOpportunities = (maxResults = 10) =>
+  request<{ count: number; opportunities: ScanOpportunity[] }>(
+    `/scanner/opportunities?max_results=${maxResults}`
+  );
+
 // ── Ideas ─────────────────────────────────────────────────────────────────────
 
 export const getIdeas = () => request<IdeaSummary[]>("/ideas");
@@ -365,6 +372,30 @@ export interface InvestmentThesis {
   invalidation_conditions?: string;
   created_at: string;
   updated_at?: string;
+}
+
+export interface ScanOpportunity {
+  ticker: string;
+  type: string;
+  sector_group?: string;
+  current_price?: number;
+  change_1d?: number;
+  change_1m?: number;
+  change_ytd?: number;
+  scores: {
+    composite: number;
+    composite_label: string;
+    quality: number;
+    valuation: number;
+    growth: number;
+    momentum: number;
+    risk: number;
+  };
+  highlights: string[];
+  action: string;
+  action_label: string;
+  upside_vs_target?: number | null;
+  analyst_count?: number | null;
 }
 
 export interface IdeaSummary {

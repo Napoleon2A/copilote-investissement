@@ -17,7 +17,24 @@
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('items:', d['item_count'], '| market:', list\\(d['market_summary'].keys\\(\\)\\)\\)\")",
       "Bash(python3:*)",
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git rm:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git config:*)",
+      "Bash(sudo apt:*)",
+      "Bash(gh repo:*)",
+      "Bash(chmod +x:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(echo \"Frontend lancé \\(PID: $!\\)\")",
+      "Bash(find /mnt/c/Users/JeanNATALI/Pictures -name \"*.png\" -newer /mnt/c/Users/JeanNATALI/Pictures/AEROFORCE*)",
+      "Bash(ls -la \"/mnt/c/Users/JeanNATALI/Pictures/\"*\"2026\"*)",
+      "Bash(find \"/mnt/c/Users/JeanNATALI/Pictures/\" -name \"*2026-04-14*\" -exec cp {} /tmp/screen.png \\\\;)",
+      "Bash(lsof -ti:3000)",
+      "Bash(xargs kill:*)",
+      "Bash(fuser -k 3000/tcp)",
+      "Bash(fuser -k 3001/tcp)",
+      "Bash(kill -9 1489 16763)"
     ]
   }
 }

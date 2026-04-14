@@ -5,6 +5,7 @@ import clsx from "clsx";
 
 const NAV_ITEMS = [
   { href: "/", label: "Brief", icon: "⚡" },
+  { href: "/opportunities", label: "Opportunités", icon: "🎯" },
   { href: "/watchlist", label: "Watchlist", icon: "👁" },
   { href: "/portfolio", label: "Portefeuille", icon: "📊" },
   { href: "/idea", label: "Idée ?", icon: "💡" },

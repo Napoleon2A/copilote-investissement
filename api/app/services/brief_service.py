@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Optional
 from app.services.data_service import get_price_changes, get_fundamentals
 from app.services.scoring import compute_all_scores, get_score_label
+from app.services.scanner import run_scan
 import logging
 
 logger = logging.getLogger(__name__)
@@ -239,6 +240,29 @@ def generate_daily_brief(
             if item:
                 item["type"] = "idea_followup"
                 items.append(item)
+
+    # ── Opportunités détectées par le scanner ────────────────────────────────
+    # Le scanner analyse ~50 tickers et remonte les meilleures opportunités.
+    # On exclut les tickers déjà en portefeuille pour éviter les doublons.
+    all_known = set(portfolio_tickers + watchlist_tickers + idea_tickers)
+    scan_slots = max(0, max_items - len(items))  # combien de slots il reste
+    if scan_slots > 0:
+        try:
+            opportunities = run_scan(
+                exclude_tickers=list(all_known),
+                max_results=min(3, scan_slots),  # max 3 opportunités système
+            )
+            for opp in opportunities:
+                opp["type"] = "opportunity"
+                opp["context"] = "system_scan"
+                opp["signals"] = opp.get("highlights", [])
+                opp["why_now"] = opp["highlights"][0] if opp.get("highlights") else ""
+                opp["priority"] = 0  # Priorité inférieure au portefeuille
+                opp["position"] = None
+                opp["generated_at"] = datetime.utcnow().isoformat()
+                items.append(opp)
+        except Exception as e:
+            logger.error(f"Erreur scanner: {e}")
 
     # Trier par priorité décroissante et limiter
     items.sort(key=lambda x: x.get("priority", 0), reverse=True)
