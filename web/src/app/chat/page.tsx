@@ -1,15 +1,3 @@
-/**
- * Page Chatbot — /chat
- *
- * Interface de conversation pour interroger le système en langage naturel.
- * Questions possibles :
- *   - "Analyse AAPL"
- *   - "Quelles sont les meilleures opportunités ?"
- *   - "Etat du marché"
- *   - "News sur NVDA"
- *   - "Explique-moi le P/E"
- *   - "Qu'est-ce que le VIX ?"
- */
 "use client";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
@@ -40,7 +28,7 @@ export default function ChatPage() {
     {
       id: 0,
       role: "assistant",
-      text: "## Copilote Investissement\n\nPose-moi une question sur le marché, un ticker ou une opportunité.\n\nExemples :\n• *Analyse AAPL*\n• *Meilleures opportunités*\n• *État du marché*\n• *News sur NVDA*\n• *Explique le P/E*",
+      text: "## Austerlitz Hedge Fund\n\nPose-moi une question sur le marché, un ticker ou une opportunité.\n\nExemples :\n• *Analyse AAPL*\n• *Meilleures opportunités*\n• *État du marché*\n• *News sur NVDA*\n• *Explique le P/E*",
     },
   ]);
   const [input, setInput] = useState("");
@@ -54,39 +42,22 @@ export default function ChatPage() {
 
   const sendMessage = async (text: string) => {
     if (!text.trim() || loading) return;
-
     const userMsg: Message = { id: Date.now(), role: "user", text };
-    const loadingMsg: Message = {
-      id: Date.now() + 1,
-      role: "assistant",
-      text: "",
-      loading: true,
-    };
-
+    const loadingMsg: Message = { id: Date.now() + 1, role: "assistant", text: "", loading: true };
     setMessages((prev) => [...prev, userMsg, loadingMsg]);
     setInput("");
     setLoading(true);
-
     try {
-      const response = await chatWithBot(text);
+      const history = messages
+        .filter((m) => !m.loading)
+        .map((m) => ({ role: m.role, text: m.text, data: m.data as Record<string, unknown> | undefined }));
+      const response = await chatWithBot(text, history);
       setMessages((prev) =>
-        prev.map((m) =>
-          m.loading
-            ? { ...m, text: response.text, data: response.data, loading: false }
-            : m
-        )
+        prev.map((m) => m.loading ? { ...m, text: response.text, data: response.data, loading: false } : m)
       );
     } catch {
       setMessages((prev) =>
-        prev.map((m) =>
-          m.loading
-            ? {
-                ...m,
-                text: "Erreur de connexion au backend. Vérifie que l'API est active.",
-                loading: false,
-              }
-            : m
-        )
+        prev.map((m) => m.loading ? { ...m, text: "Erreur de connexion au backend.", loading: false } : m)
       );
     } finally {
       setLoading(false);
@@ -94,66 +65,49 @@ export default function ChatPage() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    sendMessage(input);
-  };
-
   return (
     <div className="max-w-3xl mx-auto flex flex-col h-[calc(100vh-120px)]">
-      {/* En-tête */}
       <div className="flex items-baseline justify-between mb-4">
         <div>
-          <h1 className="text-lg font-semibold text-slate-100">Chatbot</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h1 className="text-lg font-semibold text-[#0B1929]"
+              style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+            Chatbot
+          </h1>
+          <p className="text-xs text-[#7898AC] mt-0.5">
             Analyse, opportunités, news, concepts — en langage naturel
           </p>
         </div>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
-        ))}
+        {messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)}
         <div ref={bottomRef} />
       </div>
 
-      {/* Suggestions (si premier message seulement) */}
       {messages.length <= 1 && (
         <div className="flex flex-wrap gap-2 py-3">
           {SUGGESTIONS.map((s) => (
-            <button
-              key={s}
-              onClick={() => sendMessage(s)}
-              className="text-xs px-3 py-1.5 border border-[#2a2d3a] rounded-full text-slate-400
-                         hover:border-indigo-500/50 hover:text-indigo-300 transition-colors"
-            >
+            <button key={s} onClick={() => sendMessage(s)}
+              className="text-xs px-3 py-1.5 border border-[#BFD0DC] rounded-full text-[#2D4A5C]
+                         hover:border-[#1E3A5F]/30 hover:text-[#1E3A5F] bg-white transition-colors">
               {s}
             </button>
           ))}
         </div>
       )}
 
-      {/* Input */}
-      <form onSubmit={handleSubmit} className="flex gap-2 pt-3 border-t border-[#2a2d3a]">
-        <input
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Pose une question... (ex: Analyse AAPL, opportunités, marché)"
+      <form onSubmit={(e) => { e.preventDefault(); sendMessage(input); }}
+        className="flex gap-2 pt-3 border-t border-[#BFD0DC]">
+        <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)}
+          placeholder="Pose une question… (ex: Analyse AAPL, opportunités, marché)"
           disabled={loading}
-          className="flex-1 bg-[#1a1d27] border border-[#2a2d3a] rounded-lg px-4 py-2.5 text-sm
-                     text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500
-                     disabled:opacity-50"
-          autoComplete="off"
-        />
-        <button
-          type="submit"
-          disabled={loading || !input.trim()}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white text-sm
-                     transition-colors disabled:opacity-40 flex-shrink-0"
-        >
+          className="flex-1 bg-white border border-[#BFD0DC] rounded-lg px-4 py-2.5 text-sm
+                     text-[#0B1929] placeholder-[#7898AC] focus:outline-none focus:border-[#1E3A5F]
+                     disabled:opacity-50 transition-colors"
+          autoComplete="off" />
+        <button type="submit" disabled={loading || !input.trim()}
+          className="px-4 py-2 bg-[#1E3A5F] hover:bg-[#162d4a] rounded-lg text-white text-sm
+                     transition-colors disabled:opacity-40 flex-shrink-0 font-medium">
           {loading ? "…" : "→"}
         </button>
       </form>
@@ -167,14 +121,13 @@ function MessageBubble({ message }: { message: Message }) {
   if (message.loading) {
     return (
       <div className="flex gap-3">
-        <div className="w-7 h-7 rounded-full bg-indigo-600/30 flex-shrink-0 flex items-center justify-center text-xs text-indigo-400">
-          ⚡
-        </div>
-        <div className="flex-1 rounded-lg bg-[#1a1d27] border border-[#2a2d3a] p-4">
+        <div className="w-7 h-7 rounded-full bg-[#1E3A5F] flex-shrink-0 flex items-center justify-center text-[10px] text-[#5E96B0] font-bold"
+             style={{ fontFamily: "'Space Grotesk', sans-serif" }}>A</div>
+        <div className="flex-1 rounded-lg bg-white border border-[#BFD0DC] p-4 shadow-sm">
           <div className="flex gap-1">
-            <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-            <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-            <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+            <span className="w-1.5 h-1.5 bg-[#1E3A5F] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+            <span className="w-1.5 h-1.5 bg-[#1E3A5F] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+            <span className="w-1.5 h-1.5 bg-[#1E3A5F] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
           </div>
         </div>
       </div>
@@ -184,10 +137,10 @@ function MessageBubble({ message }: { message: Message }) {
   if (isUser) {
     return (
       <div className="flex gap-3 flex-row-reverse">
-        <div className="w-7 h-7 rounded-full bg-slate-700 flex-shrink-0 flex items-center justify-center text-xs text-slate-300">
+        <div className="w-7 h-7 rounded-full bg-[#E2EAF0] border border-[#BFD0DC] flex-shrink-0 flex items-center justify-center text-xs text-[#2D4A5C]">
           →
         </div>
-        <div className="rounded-lg bg-indigo-600/20 border border-indigo-500/30 px-4 py-2.5 text-sm text-slate-200 max-w-md">
+        <div className="rounded-lg bg-[#1E3A5F] px-4 py-2.5 text-sm text-white max-w-md shadow-sm">
           {message.text}
         </div>
       </div>
@@ -196,10 +149,9 @@ function MessageBubble({ message }: { message: Message }) {
 
   return (
     <div className="flex gap-3">
-      <div className="w-7 h-7 rounded-full bg-indigo-600/30 flex-shrink-0 flex items-center justify-center text-xs text-indigo-400">
-        ⚡
-      </div>
-      <div className="flex-1 rounded-lg bg-[#1a1d27] border border-[#2a2d3a] p-4">
+      <div className="w-7 h-7 rounded-full bg-[#1E3A5F] flex-shrink-0 flex items-center justify-center text-[10px] text-[#5E96B0] font-bold"
+           style={{ fontFamily: "'Space Grotesk', sans-serif" }}>A</div>
+      <div className="flex-1 rounded-lg bg-white border border-[#BFD0DC] p-4 shadow-sm">
         <MarkdownText text={message.text} />
         {!!message.data && <DataLinks data={message.data as Record<string, unknown>} />}
       </div>
@@ -208,73 +160,32 @@ function MessageBubble({ message }: { message: Message }) {
 }
 
 function MarkdownText({ text }: { text: string }) {
-  // Rendu markdown minimal : ## titres, **gras**, • listes, \n paragraphes
   const lines = text.split("\n");
   return (
-    <div className="text-sm text-slate-300 space-y-1">
+    <div className="text-sm text-[#0B1929] space-y-1">
       {lines.map((line, i) => {
-        if (line.startsWith("## ")) {
-          return (
-            <p key={i} className="text-base font-semibold text-slate-100 mb-2">
-              {line.slice(3)}
-            </p>
-          );
-        }
-        if (line.startsWith("**") && line.endsWith("**") && line.length > 4) {
-          return (
-            <p key={i} className="font-medium text-slate-200">
-              {line.slice(2, -2)}
-            </p>
-          );
-        }
-        if (line.startsWith("+ ")) {
-          return (
-            <p key={i} className="text-green-400 text-xs">
-              {line}
-            </p>
-          );
-        }
-        if (line.startsWith("− ") || line.startsWith("- ")) {
-          return (
-            <p key={i} className="text-red-400 text-xs">
-              {line}
-            </p>
-          );
-        }
-        if (line.startsWith("• ") || line.startsWith("* ")) {
-          return (
-            <p key={i} className="text-slate-400 text-xs pl-2">
-              {line}
-            </p>
-          );
-        }
-        if (line.startsWith("↳ ")) {
-          return (
-            <p key={i} className="text-slate-500 text-xs pl-4">
-              {line}
-            </p>
-          );
-        }
+        if (line.startsWith("## "))
+          return <p key={i} className="text-base font-semibold text-[#1E3A5F] mb-2"
+                    style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{line.slice(3)}</p>;
+        if (line.startsWith("**") && line.endsWith("**") && line.length > 4)
+          return <p key={i} className="font-semibold text-[#0B1929]">{line.slice(2, -2)}</p>;
+        if (line.startsWith("+ ")) return <p key={i} className="text-green-700 text-xs">{line}</p>;
+        if (line.startsWith("− ") || line.startsWith("- ")) return <p key={i} className="text-red-700 text-xs">{line}</p>;
+        if (line.startsWith("• ") || line.startsWith("* ")) return <p key={i} className="text-[#2D4A5C] text-xs pl-2">{line}</p>;
+        if (line.startsWith("↳ ")) return <p key={i} className="text-[#7898AC] text-xs pl-4">{line}</p>;
         if (line === "") return <div key={i} className="h-1" />;
-
-        // Traitement inline bold (**texte**)
         const parts = line.split(/\*\*(.+?)\*\*/g);
         if (parts.length > 1) {
           return (
             <p key={i}>
-              {parts.map((part: string, j: number) =>
-                j % 2 === 1 ? (
-                  <strong key={j} className="text-slate-200 font-medium">
-                    {part}
-                  </strong>
-                ) : (
-                  <span key={j}>{part}</span>
-                )
+              {parts.map((part, j) =>
+                j % 2 === 1
+                  ? <strong key={j} className="text-[#0B1929] font-semibold">{part}</strong>
+                  : <span key={j}>{part}</span>
               )}
             </p>
           );
         }
-
         return <p key={i}>{line}</p>;
       })}
     </div>
@@ -287,13 +198,10 @@ function DataLinks({ data }: { data: Record<string, unknown> }) {
 
   if (opportunities && opportunities.length > 0) {
     return (
-      <div className="mt-3 flex flex-wrap gap-2 border-t border-[#2a2d3a] pt-2">
+      <div className="mt-3 flex flex-wrap gap-2 border-t border-[#BFD0DC] pt-2">
         {opportunities.slice(0, 5).map((opp) => (
-          <Link
-            key={opp.ticker}
-            href={`/company/${opp.ticker}`}
-            className="text-xs px-2.5 py-1 border border-indigo-500/30 bg-indigo-500/10 rounded text-indigo-300 hover:bg-indigo-500/20"
-          >
+          <Link key={opp.ticker} href={`/company/${opp.ticker}`}
+            className="text-xs px-2.5 py-1 border border-[#1E3A5F]/20 bg-[#EEF2F6] rounded text-[#1E3A5F] hover:bg-[#E2EAF0] transition-colors">
             {opp.ticker} ({opp.scores.composite}/10)
           </Link>
         ))}
@@ -303,11 +211,9 @@ function DataLinks({ data }: { data: Record<string, unknown> }) {
 
   if (ticker) {
     return (
-      <div className="mt-3 border-t border-[#2a2d3a] pt-2">
-        <Link
-          href={`/company/${ticker}`}
-          className="text-xs px-3 py-1 border border-indigo-500/30 bg-indigo-500/10 rounded text-indigo-300 hover:bg-indigo-500/20"
-        >
+      <div className="mt-3 border-t border-[#BFD0DC] pt-2">
+        <Link href={`/company/${ticker}`}
+          className="text-xs px-3 py-1 border border-[#1E3A5F]/20 bg-[#EEF2F6] rounded text-[#1E3A5F] hover:bg-[#E2EAF0] transition-colors">
           → Voir la fiche {ticker}
         </Link>
       </div>

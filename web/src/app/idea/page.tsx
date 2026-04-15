@@ -22,33 +22,22 @@ function IdeaPageContent() {
   const [showReviseForm, setShowReviseForm] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    getIdeas().then(setIdeas).catch(() => {});
-  }, []);
+  useEffect(() => { getIdeas().then(setIdeas).catch(() => {}); }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ticker.trim()) return;
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
       const result = await submitIdea(ticker.trim().toUpperCase(), userThesis || undefined) as { idea: { id: number } };
       const detail = await getIdea(result.idea.id);
       setSelectedIdea(detail);
-      setIdeas((prev) => [
-        {
-          id: result.idea.id,
-          ticker: ticker.toUpperCase(),
-          name: detail.company.name,
-          conviction: detail.idea.conviction || undefined,
-          action: detail.idea.action || undefined,
-          horizon: detail.idea.horizon || undefined,
-          created_at: detail.idea.created_at,
-        },
-        ...prev,
-      ]);
-      setTicker("");
-      setUserThesis("");
+      setIdeas((prev) => [{
+        id: result.idea.id, ticker: ticker.toUpperCase(), name: detail.company.name,
+        conviction: detail.idea.conviction || undefined, action: detail.idea.action || undefined,
+        horizon: detail.idea.horizon || undefined, created_at: detail.idea.created_at,
+      }, ...prev]);
+      setTicker(""); setUserThesis("");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erreur");
     } finally {
@@ -66,100 +55,88 @@ function IdeaPageContent() {
     if (!selectedIdea || !revisionNote.trim()) return;
     const result = await reviseIdea(selectedIdea.idea.id, revisionNote);
     setSelectedIdea(result as unknown as IdeaDetail);
-    setRevisionNote("");
-    setShowReviseForm(false);
+    setRevisionNote(""); setShowReviseForm(false);
   };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <h1 className="text-lg font-semibold text-slate-100">Idées</h1>
-      <p className="text-sm text-slate-500">
-        Soumets un ticker. Le système génère un avis argumenté, le date, et le révise si les faits changent.
-      </p>
+      <div>
+        <h1 className="text-lg font-semibold text-[#0B1929]"
+            style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+          Idées
+        </h1>
+        <p className="text-xs text-[#7898AC] mt-0.5">
+          Soumets un ticker — le système génère un avis argumenté, le date, et le révise si les faits changent.
+        </p>
+      </div>
 
       {/* Formulaire de soumission */}
-      <form
-        onSubmit={handleSubmit}
-        className="rounded-lg border border-[#2a2d3a] bg-[#1a1d27] p-4 space-y-3"
-      >
+      <form onSubmit={handleSubmit} className="rounded-lg border border-[#BFD0DC] bg-white p-5 space-y-4 shadow-sm">
+        <h2 className="text-xs font-semibold text-[#1E3A5F] uppercase tracking-widest">Nouvelle idée</h2>
         <div className="flex gap-3">
-          <input
-            value={ticker}
-            onChange={(e) => setTicker(e.target.value.toUpperCase())}
+          <input value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())}
             placeholder="Ticker (ex: NVDA)"
-            className="bg-[#0f1117] border border-[#2a2d3a] rounded px-3 py-2 text-sm
-                       text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 w-40"
-            required
-          />
-          <textarea
-            value={userThesis}
-            onChange={(e) => setUserThesis(e.target.value)}
-            placeholder="Ta thèse (optionnel) — pourquoi tu trouves ça intéressant..."
-            className="flex-1 bg-[#0f1117] border border-[#2a2d3a] rounded px-3 py-2 text-sm
-                       text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500
-                       resize-none h-16"
-          />
+            className="bg-[#EEF2F6] border border-[#BFD0DC] rounded px-3 py-2 text-sm
+                       text-[#0B1929] placeholder-[#7898AC] focus:outline-none focus:border-[#1E3A5F] w-40 transition-colors"
+            required />
+          <textarea value={userThesis} onChange={(e) => setUserThesis(e.target.value)}
+            placeholder="Ta thèse (optionnel) — pourquoi tu trouves ça intéressant…"
+            className="flex-1 bg-[#EEF2F6] border border-[#BFD0DC] rounded px-3 py-2 text-sm
+                       text-[#0B1929] placeholder-[#7898AC] focus:outline-none focus:border-[#1E3A5F]
+                       resize-none h-16 transition-colors" />
         </div>
-        {error && <p className="text-red-400 text-xs">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="text-sm px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-white
-                     disabled:opacity-50 transition-colors"
-        >
-          {loading ? "Analyse en cours..." : "→ Analyser"}
+        {error && <p className="text-red-700 text-xs">{error}</p>}
+        <button type="submit" disabled={loading}
+          className="text-sm px-4 py-2 bg-[#1E3A5F] hover:bg-[#162d4a] rounded text-white font-medium disabled:opacity-50 transition-colors">
+          {loading ? "Analyse en cours…" : "→ Analyser"}
         </button>
       </form>
 
       <div className="grid grid-cols-3 gap-4">
         {/* Liste des idées */}
         <div className="space-y-2">
-          <h2 className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-            Historique ({ideas.length})
-          </h2>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[#5E96B0] text-xs">◇</span>
+            <h2 className="text-[10px] font-semibold text-[#7898AC] uppercase tracking-widest">
+              Historique ({ideas.length})
+            </h2>
+          </div>
           {ideas.length === 0 ? (
-            <p className="text-slate-700 text-xs">Aucune idée soumise.</p>
+            <p className="text-[#7898AC] text-xs">Aucune idée soumise.</p>
           ) : (
             ideas.map((idea) => (
-              <button
-                key={idea.id}
-                onClick={() => handleSelectIdea(idea.id)}
-                className={`w-full text-left rounded border p-2.5 transition-colors ${
+              <button key={idea.id} onClick={() => handleSelectIdea(idea.id)}
+                className={`w-full text-left rounded border p-2.5 transition-all duration-150 ${
                   selectedIdea?.idea.id === idea.id
-                    ? "border-indigo-500/50 bg-indigo-500/10"
-                    : "border-[#2a2d3a] bg-[#1a1d27] hover:border-slate-600"
-                }`}
-              >
-                <p className="text-sm font-mono font-bold text-indigo-300">{idea.ticker}</p>
-                <p className="text-xs text-slate-500 mt-0.5 truncate">{idea.name}</p>
-                <p className="text-xs text-slate-700 mt-1">
-                  {idea.action} · {idea.conviction}
-                </p>
+                    ? "border-[#1E3A5F] bg-[#1E3A5F]/5 shadow-sm"
+                    : "border-[#BFD0DC] bg-white hover:border-[#1E3A5F]/30"
+                }`}>
+                <p className="text-sm font-mono font-bold text-[#1E3A5F]">{idea.ticker}</p>
+                <p className="text-xs text-[#2D4A5C] mt-0.5 truncate">{idea.name}</p>
+                <p className="text-[10px] text-[#7898AC] mt-1">{idea.action} · {idea.conviction}</p>
               </button>
             ))
           )}
         </div>
 
-        {/* Détail de l'idée sélectionnée */}
+        {/* Détail */}
         <div className="col-span-2">
           {!selectedIdea ? (
-            <div className="rounded-lg border border-[#2a2d3a] bg-[#1a1d27] p-6 text-center">
-              <p className="text-slate-600 text-sm">Soumets une idée ou sélectionnes-en une pour voir l&apos;analyse.</p>
+            <div className="rounded-lg border border-[#BFD0DC] bg-white p-6 text-center shadow-sm">
+              <p className="text-[#7898AC] text-sm">Soumets une idée ou sélectionnes-en une pour voir l&apos;analyse.</p>
             </div>
           ) : (
             <div className="space-y-4">
               {/* En-tête */}
               <div className="flex items-start justify-between">
                 <div>
-                  <Link
-                    href={`/company/${selectedIdea.company.ticker}`}
-                    className="text-xl font-bold font-mono text-indigo-300 hover:text-indigo-200"
-                  >
+                  <Link href={`/company/${selectedIdea.company.ticker}`}
+                    className="text-xl font-bold font-mono text-[#1E3A5F] hover:text-[#162d4a]">
                     {selectedIdea.company.ticker}
                   </Link>
-                  <p className="text-slate-400 text-sm">{selectedIdea.company.name}</p>
+                  <p className="text-[#2D4A5C] text-sm">{selectedIdea.company.name}</p>
                 </div>
-                <div className="text-right text-xs text-slate-600">
+                <div className="text-right text-xs text-[#7898AC]">
                   <p>{new Date(selectedIdea.idea.created_at).toLocaleDateString("fr-FR")}</p>
                   {selectedIdea.idea.updated_at && (
                     <p>Révisé le {new Date(selectedIdea.idea.updated_at).toLocaleDateString("fr-FR")}</p>
@@ -169,17 +146,17 @@ function IdeaPageContent() {
 
               {/* Thèse utilisateur */}
               {selectedIdea.idea.user_thesis && (
-                <div className="rounded border border-[#2a2d3a] bg-[#0f1117] p-3">
-                  <p className="text-xs text-slate-600 mb-1">Ta thèse initiale</p>
-                  <p className="text-sm text-slate-300">{selectedIdea.idea.user_thesis}</p>
+                <div className="rounded border border-[#BFD0DC] bg-[#EEF2F6] p-3">
+                  <p className="text-[10px] text-[#7898AC] uppercase tracking-wider mb-1">Ta thèse initiale</p>
+                  <p className="text-sm text-[#0B1929]">{selectedIdea.idea.user_thesis}</p>
                 </div>
               )}
 
               {/* Avis système */}
               {selectedIdea.idea.system_opinion && (
-                <div className="rounded border border-indigo-500/20 bg-[#1a1d27] p-3">
-                  <p className="text-xs text-indigo-500 mb-2">Avis du système</p>
-                  <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono">
+                <div className="rounded border border-[#1E3A5F]/15 bg-white p-3 shadow-sm">
+                  <p className="text-[10px] text-[#1E3A5F] uppercase tracking-wider mb-2 font-semibold">Avis du système</p>
+                  <pre className="text-xs text-[#0B1929] whitespace-pre-wrap font-mono leading-relaxed">
                     {selectedIdea.idea.system_opinion}
                   </pre>
                 </div>
@@ -188,19 +165,15 @@ function IdeaPageContent() {
               {/* Arguments */}
               <div className="grid grid-cols-2 gap-3">
                 {selectedIdea.idea.pro_args && (
-                  <div>
-                    <p className="text-xs text-green-600 mb-1">+ Pour</p>
-                    <p className="text-xs text-slate-400 whitespace-pre-wrap">
-                      {selectedIdea.idea.pro_args}
-                    </p>
+                  <div className="rounded border border-green-200 bg-green-50 p-3">
+                    <p className="text-[10px] text-green-700 uppercase tracking-wider mb-1.5 font-semibold">+ Pour</p>
+                    <p className="text-xs text-green-800 whitespace-pre-wrap">{selectedIdea.idea.pro_args}</p>
                   </div>
                 )}
                 {selectedIdea.idea.con_args && (
-                  <div>
-                    <p className="text-xs text-red-600 mb-1">- Contre</p>
-                    <p className="text-xs text-slate-400 whitespace-pre-wrap">
-                      {selectedIdea.idea.con_args}
-                    </p>
+                  <div className="rounded border border-red-200 bg-red-50 p-3">
+                    <p className="text-[10px] text-red-700 uppercase tracking-wider mb-1.5 font-semibold">- Contre</p>
+                    <p className="text-xs text-red-800 whitespace-pre-wrap">{selectedIdea.idea.con_args}</p>
                   </div>
                 )}
               </div>
@@ -208,37 +181,27 @@ function IdeaPageContent() {
               {/* Conditions de validation */}
               {selectedIdea.idea.validation_conditions && (
                 <div>
-                  <p className="text-xs text-slate-600 mb-1">Conditions de validation</p>
-                  <p className="text-xs text-slate-500 whitespace-pre-wrap">
-                    {selectedIdea.idea.validation_conditions}
-                  </p>
+                  <p className="text-[10px] text-[#7898AC] uppercase tracking-wider mb-1">Conditions de validation</p>
+                  <p className="text-xs text-[#2D4A5C] whitespace-pre-wrap">{selectedIdea.idea.validation_conditions}</p>
                 </div>
               )}
 
               {/* Révision */}
               <div>
-                <button
-                  onClick={() => setShowReviseForm(!showReviseForm)}
-                  className="text-xs text-indigo-400 hover:text-indigo-300"
-                >
+                <button onClick={() => setShowReviseForm(!showReviseForm)}
+                  className="text-xs text-[#1E3A5F] hover:text-[#162d4a] font-medium transition-colors">
                   ↻ Réviser l&apos;avis (les faits ont changé)
                 </button>
-
                 {showReviseForm && (
                   <form onSubmit={handleRevise} className="mt-2 space-y-2">
-                    <textarea
-                      value={revisionNote}
-                      onChange={(e) => setRevisionNote(e.target.value)}
-                      placeholder="Ce qui a changé : publication de résultats, changement de management, news macro..."
-                      className="w-full bg-[#0f1117] border border-[#2a2d3a] rounded px-3 py-2 text-sm
-                                 text-slate-200 placeholder-slate-600 focus:outline-none
-                                 focus:border-indigo-500 resize-none h-20"
-                      required
-                    />
-                    <button
-                      type="submit"
-                      className="text-xs px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded text-white"
-                    >
+                    <textarea value={revisionNote} onChange={(e) => setRevisionNote(e.target.value)}
+                      placeholder="Ce qui a changé : résultats, management, news macro…"
+                      className="w-full bg-[#EEF2F6] border border-[#BFD0DC] rounded px-3 py-2 text-sm
+                                 text-[#0B1929] placeholder-[#7898AC] focus:outline-none
+                                 focus:border-[#1E3A5F] resize-none h-20 transition-colors"
+                      required />
+                    <button type="submit"
+                      className="text-xs px-3 py-1.5 bg-[#1E3A5F] hover:bg-[#162d4a] rounded text-white font-medium transition-colors">
                       Recalculer l&apos;avis
                     </button>
                   </form>
@@ -254,7 +217,7 @@ function IdeaPageContent() {
 
 export default function IdeaPage() {
   return (
-    <Suspense fallback={<div className="text-slate-600 text-sm">Chargement...</div>}>
+    <Suspense fallback={<div className="text-[#7898AC] text-sm">Chargement…</div>}>
       <IdeaPageContent />
     </Suspense>
   );

@@ -15,30 +15,28 @@ export function TopBar() {
   };
 
   return (
-    <header className="h-12 bg-[#1a1d27] border-b border-[#2a2d3a] flex items-center px-6 gap-4 flex-shrink-0">
-      {/* Recherche rapide */}
+    <header className="h-11 bg-white border-b border-[#BFD0DC] flex items-center px-6 gap-4 flex-shrink-0">
       <form onSubmit={handleSearch} className="flex items-center gap-2">
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Ticker (ex: AAPL, MC.PA)"
-          className="bg-[#0f1117] border border-[#2a2d3a] rounded px-3 py-1 text-sm
-                     text-slate-200 placeholder-slate-600 focus:outline-none
-                     focus:border-indigo-500 w-52"
+          placeholder="Rechercher un ticker…"
+          className="bg-[#EEF2F6] border border-[#BFD0DC] rounded px-3 py-1.5 text-xs
+                     text-[#0B1929] placeholder-[#7898AC] focus:outline-none
+                     focus:border-[#1E3A5F] focus:bg-white transition-colors w-48"
         />
         <button
           type="submit"
-          className="text-xs px-3 py-1 bg-indigo-600 hover:bg-indigo-500
-                     rounded text-white transition-colors"
+          className="text-xs px-3 py-1.5 bg-[#1E3A5F] hover:bg-[#162d4a]
+                     rounded text-white transition-colors font-medium"
         >
           →
         </button>
       </form>
 
-      {/* Disclaimer discret */}
-      <p className="text-xs text-slate-600 ml-auto">
-        À titre informatif uniquement. Pas un conseil en investissement.
+      <p className="text-[10px] text-[#7898AC] ml-auto tracking-wide">
+        À titre informatif uniquement · Pas un conseil en investissement
       </p>
     </header>
   );

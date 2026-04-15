@@ -58,7 +58,11 @@ Ce système est à usage personnel. Ce n'est pas un conseil en investissement.
 )
 
 # CORS — origines autorisées : localhost en local + origines prod via env
-_cors_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+_cors_origins = [
+    "http://localhost:3000", "http://127.0.0.1:3000",
+    "http://localhost:3001", "http://127.0.0.1:3001",
+    "http://localhost:3002", "http://127.0.0.1:3002",
+]
 if settings.allowed_origins:
     _cors_origins += [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
 

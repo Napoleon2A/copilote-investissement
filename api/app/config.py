@@ -4,7 +4,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # App
-    app_name: str = "Copilote Investissement"
+    app_name: str = "Austerlitz Hedge Fund"
     debug: bool = True
 
     # Base de données SQLite (fichier local, zéro config)

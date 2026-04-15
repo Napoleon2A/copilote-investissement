@@ -9,22 +9,22 @@ export function MarketSummary({ data }: Props) {
   if (!data || Object.keys(data).length === 0) return null;
 
   return (
-    <div className="rounded-lg border border-[#2a2d3a] bg-[#1a1d27] p-3">
-      <div className="flex flex-wrap gap-6">
+    <div className="rounded-lg border border-[#BFD0DC] bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap gap-8">
         {Object.entries(data).map(([name, index]) => (
           <div key={name} className="flex flex-col gap-0.5">
-            <span className="text-xs text-slate-600 uppercase tracking-wide">{name}</span>
+            <span className="text-[10px] text-[#7898AC] uppercase tracking-widest font-medium">{name}</span>
             <div className="flex items-baseline gap-2">
               {index.price !== null && (
-                <span className="text-sm font-mono text-slate-300">
+                <span className="text-sm font-mono text-[#0B1929] font-medium">
                   {index.price?.toLocaleString("fr-FR", { maximumFractionDigits: 0 })}
                 </span>
               )}
               <ChangeCell value={index.change_1d} />
             </div>
             {index.change_ytd !== null && (
-              <span className="text-xs text-slate-600">
-                YTD : <ChangeCell value={index.change_ytd} className="text-xs" />
+              <span className="text-[10px] text-[#7898AC]">
+                YTD : <ChangeCell value={index.change_ytd} className="text-[10px]" />
               </span>
             )}
           </div>

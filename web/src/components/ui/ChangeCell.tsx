@@ -8,11 +8,11 @@ interface Props {
 
 /**
  * Affiche une variation avec couleur automatique (vert/rouge).
- * Utilisé dans les tableaux de prix et les cartes de brief.
+ * Adapté pour fond clair — tons plus sombres que le mode sombre.
  */
 export function ChangeCell({ value, suffix = "%", className }: Props) {
   if (value === null || value === undefined) {
-    return <span className="text-slate-600">—</span>;
+    return <span className="text-[#7898AC]">—</span>;
   }
 
   const isUp = value > 0;
@@ -22,7 +22,7 @@ export function ChangeCell({ value, suffix = "%", className }: Props) {
     <span
       className={clsx(
         "font-mono text-sm",
-        isFlat ? "text-slate-400" : isUp ? "text-green-400" : "text-red-400",
+        isFlat ? "text-[#2D4A5C]" : isUp ? "text-green-700" : "text-red-700",
         className
       )}
     >

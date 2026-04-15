@@ -100,10 +100,14 @@ export const getThesis = (ticker: string) =>
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
-export const chatWithBot = (message: string, context?: string) =>
+export const chatWithBot = (
+  message: string,
+  history: ChatMessage[] = [],
+  context?: string
+) =>
   request<ChatResponse>("/chat", {
     method: "POST",
-    body: JSON.stringify({ message, context }),
+    body: JSON.stringify({ message, history, context }),
   });
 
 // ── Scanner ───────────────────────────────────────────────────────────────────

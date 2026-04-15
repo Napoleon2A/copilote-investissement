@@ -107,13 +107,13 @@ def score_quality(fundamentals: dict) -> dict:
     market_cap = fundamentals.get("market_cap")
     if fcf is not None and market_cap and market_cap > 0:
         fcf_yield = fcf / market_cap  # FCF Yield = FCF / Market Cap
-        if fcf_yield > 0.05:          # > 5% = très généreux en cash
+        if fcf_yield > 0.05:           # > 5% = très généreux en cash
             score += 1.5
             reasons.append(f"FCF yield élevé : {fcf_yield:.1%} — forte génération de cash")
-        elif fcf_yield > 0.02:        # > 2% = correct
+        elif fcf_yield > 0.015:        # > 1.5% = correct (les large caps investissent massivement)
             score += 0.5
-            reasons.append(f"FCF positif : {fcf_yield:.1%} de rendement")
-        elif fcf_yield < -0.02:       # FCF négatif = brûle du cash
+            reasons.append(f"FCF positif : {fcf_yield:.1%} de rendement ({fcf/1e9:.0f}B)")
+        elif fcf_yield < -0.02:        # FCF négatif = brûle du cash
             score -= 1.0
             reasons.append(f"FCF négatif : entreprise en mode cash-burn")
     elif fcf is not None:

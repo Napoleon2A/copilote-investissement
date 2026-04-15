@@ -4,39 +4,39 @@ import { ScoreBadge } from "@/components/ui/ScoreBadge";
 import type { BriefItem, BriefPosition } from "@/lib/api";
 
 const ACTION_COLORS: Record<string, string> = {
-  watch: "text-blue-400",
-  read: "text-yellow-400",
-  buy_small: "text-green-400",
-  add: "text-green-500",
-  reduce: "text-orange-400",
-  avoid: "text-red-400",
-  hold: "text-slate-400",
-  review_thesis: "text-purple-400",
+  watch:         "text-blue-700",
+  read:          "text-amber-700",
+  buy_small:     "text-green-700",
+  add:           "text-green-700",
+  reduce:        "text-orange-600",
+  avoid:         "text-red-700",
+  hold:          "text-[#2D4A5C]",
+  review_thesis: "text-purple-700",
 };
 
 export function BriefItemCard({ item }: { item: BriefItem }) {
-  const actionColor = ACTION_COLORS[item.action] || "text-slate-400";
+  const actionColor = ACTION_COLORS[item.action] || "text-[#2D4A5C]";
 
   return (
-    <div className="rounded-lg border border-[#2a2d3a] bg-[#1a1d27] p-4 hover:border-indigo-500/40 transition-colors">
+    <div className="rounded-lg border border-[#BFD0DC] bg-white p-4 hover:border-[#1E3A5F]/30 hover:shadow-sm transition-all duration-150">
       <div className="flex items-start justify-between gap-4">
         {/* Ticker + prix */}
         <div>
           <Link
             href={`/company/${item.ticker}`}
-            className="text-base font-bold text-indigo-300 hover:text-indigo-200 font-mono"
+            className="text-base font-bold text-[#1E3A5F] hover:text-[#162d4a] font-mono"
           >
             {item.ticker}
           </Link>
           <div className="flex items-center gap-2 mt-0.5">
             {item.current_price && (
-              <span className="text-sm text-slate-300 font-mono">
+              <span className="text-sm text-[#0B1929] font-mono">
                 {item.current_price.toLocaleString()}
               </span>
             )}
             <ChangeCell value={item.change_1d} />
             {item.change_1m !== undefined && (
-              <ChangeCell value={item.change_1m} className="text-slate-500 text-xs" />
+              <ChangeCell value={item.change_1m} className="text-[#7898AC] text-xs" />
             )}
           </div>
         </div>
@@ -54,19 +54,19 @@ export function BriefItemCard({ item }: { item: BriefItem }) {
 
       {/* Pourquoi maintenant */}
       {item.why_now && (
-        <p className="text-sm text-slate-400 mt-2 leading-relaxed">
+        <p className="text-sm text-[#2D4A5C] mt-2 leading-relaxed">
           {item.why_now}
         </p>
       )}
 
-      {/* P&L de la position (uniquement pour le portefeuille) */}
+      {/* P&L de la position */}
       {item.position && <PositionPnl pos={item.position} />}
 
       {/* Signaux supplémentaires */}
       {item.signals.length > 1 && (
         <ul className="mt-2 space-y-0.5">
           {item.signals.slice(1).map((signal, i) => (
-            <li key={i} className="text-xs text-slate-600 flex gap-1">
+            <li key={i} className="text-xs text-[#7898AC] flex gap-1">
               <span>·</span>
               <span>{signal}</span>
             </li>
@@ -79,15 +79,15 @@ export function BriefItemCard({ item }: { item: BriefItem }) {
 
 function PositionPnl({ pos }: { pos: BriefPosition }) {
   const isPositive = pos.pnl >= 0;
-  const color = isPositive ? "text-green-400" : "text-red-400";
+  const color = isPositive ? "text-green-700" : "text-red-700";
   return (
-    <div className="mt-2 flex items-center gap-3 text-xs text-slate-500 border-t border-[#2a2d3a] pt-2">
+    <div className="mt-2 flex items-center gap-3 text-xs text-[#7898AC] border-t border-[#BFD0DC] pt-2">
       <span>{pos.quantity} actions × {pos.avg_cost.toFixed(2)} {pos.currency}</span>
       <span>→</span>
       <span className={`font-mono font-medium ${color}`}>
         {isPositive ? "+" : ""}{pos.pnl.toFixed(2)} {pos.currency}
         {pos.pnl_pct != null && (
-          <span className="ml-1 opacity-70">({isPositive ? "+" : ""}{pos.pnl_pct.toFixed(1)}%)</span>
+          <span className="ml-1 opacity-60">({isPositive ? "+" : ""}{pos.pnl_pct.toFixed(1)}%)</span>
         )}
       </span>
     </div>

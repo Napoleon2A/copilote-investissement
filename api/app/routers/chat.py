@@ -145,9 +145,16 @@ CONCEPTS = {
 }
 
 
+class HistoryMessage(BaseModel):
+    role: str   # "user" | "assistant"
+    text: str
+    data: Optional[dict] = None
+
+
 class ChatRequest(BaseModel):
     message: str
-    context: Optional[str] = None  # ticker actif si l'utilisateur est sur une fiche
+    context: Optional[str] = None       # ticker actif si l'utilisateur est sur une fiche
+    history: list[HistoryMessage] = []  # Historique de la conversation
 
 
 class ChatResponse(BaseModel):
@@ -156,33 +163,465 @@ class ChatResponse(BaseModel):
     data: Optional[dict] = None  # Données structurées associées
 
 
+STOP_WORDS = {
+    # Articles et pronoms FR
+    "ET", "LE", "LA", "LES", "DE", "DU", "UN", "UNE", "EST", "EN",
+    "SUR", "AU", "AUX", "PAR", "POUR", "AVEC", "DANS", "QUE", "QUI",
+    "CE", "IL", "EL", "ETA", "MOI", "TOI", "LUI", "EUX", "SOI",
+    "MON", "TON", "SON", "MES", "TES", "SES", "NOS", "VOS", "MA", "SA",
+    "JE", "TU", "ON", "ILS", "ELLES", "NOUS", "VOUS",
+    # Mots FR courants qui ressemblent à des tickers
+    "QUOI", "CAR", "MAIS", "DONC", "QUAND", "COMMENT", "POURQUOI",
+    "QUEL", "QUELLE", "QUELS", "QUELLES", "DONNE", "COURS", "PRIX",
+    "VOIR", "AIDE", "HAUT", "BAS", "PLUS", "MOINS", "TRES", "BIEN",
+    "TOUT", "TOUS", "TOUTES", "FAIRE", "DIRE", "ALLER", "VENIR",
+    "PEUX", "PEUT", "VEUX", "VEUT", "DOIS", "DOIT",
+    "MOIS", "JOURS", "JOUR", "HIER", "DEMAIN", "MEME", "COMME",
+    "FOND", "PART", "PARTS", "AVEC", "SANS", "SOUS",
+    # Adjectifs et mots courants confondus avec tickers
+    "BON", "BONNE", "BONS", "BONNES", "MAUVAIS", "MAUVAISE",
+    "GRAND", "GRANDE", "PETIT", "PETITE", "PREMIER", "PREMIERE",
+    "DERNIER", "DERNIERE", "IDEE", "IDÉE", "MEILLEUR", "MEILLEURE",
+    "ACTUEL", "ACTUELLE", "GLOBAL", "LOCALE", "SEUL", "SEULE",
+    "FORTE", "FORT", "FAIBLE", "MOYEN", "NEUTRE", "RISQUE",
+    "ACHAT", "VENTE", "BOURSE", "ACTION", "ACTIONS", "MARCHE",
+    "SECTEUR", "HAUSSE", "BAISSE", "TREND", "COTE", "LISTE",
+    # Anglais
+    "THE", "AND", "OR", "FOR", "IS", "IN", "ON", "AT", "TO", "BY",
+    "AN", "AS", "BE", "DO", "IF", "MY", "IT", "OF", "NO", "SO",
+    "VS", "VA", "VU", "OU", "UX", "OK", "GO",
+    # Mots financiers qui ne sont pas des tickers
+    "ETF", "IPO", "SPY", "TER", "NAV", "AUM",
+}
+
+# Correspondance noms communs → tickers Yahoo Finance
+# Permet de dire "LVMH", "Total", "Tesla" sans connaître le ticker exact
+COMPANY_NAME_TO_TICKER = {
+    # France / Europe
+    "LVMH": "MC.PA",
+    "TOTAL": "TTE.PA",
+    "TOTALENERGIES": "TTE.PA",
+    "AIRBUS": "AIR.PA",
+    "AIRFRANCE": "AF.PA",
+    "BNP": "BNP.PA",
+    "BNPPARIBAS": "BNP.PA",
+    "SOCIETE GENERALE": "GLE.PA",
+    "SOCIETEGENERALE": "GLE.PA",
+    "SOGENE": "GLE.PA",
+    "SANOFI": "SAN.PA",
+    "LOREAL": "OR.PA",
+    "HERMES": "RMS.PA",
+    "KERING": "KER.PA",
+    "PERNOD": "RI.PA",
+    "PERNODRICARD": "RI.PA",
+    "MICHELIN": "ML.PA",
+    "RENAULT": "RNO.PA",
+    "STELLANTIS": "STLA",
+    "DASSAULT": "AM.PA",
+    "SCHNEIDER": "SU.PA",
+    "SAFRAN": "SAF.PA",
+    "VINCI": "DG.PA",
+    "SAINT GOBAIN": "SGO.PA",
+    "SAINTGOBAIN": "SGO.PA",
+    "CAPGEMINI": "CAP.PA",
+    "LEGRAND": "LR.PA",
+    "PUBLICIS": "PUB.PA",
+    "CARREFOUR": "CA.PA",
+    "DANONE": "BN.PA",
+    "CREDIT AGRICOLE": "ACA.PA",
+    "CREDITAGRICOLE": "ACA.PA",
+    "AXA": "CS.PA",
+    "BOUYGUES": "EN.PA",
+    "EURONEXT": "ENX.PA",
+    "WORLDLINE": "WLN.PA",
+    "NOVONORDISK": "NVO",
+    "NOVO": "NVO",
+    "ASML": "ASML",
+    "SAP": "SAP",
+    "SIEMENS": "SIE.DE",
+    "VOLKSWAGEN": "VOW.DE",
+    "BMW": "BMW.DE",
+    "MERCEDES": "MBG.DE",
+    "ALLIANZ": "ALV.DE",
+    "DEUTSCHE BANK": "DBK.DE",
+    "NESTLE": "NESN.SW",
+    "ROCHE": "ROG.SW",
+    "NOVARTIS": "NOVN.SW",
+    "UNILEVER": "UL",
+    "SHELL": "SHEL",
+    "BP": "BP",
+    "HSBC": "HSBC",
+    "RICHEMONT": "CFR.SW",
+    # USA — noms courants
+    "TESLA": "TSLA",
+    "APPLE": "AAPL",
+    "MICROSOFT": "MSFT",
+    "GOOGLE": "GOOGL",
+    "ALPHABET": "GOOGL",
+    "AMAZON": "AMZN",
+    "META": "META",
+    "FACEBOOK": "META",
+    "NVIDIA": "NVDA",
+    "NETFLIX": "NFLX",
+    "PALANTIR": "PLTR",
+    "COINBASE": "COIN",
+    "OPENAI": None,  # Pas coté
+    "JPMORGAN": "JPM",
+    "GOLDMANSACHS": "GS",
+    "GOLDMAN": "GS",
+    "BERKSHIRE": "BRK-B",
+    "JOHNSON": "JNJ",
+    "PFIZER": "PFE",
+    "EXXON": "XOM",
+    "CHEVRON": "CVX",
+    "WALMART": "WMT",
+    "VISA": "V",
+    "MASTERCARD": "MA",
+    "PAYPAL": "PYPL",
+    "UBER": "UBER",
+    "AIRBNB": "ABNB",
+    "SPOTIFY": "SPOT",
+    "DISNEY": "DIS",
+    "SALESFORCE": "CRM",
+    "ADOBE": "ADBE",
+    "AMD": "AMD",
+    "INTEL": "INTC",
+    "QUALCOMM": "QCOM",
+    "TSMC": "TSM",
+    "SAMSUNG": "005930.KS",
+    "LILLY": "LLY",
+    "ELIYLILLY": "LLY",
+    "NOVO NORDISK": "NVO",
+    "MERCK": "MRK",
+    "ABBVIE": "ABBV",
+    "NEWMONT": "NEM",
+    "FIRST SOLAR": "FSLR",
+    "FIRSTSOLAR": "FSLR",
+}
+
+TICKER_PATTERNS = [
+    r'\b([A-Z]{1,5}\.[A-Z]{2})\b',  # Ticker européen en premier (MC.PA, AIR.PA, BRK.B)
+    r'\b([A-Z]{2,6})\b',             # Ticker US (AAPL, MSFT, NVDA)
+]
+
+
+def _resolve_company_name(text: str) -> Optional[str]:
+    """
+    Tente de résoudre un nom d'entreprise en ticker.
+    Ex: "LVMH" → "MC.PA", "Tesla" → "TSLA"
+    """
+    text_upper = text.upper().replace(" ", "").replace("-", "").replace("_", "")
+    # Essai direct
+    if text_upper in COMPANY_NAME_TO_TICKER:
+        return COMPANY_NAME_TO_TICKER[text_upper]
+    # Essai avec texte normalisé
+    text_normalized = text.upper().strip()
+    if text_normalized in COMPANY_NAME_TO_TICKER:
+        return COMPANY_NAME_TO_TICKER[text_normalized]
+    # Recherche partielle (ex: "Novo Nordisk" → "NOVO NORDISK")
+    for key, ticker in COMPANY_NAME_TO_TICKER.items():
+        if key in text_normalized or text_normalized in key:
+            return ticker
+    return None
+
+
 def _extract_ticker(text: str) -> Optional[str]:
     """
-    Extrait un ticker boursier d'un texte.
-    Cherche des séquences de 2-6 lettres majuscules (ou avec .PA, .L, etc.)
+    Extrait un ticker boursier d'un texte en langage naturel.
+    Essaie d'abord les noms d'entreprises connus, puis les patterns regex.
     """
+    # 1. Résolution par nom d'entreprise (priorité maximale)
+    resolved = _resolve_company_name(text)
+    if resolved:
+        return resolved
+
+    # 2. Patterns regex — mais on filtre agressivement les mots courants
     text_upper = text.upper()
-
-    # Chercher des patterns de ticker explicites
-    patterns = [
-        r'\b([A-Z]{2,6})\b',           # Ticker US simple (AAPL, MSFT)
-        r'\b([A-Z]{2,5}\.[A-Z]{1,2})\b', # Ticker européen (MC.PA, AIR.PA)
-    ]
-    stop_words = {
-        "ET", "LE", "LA", "LES", "DE", "DU", "UN", "UNE", "EST", "EN",
-        "SUR", "AU", "AUX", "PAR", "POUR", "AVEC", "DANS", "QUE", "QUI",
-        "CE", "IL", "EL", "ETA", "THE", "AND", "OR", "FOR", "IS", "IN",
-        "ON", "AT", "TO", "BY", "AN", "AS", "BE", "DO", "IF", "MY",
-        "QUOI", "MOI", "TOI", "LUI", "EUX", "SOI", "CAR", "MAIS", "DONC",
-        "QUAND", "COMMENT", "POURQUOI", "QUEL", "QUELLE", "QUELS", "QUELLES",
-    }
-
-    for pattern in patterns:
+    for pattern in TICKER_PATTERNS:
         matches = re.findall(pattern, text_upper)
         for match in matches:
-            if match not in stop_words and len(match) >= 2:
+            if match not in STOP_WORDS and len(match) >= 2:
+                # Éviter de retourner des mots du dictionnaire français évidents
                 return match
     return None
+
+
+def _extract_multiple_tickers(text: str, max_count: int = 3) -> list[str]:
+    """
+    Extrait plusieurs tickers d'un texte (utile pour les comparaisons).
+    """
+    # Chercher d'abord les noms connus
+    found = []
+    text_upper = text.upper()
+
+    for name, ticker in COMPANY_NAME_TO_TICKER.items():
+        if name in text_upper and ticker and ticker not in found:
+            found.append(ticker)
+        if len(found) >= max_count:
+            return found
+
+    # Compléter avec regex si pas assez trouvé
+    for pattern in TICKER_PATTERNS:
+        matches = re.findall(pattern, text_upper)
+        for match in matches:
+            if match not in STOP_WORDS and len(match) >= 2 and match not in found:
+                found.append(match)
+        if len(found) >= max_count:
+            break
+
+    return found[:max_count]
+
+
+def _extract_context(history: list[HistoryMessage]) -> dict:
+    """
+    Extrait le contexte actif depuis l'historique de conversation.
+    Remonte jusqu'à trouver : le dernier ticker discuté, les dernières
+    opportunités montrées, et le type de la dernière réponse.
+    """
+    ctx = {
+        "last_ticker": None,
+        "last_opportunities": [],
+        "last_intent": None,
+    }
+    for msg in reversed(history):
+        if msg.role == "assistant" and msg.data:
+            if not ctx["last_ticker"] and msg.data.get("ticker"):
+                ctx["last_ticker"] = msg.data["ticker"]
+            if not ctx["last_opportunities"] and msg.data.get("opportunities"):
+                ctx["last_opportunities"] = msg.data["opportunities"]
+        if ctx["last_ticker"] and ctx["last_opportunities"]:
+            break
+    return ctx
+
+
+FOLLOWUP_RISK = {
+    "risque", "risqué", "risquee", "dangereux", "sûr", "sur",
+    "volatil", "volatilité", "volatilite", "prudent", "prudence",
+    "protection", "stop loss", "stop-loss", "downside",
+}
+FOLLOWUP_BUY = {
+    "acheter", "achat", "j'achète", "j achete", "je prends",
+    "initier", "rentrer", "entrer", "investir", "maintenant",
+    "bon moment", "bonne idée", "bonne idee", "je dois", "tu conseilles",
+    "tu recommandes", "recommande", "conseille",
+}
+FOLLOWUP_DEEPEN = {
+    "approfondis", "développe", "developpe", "dis m'en plus", "dis moi plus",
+    "plus de détail", "plus de detail", "explique", "explique moi",
+    "pourquoi", "comment", "creuse", "analyse plus",
+}
+FOLLOWUP_MORE_OPPS = {
+    "autres", "encore", "suite", "montre plus", "la suite",
+    "plus d'opportunités", "plus d opportunites", "voir plus",
+}
+
+
+def _detect_followup(msg: str, ctx: dict) -> Optional[dict]:
+    """
+    Détecte si le message est une question de suivi sur le contexte actif.
+    Retourne None si ce n'est pas un follow-up.
+    """
+    msg_lower = msg.lower()
+    words = set(msg_lower.split())
+
+    # "compare avec X" ou "et X ?" en mode follow-up
+    ticker_in_msg = _extract_ticker(msg)
+    if ticker_in_msg and ctx["last_ticker"] and ticker_in_msg != ctx["last_ticker"]:
+        if any(kw in msg_lower for kw in ["compar", " vs ", "et ", "ou ", "plutôt", "plutot"]):
+            return {"intent": "compare", "tickers": [ctx["last_ticker"], ticker_in_msg]}
+
+    # Questions sur le risque
+    if FOLLOWUP_RISK & words or any(k in msg_lower for k in FOLLOWUP_RISK):
+        ticker = ctx["last_ticker"]
+        if not ticker and ctx["last_opportunities"]:
+            opps = ctx["last_opportunities"]
+            ticker = opps[0]["ticker"] if opps else None
+        if ticker:
+            return {"intent": "followup_risk", "ticker": ticker}
+
+    # Questions d'achat / décision
+    if FOLLOWUP_BUY & words or any(k in msg_lower for k in FOLLOWUP_BUY):
+        ticker = ticker_in_msg or ctx["last_ticker"]
+        # Si pas de ticker mais des opportunités affichées → utiliser la première
+        if not ticker and ctx["last_opportunities"]:
+            opps = ctx["last_opportunities"]
+            ticker = opps[0]["ticker"] if opps else None
+        if ticker:
+            return {"intent": "followup_buy", "ticker": ticker}
+
+    # Demandes d'approfondissement
+    if FOLLOWUP_DEEPEN & words or any(k in msg_lower for k in FOLLOWUP_DEEPEN):
+        if ctx["last_ticker"]:
+            return {"intent": "analysis", "ticker": ctx["last_ticker"]}
+
+    # "Et les autres opportunités ?"
+    if FOLLOWUP_MORE_OPPS & words or any(k in msg_lower for k in FOLLOWUP_MORE_OPPS):
+        if ctx["last_opportunities"]:
+            return {"intent": "opportunities", "ticker": None}
+
+    return None
+
+
+async def _handle_followup_risk(ticker: str) -> ChatResponse:
+    """Analyse détaillée du risque sur un ticker — réponse en mode co-gérant."""
+    changes = get_price_changes(ticker)
+    fundamentals = get_fundamentals(ticker)
+    if not changes:
+        return ChatResponse(type="error", text=f"Je n'arrive pas à récupérer les données de {ticker}.")
+
+    scores = compute_all_scores(fundamentals, changes)
+    risk = scores["risk"]
+    risk_score = risk["score"]
+    volatility_amplitude = None
+    high_52w = fundamentals.get("week_52_high")
+    low_52w = fundamentals.get("week_52_low")
+    if high_52w and low_52w and low_52w > 0:
+        volatility_amplitude = (high_52w - low_52w) / low_52w * 100
+
+    lines = [f"## Analyse de risque — {ticker}\n"]
+    lines.append(f"**Score risque : {risk_score}/10** {'(risque faible)' if risk_score >= 6 else '(risque modéré)' if risk_score >= 4 else '(risque élevé)'}\n")
+
+    # Raisons du score risque
+    for r in risk.get("reasons", []):
+        if "insuffisant" not in r.lower():
+            lines.append(f"• {r}")
+
+    # Volatilité 52W
+    if volatility_amplitude is not None:
+        lines.append(f"• Amplitude 52 semaines : {volatility_amplitude:.0f}% (de {low_52w:.2f} à {high_52w:.2f})")
+
+    # Distance depuis le plus bas
+    pct_from_low = changes.get("pct_from_52w_low")
+    pct_from_high = changes.get("pct_from_52w_high")
+    if pct_from_high is not None:
+        lines.append(f"• Actuellement {abs(pct_from_high):.0f}% sous son plus haut 52W")
+    if pct_from_low is not None:
+        lines.append(f"• {pct_from_low:.0f}% au-dessus de son plus bas 52W")
+
+    # Earnings
+    try:
+        from app.services.data_service import get_earnings_calendar
+        cal = get_earnings_calendar(ticker)
+        earnings_str = cal.get("earnings_date")
+        if earnings_str and str(earnings_str) != "None":
+            from datetime import date as _d, datetime as _dt
+            earnings_dt = _d.fromisoformat(str(earnings_str)[:10])
+            days_until = (earnings_dt - _dt.utcnow().date()).days
+            if 0 <= days_until <= 30:
+                lines.append(f"\n⚠ **Résultats dans {days_until}j ({earnings_dt.strftime('%d/%m')})** — fort potentiel de gap. Réduire la taille de position avant la publication.")
+    except Exception:
+        pass
+
+    # Verdict calibrage position
+    lines.append("")
+    if risk_score >= 7:
+        conseil = "Profil de risque maîtrisé. Taille de position standard possible."
+    elif risk_score >= 5:
+        conseil = "Risque modéré. Limite la position à 3-5% du portefeuille et pose un stop."
+    elif risk_score >= 3:
+        conseil = "Risque élevé. Position spéculative uniquement — max 1-2% du portefeuille."
+    else:
+        conseil = "Profil très risqué. Éviter ou position symbolique uniquement."
+
+    lines.append(f"**Verdict position sizing :** {conseil}")
+
+    return ChatResponse(
+        type="risk",
+        text="\n".join(lines),
+        data={"ticker": ticker, "risk_score": risk_score},
+    )
+
+
+async def _handle_followup_buy(ticker: str) -> ChatResponse:
+    """Donne un avis clair sur l'achat maintenant — en mode co-gérant direct."""
+    from app.services.data_service import get_earnings_calendar
+    changes = get_price_changes(ticker)
+    fundamentals = get_fundamentals(ticker)
+    if not changes:
+        return ChatResponse(type="error", text=f"Données indisponibles pour {ticker}.")
+
+    scores = compute_all_scores(fundamentals, changes)
+    composite = scores["composite"]
+    risk_score = scores["risk"]["score"]
+    momentum_score = scores["momentum"]["score"]
+    valuation_score = scores["valuation"]["score"]
+
+    lines = [f"## Faut-il acheter {ticker} maintenant ?\n"]
+
+    # Arguments pour/contre structurés
+    pros = []
+    cons = []
+
+    if composite >= 7:
+        pros.append(f"Score composite solide ({composite}/10)")
+    elif composite < 5:
+        cons.append(f"Score composite insuffisant ({composite}/10) — le profil ne justifie pas une entrée")
+
+    if valuation_score >= 6.5:
+        pros.append("Valorisation attractive — tu n'overpays pas")
+    elif valuation_score < 4:
+        cons.append("Valorisation tendue — attendre une correction ou un meilleur point d'entrée")
+
+    if momentum_score >= 6:
+        pros.append("Momentum positif — le titre est dans le sens du marché")
+    elif momentum_score < 4:
+        cons.append("Momentum négatif — le titre baisse, pas de confirmation technique")
+
+    if risk_score >= 6:
+        pros.append("Risque maîtrisé — bilan solide")
+    elif risk_score < 4:
+        cons.append("Risque élevé — dette ou volatilité préoccupante")
+
+    # Earnings check
+    earnings_warning = None
+    try:
+        cal = get_earnings_calendar(ticker)
+        earnings_str = cal.get("earnings_date")
+        if earnings_str and str(earnings_str) != "None":
+            from datetime import date as _d, datetime as _dt
+            earnings_dt = _d.fromisoformat(str(earnings_str)[:10])
+            days_until = (earnings_dt - _dt.utcnow().date()).days
+            if 0 <= days_until <= 14:
+                earnings_warning = f"Résultats dans {days_until}j ({earnings_dt.strftime('%d/%m')}) — risque de gap fort dans les deux sens"
+                cons.append(earnings_warning)
+    except Exception:
+        pass
+
+    if pros:
+        lines.append("**Pour :**")
+        for p in pros:
+            lines.append(f"+ {p}")
+        lines.append("")
+
+    if cons:
+        lines.append("**Contre :**")
+        for c in cons:
+            lines.append(f"− {c}")
+        lines.append("")
+
+    # Verdict final
+    score_positifs = len(pros)
+    score_negatifs = len(cons)
+
+    if composite >= 7.5 and risk_score >= 5 and not earnings_warning:
+        verdict = f"**Oui, le profil justifie une entrée.** Initie une petite position (2-4% max), pose un stop sous le plus bas récent."
+    elif composite >= 6.5 and score_positifs > score_negatifs:
+        verdict = f"**Plutôt oui, mais attends une confirmation.** Score correct, mais le timing n'est pas idéal. Moitié de position maintenant, l'autre si le titre tient."
+    elif earnings_warning:
+        verdict = f"**Attendre après les résultats.** {earnings_warning}. Trop risqué d'entrer avant la publication."
+    elif composite >= 5 and momentum_score < 4:
+        verdict = "**Trop tôt.** Le fondamental est correct mais le momentum est contre toi. Attendre un retournement technique avant d'entrer."
+    else:
+        verdict = f"**Non, le profil actuel ne justifie pas une entrée.** Score trop faible ({composite}/10). Chercher d'autres opportunités."
+
+    lines.append(f"**Verdict :** {verdict}")
+    lines.append("\n*Rappel : ceci est une heuristique, pas un conseil en investissement.*")
+
+    return ChatResponse(
+        type="buy_decision",
+        text="\n".join(lines),
+        data={"ticker": ticker, "composite": composite},
+    )
 
 
 def _detect_intent(message: str) -> dict:
@@ -236,6 +675,11 @@ def _detect_intent(message: str) -> dict:
     # Intentions liées au portefeuille
     if any(kw in msg for kw in ["portefeuille", "portfolio", "position", "pnl", "gain", "perte", "performance", "holdings"]):
         return {"intent": "portfolio", "ticker": None}
+
+    # Comparaison de plusieurs tickers
+    tickers_found = _extract_multiple_tickers(message)
+    if len(tickers_found) >= 2 and any(kw in msg for kw in ["compar", " vs ", " ou ", "meilleur entre", "lequel"]):
+        return {"intent": "compare", "tickers": tickers_found[:2], "ticker": tickers_found[0]}
 
     # Intentions liées aux opportunités
     if any(kw in msg for kw in ["opportunit", "idée", "invest", "acheter", "achat", "buy", "meilleur", "top", "scanner", "signal"]):
@@ -508,6 +952,76 @@ async def _handle_news(ticker: Optional[str]) -> ChatResponse:
     )
 
 
+async def _handle_compare(tickers: list[str]) -> ChatResponse:
+    """
+    Compare deux tickers côte-à-côte sur les scores clés.
+    Donne une conclusion sur lequel est plus attractif maintenant.
+    """
+    results = []
+    for t in tickers[:2]:
+        changes = get_price_changes(t)
+        fundamentals = get_fundamentals(t)
+        scores = compute_all_scores(fundamentals, changes)
+        info = get_company_info(t)
+        name = info.get("shortName") or t
+        results.append({
+            "ticker": t,
+            "name": name,
+            "scores": scores,
+            "changes": changes,
+        })
+
+    if not results:
+        return ChatResponse(type="error", text="Données indisponibles pour la comparaison.")
+
+    lines = [f"## Comparaison : {' vs '.join(r['ticker'] for r in results)}\n"]
+
+    # Table de comparaison
+    headers = ["", results[0]["ticker"], results[1]["ticker"] if len(results) > 1 else "—"]
+    rows = []
+    metrics = [
+        ("Composite", "composite", False),
+        ("Qualité", "quality", True),
+        ("Valorisation", "valuation", True),
+        ("Croissance", "growth", True),
+        ("Momentum", "momentum", True),
+        ("Risque", "risk", True),
+    ]
+
+    for label, key, is_sub in metrics:
+        vals = []
+        for r in results:
+            sc = r["scores"]
+            v = sc[key]["score"] if is_sub else sc[key]
+            vals.append(v)
+        winner = "→" if len(vals) < 2 else ("←" if vals[0] < vals[1] else ("→" if vals[0] > vals[1] else "="))
+        row = f"**{label}** | {vals[0]}/10 | {vals[1] if len(vals)>1 else '—'}/10 {winner}"
+        rows.append(row)
+
+    for r in rows:
+        lines.append(r)
+
+    # Conclusion
+    if len(results) == 2:
+        s1 = results[0]["scores"]["composite"]
+        s2 = results[1]["scores"]["composite"]
+        diff = abs(s1 - s2)
+        better = results[0]["ticker"] if s1 >= s2 else results[1]["ticker"]
+        worse = results[1]["ticker"] if s1 >= s2 else results[0]["ticker"]
+
+        lines.append("")
+        if diff < 0.3:
+            lines.append(f"**Verdict :** Les deux sont très proches ({s1} vs {s2}). Diversifier ou choisir selon ton horizon.")
+        else:
+            lines.append(f"**Verdict :** **{better}** est actuellement plus attractif ({max(s1,s2)}/10 vs {min(s1,s2)}/10 pour {worse}).")
+
+    return ChatResponse(
+        type="compare",
+        text="\n".join(lines),
+        data={"tickers": [r["ticker"] for r in results]},
+    )
+
+
 async def _handle_concept(concept: str) -> ChatResponse:
     """Explication d'un concept financier."""
     explanation = CONCEPTS.get(concept, "")
@@ -536,14 +1050,32 @@ async def chat(
     if not message:
         return ChatResponse(type="error", text="Pose-moi une question !")
 
-    intent_data = _detect_intent(message)
+    # Extraire le contexte de la conversation précédente
+    ctx = _extract_context(request.history)
+
+    # Détecter si c'est une question de suivi (follow-up)
+    followup = _detect_followup(message, ctx) if ctx["last_ticker"] or ctx["last_opportunities"] else None
+
+    if followup:
+        intent_data = followup
+    else:
+        intent_data = _detect_intent(message)
+
     intent = intent_data["intent"]
     ticker = intent_data.get("ticker") or request.context
 
-    logger.info(f"Chat: intent={intent}, ticker={ticker}, message='{message[:50]}'")
+    logger.info(f"Chat: intent={intent}, ticker={ticker}, followup={followup is not None}, message='{message[:50]}'")
 
     try:
-        if intent == "analysis" and ticker:
+        if intent == "compare":
+            tickers = intent_data.get("tickers", [])
+            if len(tickers) >= 2:
+                return await _handle_compare(tickers)
+        if intent == "followup_risk" and ticker:
+            return await _handle_followup_risk(ticker)
+        elif intent == "followup_buy" and ticker:
+            return await _handle_followup_buy(ticker)
+        elif intent == "analysis" and ticker:
             return await _handle_analysis(ticker)
         elif intent == "opportunities":
             return await _handle_opportunities(ticker)
@@ -554,7 +1086,6 @@ async def chat(
         elif intent == "concept":
             return await _handle_concept(intent_data.get("concept", ""))
         elif intent == "portfolio":
-            # Récupérer les positions pour répondre sur le portefeuille
             portfolio_result = await session.exec(select(Portfolio))
             portfolio = portfolio_result.first()
             if not portfolio:
@@ -568,7 +1099,6 @@ async def chat(
                 data={"portfolio_id": portfolio.id},
             )
         else:
-            # Fallback : essayer une analyse si ticker détecté, sinon opportunités
             if ticker:
                 return await _handle_analysis(ticker)
             return await _handle_opportunities(None)

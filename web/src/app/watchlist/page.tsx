@@ -5,13 +5,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import {
-  getWatchlists,
-  getWatchlistSnapshot,
-  createWatchlist,
-  addToWatchlist,
-  removeFromWatchlist,
-} from "@/lib/api";
+import { getWatchlists, getWatchlistSnapshot, createWatchlist, addToWatchlist, removeFromWatchlist } from "@/lib/api";
 import type { Watchlist, WatchlistSnapshotItem } from "@/lib/api";
 import { ChangeCell } from "@/components/ui/ChangeCell";
 import { ScoreBadge } from "@/components/ui/ScoreBadge";
@@ -25,17 +19,12 @@ export default function WatchlistPage() {
   const [newListName, setNewListName] = useState("");
   const [error, setError] = useState("");
 
-  // Charger les watchlists au montage
   useEffect(() => {
     getWatchlists()
-      .then((data) => {
-        setWatchlists(data);
-        if (data.length > 0) setSelectedId(data[0].id);
-      })
+      .then((data) => { setWatchlists(data); if (data.length > 0) setSelectedId(data[0].id); })
       .catch(() => setError("Backend inaccessible"));
   }, []);
 
-  // Charger le snapshot quand la watchlist change
   useEffect(() => {
     if (!selectedId) return;
     setLoading(true);
@@ -51,7 +40,6 @@ export default function WatchlistPage() {
     try {
       await addToWatchlist(selectedId, newTicker.trim());
       setNewTicker("");
-      // Rafraîchir
       const data = await getWatchlistSnapshot(selectedId);
       setSnapshot(data.snapshots);
     } catch (err: unknown) {
@@ -75,39 +63,32 @@ export default function WatchlistPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4">
-      <h1 className="text-lg font-semibold text-slate-100">Watchlist</h1>
+    <div className="max-w-4xl mx-auto space-y-5">
+      <h1 className="text-lg font-semibold text-[#0B1929]"
+          style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+        Watchlist
+      </h1>
 
-      {/* Sélecteur de watchlist + création */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* Sélecteur + création */}
+      <div className="flex items-center gap-2 flex-wrap">
         {watchlists.map((wl) => (
-          <button
-            key={wl.id}
-            onClick={() => setSelectedId(wl.id)}
+          <button key={wl.id} onClick={() => setSelectedId(wl.id)}
             className={`text-sm px-3 py-1 rounded border transition-colors ${
               selectedId === wl.id
-                ? "border-indigo-500 bg-indigo-500/20 text-indigo-300"
-                : "border-[#2a2d3a] text-slate-400 hover:border-slate-500"
-            }`}
-          >
+                ? "border-[#1E3A5F] bg-[#1E3A5F] text-white font-medium"
+                : "border-[#BFD0DC] text-[#2D4A5C] bg-white hover:border-[#1E3A5F]/30 hover:text-[#1E3A5F]"
+            }`}>
             {wl.name}
           </button>
         ))}
-
-        {/* Créer une nouvelle liste */}
         <form onSubmit={handleCreateList} className="flex gap-2">
-          <input
-            value={newListName}
-            onChange={(e) => setNewListName(e.target.value)}
-            placeholder="Nouvelle liste..."
-            className="bg-[#0f1117] border border-[#2a2d3a] rounded px-2 py-1 text-xs
-                       text-slate-300 placeholder-slate-600 focus:outline-none focus:border-indigo-500 w-32"
-          />
-          <button
-            type="submit"
-            className="text-xs px-2 py-1 border border-[#2a2d3a] rounded text-slate-400
-                       hover:border-slate-500 hover:text-slate-200"
-          >
+          <input value={newListName} onChange={(e) => setNewListName(e.target.value)}
+            placeholder="Nouvelle liste…"
+            className="bg-white border border-[#BFD0DC] rounded px-2.5 py-1 text-xs
+                       text-[#0B1929] placeholder-[#7898AC] focus:outline-none focus:border-[#1E3A5F] w-32 transition-colors" />
+          <button type="submit"
+            className="text-xs px-2.5 py-1 border border-[#BFD0DC] rounded text-[#2D4A5C]
+                       bg-white hover:border-[#1E3A5F]/30 hover:text-[#1E3A5F] transition-colors">
             +
           </button>
         </form>
@@ -116,44 +97,36 @@ export default function WatchlistPage() {
       {/* Ajouter un ticker */}
       {selectedId && (
         <form onSubmit={handleAddTicker} className="flex gap-2 items-center">
-          <input
-            value={newTicker}
-            onChange={(e) => setNewTicker(e.target.value.toUpperCase())}
-            placeholder="Ajouter ticker (ex: MSFT)"
-            className="bg-[#0f1117] border border-[#2a2d3a] rounded px-3 py-1.5 text-sm
-                       text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 w-52"
-          />
-          <button
-            type="submit"
-            className="text-sm px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded text-white transition-colors"
-          >
+          <input value={newTicker} onChange={(e) => setNewTicker(e.target.value.toUpperCase())}
+            placeholder="Ajouter un ticker (ex: MSFT)"
+            className="bg-white border border-[#BFD0DC] rounded px-3 py-1.5 text-sm
+                       text-[#0B1929] placeholder-[#7898AC] focus:outline-none focus:border-[#1E3A5F] w-52 transition-colors" />
+          <button type="submit"
+            className="text-sm px-3 py-1.5 bg-[#1E3A5F] hover:bg-[#162d4a] rounded text-white transition-colors font-medium">
             Ajouter
           </button>
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && <p className="text-xs text-red-700">{error}</p>}
         </form>
       )}
 
-      {/* Tableau snapshot */}
+      {/* Tableau */}
       {loading ? (
-        <p className="text-slate-600 text-sm">Chargement...</p>
+        <p className="text-[#7898AC] text-sm">Chargement…</p>
       ) : snapshot.length === 0 ? (
-        <div className="rounded-lg border border-[#2a2d3a] bg-[#1a1d27] p-8 text-center">
-          <p className="text-slate-500 text-sm">
+        <div className="rounded-lg border border-[#BFD0DC] bg-white p-8 text-center shadow-sm">
+          <p className="text-[#2D4A5C] text-sm">
             {watchlists.length === 0
               ? "Crée une watchlist puis ajoute des tickers."
               : "Cette watchlist est vide. Ajoute un ticker ci-dessus."}
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border border-[#2a2d3a] overflow-hidden">
+        <div className="rounded-lg border border-[#BFD0DC] overflow-hidden shadow-sm">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[#2a2d3a] bg-[#1a1d27]">
+              <tr className="border-b border-[#BFD0DC] bg-[#EEF2F6]">
                 {["Ticker", "Nom", "Prix", "1J", "1M", "YTD", "Score", ""].map((h) => (
-                  <th
-                    key={h}
-                    className="px-4 py-2 text-left text-xs font-medium text-slate-600 uppercase tracking-wide"
-                  >
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[#7898AC] uppercase tracking-widest">
                     {h}
                   </th>
                 ))}
@@ -161,39 +134,28 @@ export default function WatchlistPage() {
             </thead>
             <tbody>
               {snapshot.map((item) => (
-                <tr
-                  key={item.ticker}
-                  className="border-b border-[#2a2d3a] bg-[#0f1117] hover:bg-[#1a1d27] transition-colors"
-                >
+                <tr key={item.ticker} className="border-b border-[#BFD0DC] bg-white hover:bg-[#EEF2F6] transition-colors">
                   <td className="px-4 py-2.5">
-                    <Link
-                      href={`/company/${item.ticker}`}
-                      className="font-mono font-bold text-indigo-300 hover:text-indigo-200"
-                    >
+                    <Link href={`/company/${item.ticker}`}
+                      className="font-mono font-bold text-[#1E3A5F] hover:text-[#162d4a]">
                       {item.ticker}
                     </Link>
                   </td>
-                  <td className="px-4 py-2.5 text-slate-400 text-xs max-w-[160px] truncate">
-                    {item.name}
-                  </td>
-                  <td className="px-4 py-2.5 font-mono text-slate-300">
+                  <td className="px-4 py-2.5 text-[#2D4A5C] text-xs max-w-[160px] truncate">{item.name}</td>
+                  <td className="px-4 py-2.5 font-mono text-[#0B1929] font-medium">
                     {item.price?.toLocaleString("fr-FR", { minimumFractionDigits: 2 }) ?? "—"}
                   </td>
                   <td className="px-4 py-2.5"><ChangeCell value={item.change_1d} /></td>
                   <td className="px-4 py-2.5"><ChangeCell value={item.change_1m} /></td>
                   <td className="px-4 py-2.5"><ChangeCell value={item.change_ytd} /></td>
                   <td className="px-4 py-2.5">
-                    {item.composite_score != null ? (
-                      <ScoreBadge score={item.composite_score} size="sm" />
-                    ) : (
-                      <span className="text-slate-700">—</span>
-                    )}
+                    {item.composite_score != null
+                      ? <ScoreBadge score={item.composite_score} size="sm" />
+                      : <span className="text-[#7898AC]">—</span>}
                   </td>
                   <td className="px-4 py-2.5">
-                    <button
-                      onClick={() => handleRemove(item.ticker)}
-                      className="text-xs text-slate-700 hover:text-red-400 transition-colors"
-                    >
+                    <button onClick={() => handleRemove(item.ticker)}
+                      className="text-xs text-[#7898AC] hover:text-red-700 transition-colors">
                       ×
                     </button>
                   </td>
