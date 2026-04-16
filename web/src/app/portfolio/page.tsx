@@ -9,9 +9,11 @@ import { getPositions, addTransaction, deletePosition } from "@/lib/api";
 import type { PortfolioData } from "@/lib/api";
 import { ChangeCell } from "@/components/ui/ChangeCell";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
+import { useToast } from "@/components/ui/Toast";
 
 export default function PortfolioPage() {
   useDocumentTitle("Portefeuille");
+  const { toast } = useToast();
   const [data, setData] = useState<PortfolioData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -27,9 +29,10 @@ export default function PortfolioPage() {
     setDeletingTicker(ticker);
     try {
       await deletePosition(ticker);
+      toast(`Position ${ticker} supprimée`, "success");
       loadData();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Erreur");
+      toast(err instanceof Error ? err.message : "Erreur lors de la suppression", "error");
     } finally {
       setDeletingTicker(null);
     }
@@ -54,6 +57,7 @@ export default function PortfolioPage() {
         fees: form.fees ? parseFloat(form.fees) : 0,
         note: form.note || undefined,
       });
+      toast(`Transaction ${form.type === "buy" ? "achat" : "vente"} ${form.ticker.toUpperCase()} enregistrée`, "success");
       setShowForm(false);
       setForm({ ticker: "", type: "buy", quantity: "", price: "", fees: "", note: "" });
       loadData();

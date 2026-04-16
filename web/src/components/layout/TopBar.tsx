@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function TopBar() {
   const [query, setQuery] = useState("");
@@ -56,6 +57,11 @@ export function TopBar() {
       <p className="hidden md:block text-[10px] text-[#7898AC] ml-auto tracking-wide">
         À titre informatif uniquement · Pas un conseil en investissement
       </p>
+
+      {/* Toggle dark/light — tout à droite, responsive (auto sur mobile) */}
+      <div className="ml-auto md:ml-2">
+        <ThemeToggle />
+      </div>
     </header>
   );
 }

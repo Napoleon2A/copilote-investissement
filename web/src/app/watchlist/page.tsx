@@ -10,9 +10,11 @@ import type { Watchlist, WatchlistSnapshotItem } from "@/lib/api";
 import { ChangeCell } from "@/components/ui/ChangeCell";
 import { ScoreBadge } from "@/components/ui/ScoreBadge";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
+import { useToast } from "@/components/ui/Toast";
 
 export default function WatchlistPage() {
   useDocumentTitle("Watchlist");
+  const { toast } = useToast();
   const [watchlists, setWatchlists] = useState<Watchlist[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [snapshot, setSnapshot] = useState<WatchlistSnapshotItem[]>([]);
@@ -39,13 +41,17 @@ export default function WatchlistPage() {
   const handleAddTicker = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedId || !newTicker.trim()) return;
+    const tickerToAdd = newTicker.trim();
     try {
-      await addToWatchlist(selectedId, newTicker.trim());
+      await addToWatchlist(selectedId, tickerToAdd);
       setNewTicker("");
+      toast(`${tickerToAdd} ajouté à la watchlist`, "success");
       const data = await getWatchlistSnapshot(selectedId);
       setSnapshot(data.snapshots);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Erreur");
+      const msg = err instanceof Error ? err.message : "Erreur";
+      setError(msg);
+      toast(msg, "error");
     }
   };
 
@@ -53,6 +59,7 @@ export default function WatchlistPage() {
     if (!selectedId) return;
     await removeFromWatchlist(selectedId, ticker);
     setSnapshot((prev) => prev.filter((s) => s.ticker !== ticker));
+    toast(`${ticker} retiré de la watchlist`, "success");
   };
 
   const handleCreateList = async (e: React.FormEvent) => {
