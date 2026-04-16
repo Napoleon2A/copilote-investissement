@@ -39,7 +39,7 @@ export function Sidebar() {
       {/* Overlay mobile — clic pour fermer */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-30 bg-[#0B1929]/40 md:hidden"
+          className="fixed inset-0 z-30 bg-primary/40 md:hidden"
           onClick={() => setMobileOpen(false)}
           aria-hidden="true"
         />
@@ -47,7 +47,7 @@ export function Sidebar() {
 
       <nav
         className={clsx(
-          "bg-white border-r border-[#BFD0DC] flex flex-col shadow-sm",
+          "bg-surface border-r border-edge flex flex-col shadow-sm",
           // Desktop : dans le flow normal
           "md:w-52 md:flex-shrink-0 md:static md:translate-x-0",
           // Mobile : fixed drawer qui glisse
@@ -56,15 +56,15 @@ export function Sidebar() {
         )}
       >
         {/* Logo */}
-        <div className="px-5 py-5 border-b border-[#BFD0DC]">
-          <div className="w-8 h-px bg-[#5E96B0] mb-3" />
+        <div className="px-5 py-5 border-b border-edge">
+          <div className="w-8 h-px bg-accent mb-3" />
           <span
-            className="block text-sm font-bold tracking-[0.12em] uppercase text-[#1E3A5F]"
+            className="block text-sm font-bold tracking-[0.12em] uppercase text-navy"
             style={{ fontFamily: "'Space Grotesk', sans-serif" }}
           >
             Austerlitz
           </span>
-          <p className="text-[10px] tracking-[0.2em] uppercase text-[#5E96B0] mt-0.5 font-medium">
+          <p className="text-[10px] tracking-[0.2em] uppercase text-accent mt-0.5 font-medium">
             Hedge Fund
           </p>
         </div>
@@ -84,11 +84,11 @@ export function Sidebar() {
                   className={clsx(
                     "flex items-center gap-3 px-3 py-2 rounded text-sm transition-all duration-150",
                     isActive
-                      ? "bg-[#1E3A5F] text-white font-medium shadow-sm"
-                      : "text-[#2D4A5C] hover:bg-[#EEF2F6] hover:text-[#0B1929]"
+                      ? "bg-navy text-white font-medium shadow-sm"
+                      : "text-secondary hover:bg-bg hover:text-primary"
                   )}
                 >
-                  <span className={clsx("text-xs", isActive ? "text-[#5E96B0]" : "opacity-50")}>
+                  <span className={clsx("text-xs", isActive ? "text-accent" : "opacity-50")}>
                     {item.icon}
                   </span>
                   <span>{item.label}</span>
@@ -99,8 +99,8 @@ export function Sidebar() {
         </ul>
 
         {/* Footer */}
-        <div className="px-5 py-4 border-t border-[#BFD0DC]">
-          <p className="text-[10px] text-[#7898AC] leading-relaxed">
+        <div className="px-5 py-4 border-t border-edge">
+          <p className="text-[10px] text-muted leading-relaxed">
             Données : yfinance<br />
             Délai : ~15 min (US)
           </p>

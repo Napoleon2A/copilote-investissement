@@ -4,131 +4,87 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
 
+/*
+ * Design tokens au format "canaux RGB" (sans rgb()), pour que
+ * Tailwind puisse injecter des opacités arbitraires :
+ *   rgb(var(--bg) / <alpha-value>)
+ * Chaque mode (light / dark) ne redéfinit que les canaux.
+ */
 :root {
-  /* Fond général — blanc glacial teinté bleu (neige à l'ombre) */
-  --bg:          #EEF2F6;
-  /* Cartes — blanc pur */
-  --surface:     #FFFFFF;
-  /* Surfaces secondaires — givre, glace fine */
-  --surface-alt: #E2EAF0;
-  /* Bordures froides */
-  --border:      #BFD0DC;
-  /* Textes */
-  --text-primary:   #0B1929;   /* bleu-noir polaire */
-  --text-secondary: #2D4A5C;   /* acier froid */
-  --text-muted:     #7898AC;   /* givré */
-  /* Accents */
-  --navy:   #1E3A5F;           /* marine profond */
-  --accent: #5E96B0;           /* bleu acier glacial — flashy froid */
-  --green:  #166534;
-  --red:    #991B1B;
+  --bg:           238 242 246;  /* #EEF2F6 — blanc glacial teinté bleu */
+  --surface:      255 255 255;  /* #FFFFFF — cartes */
+  --surface-alt:  226 234 240;  /* #E2EAF0 — givre */
+  --edge:         191 208 220;  /* #BFD0DC — bordures */
+  --primary:      11  25  41;   /* #0B1929 — texte principal */
+  --secondary:    45  74  92;   /* #2D4A5C — texte secondaire */
+  --muted:        120 152 172;  /* #7898AC — texte atténué */
+  --navy:         30  58  95;   /* #1E3A5F — accent marine */
+  --navy-hover:   22  45  74;   /* #162D4A — hover navy */
+  --accent:       94  150 176;  /* #5E96B0 — bleu acier glacial */
 }
 
-/* ── Dark mode : palette inversée, ambiance "hedge fund terminal nocturne" ── */
+/* Dark mode : terminal nocturne, palette inversée */
 .dark {
-  --bg:          #0B1929;   /* noir-bleu polaire */
-  --surface:     #16233A;   /* bleu nuit cartes */
-  --surface-alt: #1E2E47;   /* surface secondaire */
-  --border:      #2D4A5C;   /* acier froid */
-  --text-primary:   #EEF2F6; /* blanc glace */
-  --text-secondary: #BFD0DC; /* givre */
-  --text-muted:     #7898AC; /* identique — gris neutre */
-  --navy:   #5E96B0;        /* inversé — accent clair sur fond sombre */
-  --accent: #7FB4CC;        /* bleu glacier plus clair */
+  --bg:           11  25  41;   /* #0B1929 */
+  --surface:      22  35  58;   /* #16233A — cartes */
+  --surface-alt:  30  46  71;   /* #1E2E47 */
+  --edge:         45  74  92;   /* #2D4A5C */
+  --primary:      238 242 246;  /* #EEF2F6 */
+  --secondary:    191 208 220;  /* #BFD0DC */
+  --muted:        143 168 188;  /* #8FA8BC — légèrement plus clair pour lisibilité */
+  --navy:         94  150 176;  /* #5E96B0 — inversé : accent clair sur fond sombre */
+  --navy-hover:   127 180 204;  /* #7FB4CC — hover plus clair */
+  --accent:       168 204 224;  /* #A8CCE0 — glacier plus lumineux */
 }
 
 body {
-  background-color: var(--bg);
-  color: var(--text-primary);
+  background-color: rgb(var(--bg));
+  color: rgb(var(--primary));
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Scrollbar fine et froide */
+/* Scrollbar — suit le thème */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+::-webkit-scrollbar-track { background: rgb(var(--bg)); }
+::-webkit-scrollbar-thumb { background: rgb(var(--edge)); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--accent)); }
 
-/* ─────────────────────────────────────────────────────────────────────────
-   Dark mode : overrides des classes Tailwind en dur utilisées partout.
-   On inverse les couleurs de fond/texte/bordure tout en gardant les
-   couleurs sémantiques (vert = hausse, rouge = baisse, etc.).
-   ───────────────────────────────────────────────────────────────────────── */
+/*
+ * Surcharges pour les couleurs sémantiques Tailwind (vert = hausse, rouge = baisse, etc.)
+ * En dark mode, on éclaircit les teintes pour qu'elles restent lisibles sur fond sombre.
+ */
+.dark .bg-green-50              { background-color: rgba(22, 101, 52, 0.15); }
+.dark .border-green-200         { border-color: rgba(34, 197, 94, 0.35); }
+.dark .text-green-500           { color: #22C55E; }
+.dark .text-green-700           { color: #4ADE80; }
+.dark .text-green-800           { color: #86EFAC; }
+.dark .text-green-900           { color: #BBF7D0; }
 
-/* Backgrounds clairs → foncés */
-.dark .bg-white                   { background-color: #16233A; }
-.dark .bg-\[\#EEF2F6\]            { background-color: #0B1929; }
-.dark .bg-\[\#E2EAF0\]            { background-color: #1E2E47; }
+.dark .bg-red-50                { background-color: rgba(153, 27, 27, 0.15); }
+.dark .border-red-200           { border-color: rgba(239, 68, 68, 0.35); }
+.dark .text-red-500             { color: #EF4444; }
+.dark .text-red-600             { color: #F87171; }
+.dark .text-red-700             { color: #F87171; }
+.dark .text-red-800             { color: #FCA5A5; }
+.dark .text-red-900             { color: #FECACA; }
 
-/* Textes foncés → clairs */
-.dark .text-\[\#0B1929\]          { color: #EEF2F6; }
-.dark .text-\[\#2D4A5C\]          { color: #BFD0DC; }
+.dark .bg-amber-50              { background-color: rgba(217, 119, 6, 0.15); }
+.dark .border-amber-200         { border-color: rgba(245, 158, 11, 0.35); }
+.dark .text-amber-600           { color: #FBBF24; }
+.dark .text-amber-700           { color: #FBBF24; }
+.dark .text-amber-800           { color: #FCD34D; }
 
-/* Bordures claires → sombres */
-.dark .border-\[\#BFD0DC\]        { border-color: #2D4A5C; }
+.dark .bg-blue-50               { background-color: rgba(30, 58, 95, 0.25); }
+.dark .border-blue-200          { border-color: rgba(94, 150, 176, 0.45); }
+.dark .text-blue-700            { color: #7FB4CC; }
+.dark .text-blue-800            { color: #A8CCE0; }
 
-/* Navy : sur fond clair c'était foncé, sur fond sombre on éclaircit */
-.dark .bg-\[\#1E3A5F\]            { background-color: #2D4A5C; }
-.dark .hover\:bg-\[\#162d4a\]:hover { background-color: #1E3A5F; }
-.dark .text-\[\#1E3A5F\]          { color: #7FB4CC; }
-.dark .hover\:text-\[\#1E3A5F\]:hover { color: #A8CCE0; }
-.dark .hover\:text-\[\#162d4a\]:hover { color: #A8CCE0; }
-.dark .border-\[\#1E3A5F\]        { border-color: #5E96B0; }
-
-/* Accents glacier : on éclaircit pour contraster */
-.dark .text-\[\#5E96B0\]          { color: #A8CCE0; }
-.dark .bg-\[\#5E96B0\]            { background-color: #7FB4CC; }
-.dark .border-\[\#5E96B0\]        { border-color: #7FB4CC; }
-
-/* Opacités navy → inversées */
-.dark .border-\[\#1E3A5F\]\/20    { border-color: rgba(127, 180, 204, 0.30); }
-.dark .border-\[\#1E3A5F\]\/15    { border-color: rgba(127, 180, 204, 0.25); }
-.dark .bg-\[\#1E3A5F\]\/5         { background-color: rgba(127, 180, 204, 0.08); }
-.dark .hover\:border-\[\#1E3A5F\]\/30:hover { border-color: rgba(127, 180, 204, 0.40); }
-
-/* Les teintes pastel (pour/contre) : on assombrit les fonds, éclaircit le texte */
-.dark .bg-green-50                { background-color: rgba(22, 101, 52, 0.15); }
-.dark .border-green-200           { border-color: rgba(34, 197, 94, 0.35); }
-.dark .text-green-700             { color: #4ADE80; }
-.dark .text-green-800             { color: #86EFAC; }
-.dark .text-green-900             { color: #BBF7D0; }
-.dark .text-green-500             { color: #22C55E; }
-
-.dark .bg-red-50                  { background-color: rgba(153, 27, 27, 0.15); }
-.dark .border-red-200             { border-color: rgba(239, 68, 68, 0.35); }
-.dark .text-red-700               { color: #F87171; }
-.dark .text-red-800               { color: #FCA5A5; }
-.dark .text-red-900               { color: #FECACA; }
-.dark .text-red-500               { color: #EF4444; }
-.dark .text-red-600               { color: #F87171; }
-
-.dark .bg-amber-50                { background-color: rgba(217, 119, 6, 0.15); }
-.dark .border-amber-200           { border-color: rgba(245, 158, 11, 0.35); }
-.dark .text-amber-600             { color: #FBBF24; }
-.dark .text-amber-700             { color: #FBBF24; }
-.dark .text-amber-800             { color: #FCD34D; }
-
-.dark .bg-blue-50                 { background-color: rgba(30, 58, 95, 0.25); }
-.dark .border-blue-200            { border-color: rgba(94, 150, 176, 0.45); }
-.dark .text-blue-700              { color: #7FB4CC; }
-.dark .text-blue-800              { color: #A8CCE0; }
-
-.dark .text-purple-700            { color: #C4B5FD; }
-.dark .text-orange-600            { color: #FB923C; }
-
-/* Texte muted (gris) — OK tel quel, mais on ajuste légèrement pour lisibilité */
-.dark .text-\[\#7898AC\]          { color: #8FA8BC; }
-.dark .border-\[\#BFD0DC\]        { border-color: #2D4A5C; }
-
-/* Écrasement opacité blanche (pour overlays sur Napoleon, etc.) */
-.dark .text-white\/60             { color: rgba(238, 242, 246, 0.60); }
-.dark .text-white\/25             { color: rgba(238, 242, 246, 0.25); }
-.dark .text-white\/50             { color: rgba(238, 242, 246, 0.50); }
+.dark .text-purple-700          { color: #C4B5FD; }
+.dark .text-orange-600          { color: #FB923C; }
 
 /* ── Lignes géométriques ambiantes ──────────────────────────────────────── */
-/* stroke-dashoffset négatif = les tirets glissent vers la droite */
 @keyframes metalRushSlow {
   from { stroke-dashoffset: 0; }
   to   { stroke-dashoffset: -2000; }

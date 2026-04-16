@@ -39,12 +39,12 @@ export default async function DashboardPage() {
 
       {/* Erreur backend */}
       {!brief && (
-        <div className="rounded-lg border border-[#BFD0DC] bg-white p-6 text-center shadow-sm">
-          <p className="text-[#2D4A5C] text-sm mb-2">
+        <div className="rounded-lg border border-edge bg-surface p-6 text-center shadow-sm">
+          <p className="text-secondary text-sm mb-2">
             Le backend n&apos;est pas accessible.
           </p>
-          <p className="text-[#7898AC] text-xs">
-            Lance <code className="text-[#1E3A5F] bg-[#E2EAF0] px-1 rounded">uvicorn app.main:app --reload</code> dans <code className="text-[#1E3A5F] bg-[#E2EAF0] px-1 rounded">api/</code>
+          <p className="text-muted text-xs">
+            Lance <code className="text-navy bg-surface-alt px-1 rounded">uvicorn app.main:app --reload</code> dans <code className="text-navy bg-surface-alt px-1 rounded">api/</code>
           </p>
         </div>
       )}
@@ -57,9 +57,9 @@ export default async function DashboardPage() {
 
       {/* Brief vide */}
       {brief && brief.item_count === 0 && (
-        <div className="rounded-lg border border-[#BFD0DC] bg-white p-6 text-center shadow-sm">
-          <p className="text-[#0B1929] text-sm">Aucun signal notable aujourd&apos;hui.</p>
-          <p className="text-[#7898AC] text-xs mt-1">
+        <div className="rounded-lg border border-edge bg-surface p-6 text-center shadow-sm">
+          <p className="text-primary text-sm">Aucun signal notable aujourd&apos;hui.</p>
+          <p className="text-muted text-xs mt-1">
             Ajoute des tickers à ta watchlist ou à ton portefeuille pour générer un brief.
           </p>
         </div>
@@ -95,7 +95,7 @@ export default async function DashboardPage() {
 
       {/* Disclaimer */}
       {brief && (
-        <p className="text-[10px] text-[#7898AC] text-center pb-4 tracking-wide">
+        <p className="text-[10px] text-muted text-center pb-4 tracking-wide">
           {brief.disclaimer}
         </p>
       )}
@@ -138,8 +138,8 @@ function NapoleonBanner({ date }: { date?: string }) {
       <div className="absolute inset-0 flex flex-col justify-center px-5 sm:px-8">
         {/* Règle or supérieure */}
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-px bg-[#5E96B0]" />
-          <span className="text-[#5E96B0] text-[9px] tracking-[0.35em] uppercase font-medium opacity-80">
+          <div className="w-12 h-px bg-accent" />
+          <span className="text-accent text-[9px] tracking-[0.35em] uppercase font-medium opacity-80">
             Est. mmxxiii
           </span>
         </div>
@@ -151,13 +151,13 @@ function NapoleonBanner({ date }: { date?: string }) {
         >
           Austerlitz
         </h1>
-        <p className="text-[#5E96B0] text-[10px] tracking-[0.3em] uppercase font-medium mt-1">
+        <p className="text-accent text-[10px] tracking-[0.3em] uppercase font-medium mt-1">
           Hedge Fund
         </p>
 
         {/* Règle or inférieure + date */}
         <div className="flex items-center gap-3 mt-4">
-          <div className="w-12 h-px bg-[#5E96B0]" />
+          <div className="w-12 h-px bg-accent" />
           <span className="text-white/60 text-[10px] tracking-wider capitalize">
             {dateStr}
           </span>
@@ -179,7 +179,7 @@ const REGIME_STYLES: Record<string, string> = {
   "risk-off":  "border-red-200    bg-red-50    text-red-800",
   "calme":     "border-blue-200   bg-blue-50   text-blue-800",
   "vigilance": "border-amber-200  bg-amber-50  text-amber-800",
-  "neutral":   "border-[#BFD0DC] bg-[#EEF2F6] text-[#2D4A5C]",
+  "neutral":   "border-edge bg-bg text-secondary",
 };
 
 function MarketContextBanner({ ctx }: { ctx: MarketContext }) {
@@ -207,11 +207,11 @@ function Section({ title, tag, children }: { title: string; tag: string; childre
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-[#5E96B0] text-xs">{tag}</span>
-        <h2 className="text-[10px] font-semibold text-[#7898AC] uppercase tracking-widest">
+        <span className="text-accent text-xs">{tag}</span>
+        <h2 className="text-[10px] font-semibold text-muted uppercase tracking-widest">
           {title}
         </h2>
-        <div className="flex-1 h-px bg-[#BFD0DC]" />
+        <div className="flex-1 h-px bg-edge" />
       </div>
       <div className="space-y-2">{children}</div>
     </div>

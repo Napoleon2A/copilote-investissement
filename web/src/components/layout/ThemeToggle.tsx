@@ -14,7 +14,7 @@ export function ThemeToggle() {
       type="button"
       onClick={toggle}
       className="w-8 h-8 rounded flex items-center justify-center text-sm
-                 text-[#2D4A5C] hover:bg-[#EEF2F6] hover:text-[#1E3A5F] transition-colors"
+                 text-secondary hover:bg-bg hover:text-navy transition-colors"
       aria-label={theme === "dark" ? "Passer en mode clair" : "Passer en mode sombre"}
       title={theme === "dark" ? "Passer en mode clair" : "Passer en mode sombre"}
     >

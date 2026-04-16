@@ -41,7 +41,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className="min-h-screen bg-[#EEF2F6] text-[#0B1929]">
+      <body className="min-h-screen bg-bg text-primary">
         <ToastProvider>
           <div className="flex h-screen overflow-hidden">
             <Sidebar />

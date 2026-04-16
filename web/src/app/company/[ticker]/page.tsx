@@ -22,7 +22,7 @@ const ACTION_COLORS: Record<string, string> = {
   buy_small: "bg-green-50 text-green-700 border-green-200",
   add:       "bg-green-50 text-green-700 border-green-200",
   avoid:     "bg-red-50 text-red-700 border-red-200",
-  hold:      "bg-[#EEF2F6] text-[#2D4A5C] border-[#BFD0DC]",
+  hold:      "bg-bg text-secondary border-edge",
 };
 
 export default async function CompanyPage({ params }: Props) {
@@ -57,14 +57,14 @@ export default async function CompanyPage({ params }: Props) {
       {/* En-tête */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <Link href="/" className="text-xs text-[#7898AC] hover:text-[#1E3A5F] transition-colors">
+          <Link href="/" className="text-xs text-muted hover:text-navy transition-colors">
             ← Brief
           </Link>
-          <h1 className="mt-1 text-2xl font-bold font-mono text-[#1E3A5F]">
+          <h1 className="mt-1 text-2xl font-bold font-mono text-navy">
             {upperTicker}
           </h1>
-          {brief.name && <p className="text-sm text-[#2D4A5C]">{brief.name}</p>}
-          {brief.sector && <p className="text-[10px] text-[#7898AC] mt-0.5 uppercase tracking-wide">{brief.sector}</p>}
+          {brief.name && <p className="text-sm text-secondary">{brief.name}</p>}
+          {brief.sector && <p className="text-[10px] text-muted mt-0.5 uppercase tracking-wide">{brief.sector}</p>}
         </div>
         <div className={`rounded-full border px-4 py-1.5 text-xs font-semibold flex-shrink-0 ${actionColor}`}>
           → {brief.action_label}
@@ -72,10 +72,10 @@ export default async function CompanyPage({ params }: Props) {
       </div>
 
       {/* Prix + variations */}
-      <div className="rounded-lg border border-[#BFD0DC] bg-white p-4 shadow-sm">
+      <div className="rounded-lg border border-edge bg-surface p-4 shadow-sm">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Metric label="Prix">
-            <span className="text-xl font-mono font-semibold text-[#0B1929]">
+            <span className="text-xl font-mono font-semibold text-primary">
               {brief.current_price != null
                 ? brief.current_price.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                 : "—"}
@@ -88,10 +88,10 @@ export default async function CompanyPage({ params }: Props) {
       </div>
 
       {/* Score composite + sous-scores */}
-      <div className="rounded-lg border border-[#BFD0DC] bg-white p-4 shadow-sm flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+      <div className="rounded-lg border border-edge bg-surface p-4 shadow-sm flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
         <div className="flex flex-col items-center">
           <ScoreBadge score={brief.scores.composite} size="md" />
-          <span className="text-[10px] text-[#7898AC] mt-1 uppercase tracking-wider">{brief.scores.composite_label}</span>
+          <span className="text-[10px] text-muted mt-1 uppercase tracking-wider">{brief.scores.composite_label}</span>
         </div>
         <div className="flex-1 grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
           {[
@@ -103,7 +103,7 @@ export default async function CompanyPage({ params }: Props) {
           ].map((s) => (
             <div key={s.label}>
               <ScoreBadge score={s.score} size="sm" />
-              <p className="text-[10px] text-[#7898AC] mt-0.5">{s.label}</p>
+              <p className="text-[10px] text-muted mt-0.5">{s.label}</p>
             </div>
           ))}
         </div>
@@ -146,8 +146,8 @@ export default async function CompanyPage({ params }: Props) {
       )}
 
       {/* Métriques clés */}
-      <div className="rounded-lg border border-[#BFD0DC] bg-white p-4 shadow-sm">
-        <h3 className="text-[10px] font-semibold text-[#7898AC] uppercase tracking-widest mb-3">Métriques clés</h3>
+      <div className="rounded-lg border border-edge bg-surface p-4 shadow-sm">
+        <h3 className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-3">Métriques clés</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Metric label="P/E"><MetricValue v={brief.key_metrics.pe_ratio} decimals={1} suffix="x" /></Metric>
           <Metric label="EV/EBITDA"><MetricValue v={brief.key_metrics.ev_ebitda} decimals={1} suffix="x" /></Metric>
@@ -161,8 +161,8 @@ export default async function CompanyPage({ params }: Props) {
 
       {/* Détail des scores */}
       {scores && (
-        <div className="rounded-lg border border-[#BFD0DC] bg-white p-4 shadow-sm">
-          <h3 className="text-[10px] font-semibold text-[#7898AC] uppercase tracking-widest mb-4">Détail des scores</h3>
+        <div className="rounded-lg border border-edge bg-surface p-4 shadow-sm">
+          <h3 className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-4">Détail des scores</h3>
           <div className="space-y-4">
             {([
               ["Qualité",      scores.scores.quality],
@@ -174,12 +174,12 @@ export default async function CompanyPage({ params }: Props) {
               <div key={label}>
                 <div className="flex items-center gap-2 mb-1.5">
                   <ScoreBadge score={detail.score} size="sm" />
-                  <span className="text-sm font-medium text-[#0B1929]">{label}</span>
+                  <span className="text-sm font-medium text-primary">{label}</span>
                 </div>
                 <ul className="ml-1 space-y-0.5">
                   {detail.reasons.map((r, i) => (
-                    <li key={i} className="text-xs text-[#2D4A5C] flex gap-1.5">
-                      <span className="text-[#5E96B0] flex-shrink-0">·</span>
+                    <li key={i} className="text-xs text-secondary flex gap-1.5">
+                      <span className="text-accent flex-shrink-0">·</span>
                       <span>{r}</span>
                     </li>
                   ))}
@@ -192,16 +192,16 @@ export default async function CompanyPage({ params }: Props) {
 
       {/* News récentes */}
       {brief.recent_news.length > 0 && (
-        <div className="rounded-lg border border-[#BFD0DC] bg-white p-4 shadow-sm">
-          <h3 className="text-[10px] font-semibold text-[#7898AC] uppercase tracking-widest mb-3">Actualités récentes</h3>
+        <div className="rounded-lg border border-edge bg-surface p-4 shadow-sm">
+          <h3 className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-3">Actualités récentes</h3>
           <ul className="space-y-3">
             {brief.recent_news.map((item, i) => (
-              <li key={i} className="border-b border-[#BFD0DC] pb-3 last:border-0 last:pb-0">
+              <li key={i} className="border-b border-edge pb-3 last:border-0 last:pb-0">
                 <a href={item.link} target="_blank" rel="noopener noreferrer"
-                  className="text-sm text-[#0B1929] hover:text-[#1E3A5F] leading-snug transition-colors">
+                  className="text-sm text-primary hover:text-navy leading-snug transition-colors">
                   {item.title}
                 </a>
-                <p className="text-[10px] text-[#7898AC] mt-0.5">
+                <p className="text-[10px] text-muted mt-0.5">
                   {item.publisher}
                   {item.published && ` · ${new Date(item.published).toLocaleDateString("fr-FR")}`}
                 </p>
@@ -212,13 +212,13 @@ export default async function CompanyPage({ params }: Props) {
       )}
 
       {/* Conviction / horizon */}
-      <div className="flex items-center gap-4 text-xs text-[#2D4A5C]">
-        <span>Conviction : <span className="text-[#0B1929] font-medium">{brief.conviction}</span></span>
-        <span className="text-[#BFD0DC]">·</span>
-        <span>Horizon : <span className="text-[#0B1929] font-medium">{brief.horizon}</span></span>
+      <div className="flex items-center gap-4 text-xs text-secondary">
+        <span>Conviction : <span className="text-primary font-medium">{brief.conviction}</span></span>
+        <span className="text-edge">·</span>
+        <span>Horizon : <span className="text-primary font-medium">{brief.horizon}</span></span>
       </div>
 
-      <p className="text-[10px] text-[#7898AC] tracking-wide">{brief.disclaimer}</p>
+      <p className="text-[10px] text-muted tracking-wide">{brief.disclaimer}</p>
     </div>
   );
 }
@@ -226,7 +226,7 @@ export default async function CompanyPage({ params }: Props) {
 function Metric({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[10px] text-[#7898AC] uppercase tracking-wider mb-0.5">{label}</p>
+      <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">{label}</p>
       {children}
     </div>
   );
@@ -236,7 +236,7 @@ function MetricValue({ v, decimals = 2, suffix = "", pct = false, big = false }:
   v: number | null | undefined;
   decimals?: number; suffix?: string; pct?: boolean; big?: boolean;
 }) {
-  if (v == null) return <span className="text-[#7898AC] text-sm">—</span>;
+  if (v == null) return <span className="text-muted text-sm">—</span>;
 
   let display: string;
   if (pct) {
@@ -250,5 +250,5 @@ function MetricValue({ v, decimals = 2, suffix = "", pct = false, big = false }:
     display = `${v.toFixed(decimals)}${suffix}`;
   }
 
-  return <span className="text-sm font-mono text-[#0B1929] font-medium">{display}</span>;
+  return <span className="text-sm font-mono text-primary font-medium">{display}</span>;
 }

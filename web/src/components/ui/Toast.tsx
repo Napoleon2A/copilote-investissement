@@ -69,7 +69,7 @@ export function useToast(): ToastContextValue {
 function typeStyle(type: ToastType): string {
   if (type === "success") return "bg-green-50 border-green-200 text-green-800";
   if (type === "error") return "bg-red-50 border-red-200 text-red-800";
-  return "bg-white border-[#BFD0DC] text-[#0B1929]";
+  return "bg-surface border-edge text-primary";
 }
 
 function typeIcon(type: ToastType): string {

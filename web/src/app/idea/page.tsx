@@ -63,33 +63,33 @@ function IdeaPageContent() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-lg font-semibold text-[#0B1929]"
+        <h1 className="text-lg font-semibold text-primary"
             style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
           Idées
         </h1>
-        <p className="text-xs text-[#7898AC] mt-0.5">
+        <p className="text-xs text-muted mt-0.5">
           Soumets un ticker — le système génère un avis argumenté, le date, et le révise si les faits changent.
         </p>
       </div>
 
       {/* Formulaire de soumission */}
-      <form onSubmit={handleSubmit} className="rounded-lg border border-[#BFD0DC] bg-white p-5 space-y-4 shadow-sm">
-        <h2 className="text-xs font-semibold text-[#1E3A5F] uppercase tracking-widest">Nouvelle idée</h2>
+      <form onSubmit={handleSubmit} className="rounded-lg border border-edge bg-surface p-5 space-y-4 shadow-sm">
+        <h2 className="text-xs font-semibold text-navy uppercase tracking-widest">Nouvelle idée</h2>
         <div className="flex flex-col sm:flex-row gap-3">
           <input value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())}
             placeholder="Ticker (ex: NVDA)"
-            className="bg-[#EEF2F6] border border-[#BFD0DC] rounded px-3 py-2 text-sm
-                       text-[#0B1929] placeholder-[#7898AC] focus:outline-none focus:border-[#1E3A5F] w-full sm:w-40 transition-colors"
+            className="bg-bg border border-edge rounded px-3 py-2 text-sm
+                       text-primary placeholder-muted focus:outline-none focus:border-navy w-full sm:w-40 transition-colors"
             required />
           <textarea value={userThesis} onChange={(e) => setUserThesis(e.target.value)}
             placeholder="Ta thèse (optionnel) — pourquoi tu trouves ça intéressant…"
-            className="flex-1 bg-[#EEF2F6] border border-[#BFD0DC] rounded px-3 py-2 text-sm
-                       text-[#0B1929] placeholder-[#7898AC] focus:outline-none focus:border-[#1E3A5F]
+            className="flex-1 bg-bg border border-edge rounded px-3 py-2 text-sm
+                       text-primary placeholder-muted focus:outline-none focus:border-navy
                        resize-none h-16 transition-colors" />
         </div>
         {error && <p className="text-red-700 text-xs">{error}</p>}
         <button type="submit" disabled={loading}
-          className="text-sm px-4 py-2 bg-[#1E3A5F] hover:bg-[#162d4a] rounded text-white font-medium disabled:opacity-50 transition-colors">
+          className="text-sm px-4 py-2 bg-navy hover:bg-navy-hover rounded text-white font-medium disabled:opacity-50 transition-colors">
           {loading ? "Analyse en cours…" : "→ Analyser"}
         </button>
       </form>
@@ -98,24 +98,24 @@ function IdeaPageContent() {
         {/* Liste des idées */}
         <div className="space-y-2">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-[#5E96B0] text-xs">◇</span>
-            <h2 className="text-[10px] font-semibold text-[#7898AC] uppercase tracking-widest">
+            <span className="text-accent text-xs">◇</span>
+            <h2 className="text-[10px] font-semibold text-muted uppercase tracking-widest">
               Historique ({ideas.length})
             </h2>
           </div>
           {ideas.length === 0 ? (
-            <p className="text-[#7898AC] text-xs">Aucune idée soumise.</p>
+            <p className="text-muted text-xs">Aucune idée soumise.</p>
           ) : (
             ideas.map((idea) => (
               <button key={idea.id} onClick={() => handleSelectIdea(idea.id)}
                 className={`w-full text-left rounded border p-2.5 transition-all duration-150 ${
                   selectedIdea?.idea.id === idea.id
-                    ? "border-[#1E3A5F] bg-[#1E3A5F]/5 shadow-sm"
-                    : "border-[#BFD0DC] bg-white hover:border-[#1E3A5F]/30"
+                    ? "border-navy bg-navy/5 shadow-sm"
+                    : "border-edge bg-surface hover:border-navy/30"
                 }`}>
-                <p className="text-sm font-mono font-bold text-[#1E3A5F]">{idea.ticker}</p>
-                <p className="text-xs text-[#2D4A5C] mt-0.5 truncate">{idea.name}</p>
-                <p className="text-[10px] text-[#7898AC] mt-1">{idea.action} · {idea.conviction}</p>
+                <p className="text-sm font-mono font-bold text-navy">{idea.ticker}</p>
+                <p className="text-xs text-secondary mt-0.5 truncate">{idea.name}</p>
+                <p className="text-[10px] text-muted mt-1">{idea.action} · {idea.conviction}</p>
               </button>
             ))
           )}
@@ -124,8 +124,8 @@ function IdeaPageContent() {
         {/* Détail */}
         <div className="md:col-span-2">
           {!selectedIdea ? (
-            <div className="rounded-lg border border-[#BFD0DC] bg-white p-6 text-center shadow-sm">
-              <p className="text-[#7898AC] text-sm">Soumets une idée ou sélectionnes-en une pour voir l&apos;analyse.</p>
+            <div className="rounded-lg border border-edge bg-surface p-6 text-center shadow-sm">
+              <p className="text-muted text-sm">Soumets une idée ou sélectionnes-en une pour voir l&apos;analyse.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -133,12 +133,12 @@ function IdeaPageContent() {
               <div className="flex items-start justify-between">
                 <div>
                   <Link href={`/company/${selectedIdea.company.ticker}`}
-                    className="text-xl font-bold font-mono text-[#1E3A5F] hover:text-[#162d4a]">
+                    className="text-xl font-bold font-mono text-navy hover:text-navy-hover">
                     {selectedIdea.company.ticker}
                   </Link>
-                  <p className="text-[#2D4A5C] text-sm">{selectedIdea.company.name}</p>
+                  <p className="text-secondary text-sm">{selectedIdea.company.name}</p>
                 </div>
-                <div className="text-right text-xs text-[#7898AC]">
+                <div className="text-right text-xs text-muted">
                   <p>{new Date(selectedIdea.idea.created_at).toLocaleDateString("fr-FR")}</p>
                   {selectedIdea.idea.updated_at && (
                     <p>Révisé le {new Date(selectedIdea.idea.updated_at).toLocaleDateString("fr-FR")}</p>
@@ -148,17 +148,17 @@ function IdeaPageContent() {
 
               {/* Thèse utilisateur */}
               {selectedIdea.idea.user_thesis && (
-                <div className="rounded border border-[#BFD0DC] bg-[#EEF2F6] p-3">
-                  <p className="text-[10px] text-[#7898AC] uppercase tracking-wider mb-1">Ta thèse initiale</p>
-                  <p className="text-sm text-[#0B1929]">{selectedIdea.idea.user_thesis}</p>
+                <div className="rounded border border-edge bg-bg p-3">
+                  <p className="text-[10px] text-muted uppercase tracking-wider mb-1">Ta thèse initiale</p>
+                  <p className="text-sm text-primary">{selectedIdea.idea.user_thesis}</p>
                 </div>
               )}
 
               {/* Avis système */}
               {selectedIdea.idea.system_opinion && (
-                <div className="rounded border border-[#1E3A5F]/15 bg-white p-3 shadow-sm">
-                  <p className="text-[10px] text-[#1E3A5F] uppercase tracking-wider mb-2 font-semibold">Avis du système</p>
-                  <pre className="text-xs text-[#0B1929] whitespace-pre-wrap font-mono leading-relaxed">
+                <div className="rounded border border-navy/15 bg-surface p-3 shadow-sm">
+                  <p className="text-[10px] text-navy uppercase tracking-wider mb-2 font-semibold">Avis du système</p>
+                  <pre className="text-xs text-primary whitespace-pre-wrap font-mono leading-relaxed">
                     {selectedIdea.idea.system_opinion}
                   </pre>
                 </div>
@@ -183,27 +183,27 @@ function IdeaPageContent() {
               {/* Conditions de validation */}
               {selectedIdea.idea.validation_conditions && (
                 <div>
-                  <p className="text-[10px] text-[#7898AC] uppercase tracking-wider mb-1">Conditions de validation</p>
-                  <p className="text-xs text-[#2D4A5C] whitespace-pre-wrap">{selectedIdea.idea.validation_conditions}</p>
+                  <p className="text-[10px] text-muted uppercase tracking-wider mb-1">Conditions de validation</p>
+                  <p className="text-xs text-secondary whitespace-pre-wrap">{selectedIdea.idea.validation_conditions}</p>
                 </div>
               )}
 
               {/* Révision */}
               <div>
                 <button onClick={() => setShowReviseForm(!showReviseForm)}
-                  className="text-xs text-[#1E3A5F] hover:text-[#162d4a] font-medium transition-colors">
+                  className="text-xs text-navy hover:text-navy-hover font-medium transition-colors">
                   ↻ Réviser l&apos;avis (les faits ont changé)
                 </button>
                 {showReviseForm && (
                   <form onSubmit={handleRevise} className="mt-2 space-y-2">
                     <textarea value={revisionNote} onChange={(e) => setRevisionNote(e.target.value)}
                       placeholder="Ce qui a changé : résultats, management, news macro…"
-                      className="w-full bg-[#EEF2F6] border border-[#BFD0DC] rounded px-3 py-2 text-sm
-                                 text-[#0B1929] placeholder-[#7898AC] focus:outline-none
-                                 focus:border-[#1E3A5F] resize-none h-20 transition-colors"
+                      className="w-full bg-bg border border-edge rounded px-3 py-2 text-sm
+                                 text-primary placeholder-muted focus:outline-none
+                                 focus:border-navy resize-none h-20 transition-colors"
                       required />
                     <button type="submit"
-                      className="text-xs px-3 py-1.5 bg-[#1E3A5F] hover:bg-[#162d4a] rounded text-white font-medium transition-colors">
+                      className="text-xs px-3 py-1.5 bg-navy hover:bg-navy-hover rounded text-white font-medium transition-colors">
                       Recalculer l&apos;avis
                     </button>
                   </form>
@@ -219,7 +219,7 @@ function IdeaPageContent() {
 
 export default function IdeaPage() {
   return (
-    <Suspense fallback={<div className="text-[#7898AC] text-sm">Chargement…</div>}>
+    <Suspense fallback={<div className="text-muted text-sm">Chargement…</div>}>
       <IdeaPageContent />
     </Suspense>
   );

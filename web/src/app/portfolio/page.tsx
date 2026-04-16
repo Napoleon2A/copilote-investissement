@@ -66,18 +66,18 @@ export default function PortfolioPage() {
     }
   };
 
-  if (loading) return <p className="text-[#2D4A5C] text-sm">Chargement…</p>;
+  if (loading) return <p className="text-secondary text-sm">Chargement…</p>;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-baseline justify-between">
-        <h1 className="text-lg font-semibold text-[#0B1929]"
+        <h1 className="text-lg font-semibold text-primary"
             style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
           Portefeuille
         </h1>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="text-xs px-3 py-1.5 bg-[#1E3A5F] hover:bg-[#162d4a] rounded text-white transition-colors font-medium"
+          className="text-xs px-3 py-1.5 bg-navy hover:bg-navy-hover rounded text-white transition-colors font-medium"
         >
           + Transaction
         </button>
@@ -85,8 +85,8 @@ export default function PortfolioPage() {
 
       {/* Formulaire transaction */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="rounded-lg border border-[#1E3A5F]/20 bg-white p-5 space-y-4 shadow-sm">
-          <h2 className="text-sm font-semibold text-[#1E3A5F]">Nouvelle transaction</h2>
+        <form onSubmit={handleSubmit} className="rounded-lg border border-navy/20 bg-surface p-5 space-y-4 shadow-sm">
+          <h2 className="text-sm font-semibold text-navy">Nouvelle transaction</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Ticker" required>
               <input value={form.ticker} onChange={(e) => setForm({ ...form, ticker: e.target.value })}
@@ -118,11 +118,11 @@ export default function PortfolioPage() {
           </div>
           {formError && <p className="text-red-700 text-xs">{formError}</p>}
           <div className="flex gap-2">
-            <button type="submit" className="text-sm px-4 py-1.5 bg-[#1E3A5F] hover:bg-[#162d4a] rounded text-white font-medium transition-colors">
+            <button type="submit" className="text-sm px-4 py-1.5 bg-navy hover:bg-navy-hover rounded text-white font-medium transition-colors">
               Enregistrer
             </button>
             <button type="button" onClick={() => setShowForm(false)}
-              className="text-sm px-4 py-1.5 border border-[#BFD0DC] rounded text-[#2D4A5C] hover:border-[#1E3A5F]/30 transition-colors">
+              className="text-sm px-4 py-1.5 border border-edge rounded text-secondary hover:border-navy/30 transition-colors">
               Annuler
             </button>
           </div>
@@ -135,20 +135,20 @@ export default function PortfolioPage() {
           {[
             { label: "Valeur totale",
               value: `${data.total_value?.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} ${data.currency}`,
-              color: "text-[#0B1929]" },
+              color: "text-primary" },
             { label: "P&L total",
               value: data.total_pnl != null
                 ? `${data.total_pnl > 0 ? "+" : ""}${data.total_pnl.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} ${data.currency}`
                 : "—",
-              color: data.total_pnl != null ? (data.total_pnl > 0 ? "text-green-700" : "text-red-700") : "text-[#7898AC]" },
+              color: data.total_pnl != null ? (data.total_pnl > 0 ? "text-green-700" : "text-red-700") : "text-muted" },
             { label: "P&L %",
               value: data.total_pnl_pct != null
                 ? `${data.total_pnl_pct > 0 ? "+" : ""}${data.total_pnl_pct.toFixed(2)}%`
                 : "—",
-              color: data.total_pnl_pct != null ? (data.total_pnl_pct > 0 ? "text-green-700" : "text-red-700") : "text-[#7898AC]" },
+              color: data.total_pnl_pct != null ? (data.total_pnl_pct > 0 ? "text-green-700" : "text-red-700") : "text-muted" },
           ].map(({ label, value, color }) => (
-            <div key={label} className="rounded-lg border border-[#BFD0DC] bg-white p-3 shadow-sm">
-              <p className="text-[10px] text-[#7898AC] uppercase tracking-widest mb-1">{label}</p>
+            <div key={label} className="rounded-lg border border-edge bg-surface p-3 shadow-sm">
+              <p className="text-[10px] text-muted uppercase tracking-widest mb-1">{label}</p>
               <p className={`text-sm font-mono font-semibold ${color}`}>{value}</p>
             </div>
           ))}
@@ -157,12 +157,12 @@ export default function PortfolioPage() {
 
       {/* Tableau des positions */}
       {data && data.positions.length > 0 ? (
-        <div className="rounded-lg border border-[#BFD0DC] overflow-x-auto shadow-sm">
+        <div className="rounded-lg border border-edge overflow-x-auto shadow-sm">
           <table className="w-full text-sm min-w-[720px]">
             <thead>
-              <tr className="border-b border-[#BFD0DC] bg-[#EEF2F6]">
+              <tr className="border-b border-edge bg-bg">
                 {["Ticker", "Qté", "P. moyen", "Cours", "Valeur", "P&L", "P&L %", "Auj.", ""].map((h) => (
-                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-[#7898AC] uppercase tracking-widest">
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-semibold text-muted uppercase tracking-widest">
                     {h}
                   </th>
                 ))}
@@ -170,17 +170,17 @@ export default function PortfolioPage() {
             </thead>
             <tbody>
               {data.positions.map((pos) => (
-                <tr key={pos.ticker} className="border-b border-[#BFD0DC] bg-white hover:bg-[#EEF2F6] transition-colors">
+                <tr key={pos.ticker} className="border-b border-edge bg-surface hover:bg-bg transition-colors">
                   <td className="px-4 py-2.5">
-                    <Link href={`/company/${pos.ticker}`} className="font-mono font-bold text-[#1E3A5F] hover:text-[#162d4a]">
+                    <Link href={`/company/${pos.ticker}`} className="font-mono font-bold text-navy hover:text-navy-hover">
                       {pos.ticker}
                     </Link>
-                    {pos.sector && <p className="text-[10px] text-[#7898AC]">{pos.sector}</p>}
+                    {pos.sector && <p className="text-[10px] text-muted">{pos.sector}</p>}
                   </td>
-                  <td className="px-4 py-2.5 font-mono text-[#2D4A5C]">{pos.quantity}</td>
-                  <td className="px-4 py-2.5 font-mono text-[#2D4A5C]">{pos.avg_cost.toFixed(2)}</td>
-                  <td className="px-4 py-2.5 font-mono text-[#0B1929] font-medium">{pos.current_price?.toFixed(2) ?? "—"}</td>
-                  <td className="px-4 py-2.5 font-mono text-[#0B1929]">
+                  <td className="px-4 py-2.5 font-mono text-secondary">{pos.quantity}</td>
+                  <td className="px-4 py-2.5 font-mono text-secondary">{pos.avg_cost.toFixed(2)}</td>
+                  <td className="px-4 py-2.5 font-mono text-primary font-medium">{pos.current_price?.toFixed(2) ?? "—"}</td>
+                  <td className="px-4 py-2.5 font-mono text-primary">
                     {pos.market_value?.toLocaleString("fr-FR", { minimumFractionDigits: 2 }) ?? "—"}
                   </td>
                   <td className="px-4 py-2.5">
@@ -194,7 +194,7 @@ export default function PortfolioPage() {
                   <td className="px-4 py-2.5"><ChangeCell value={pos.change_1d} /></td>
                   <td className="px-4 py-2.5 text-right">
                     <button onClick={() => handleDelete(pos.ticker)} disabled={deletingTicker === pos.ticker}
-                      className="text-xs text-[#7898AC] hover:text-red-700 transition-colors disabled:opacity-40"
+                      className="text-xs text-muted hover:text-red-700 transition-colors disabled:opacity-40"
                       title="Supprimer la position">
                       {deletingTicker === pos.ticker ? "…" : "✕"}
                     </button>
@@ -205,8 +205,8 @@ export default function PortfolioPage() {
           </table>
         </div>
       ) : (
-        <div className="rounded-lg border border-[#BFD0DC] bg-white p-8 text-center shadow-sm">
-          <p className="text-[#2D4A5C] text-sm">Aucune position. Clique sur &quot;+ Transaction&quot; pour commencer.</p>
+        <div className="rounded-lg border border-edge bg-surface p-8 text-center shadow-sm">
+          <p className="text-secondary text-sm">Aucune position. Clique sur &quot;+ Transaction&quot; pour commencer.</p>
         </div>
       )}
 
@@ -214,18 +214,18 @@ export default function PortfolioPage() {
       {data && Object.keys(data.sector_exposure).length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-[#5E96B0] text-xs">▣</span>
-            <h2 className="text-[10px] font-semibold text-[#7898AC] uppercase tracking-widest">Exposition sectorielle</h2>
-            <div className="flex-1 h-px bg-[#BFD0DC]" />
+            <span className="text-accent text-xs">▣</span>
+            <h2 className="text-[10px] font-semibold text-muted uppercase tracking-widest">Exposition sectorielle</h2>
+            <div className="flex-1 h-px bg-edge" />
           </div>
           <div className="space-y-2">
             {Object.entries(data.sector_exposure).map(([sector, info]) => (
               <div key={sector} className="flex items-center gap-3">
-                <span className="text-xs text-[#2D4A5C] w-28 sm:w-44 truncate">{sector}</span>
-                <div className="flex-1 bg-[#E2EAF0] rounded-full h-1.5">
-                  <div className="bg-[#1E3A5F] h-1.5 rounded-full transition-all" style={{ width: `${info.weight}%` }} />
+                <span className="text-xs text-secondary w-28 sm:w-44 truncate">{sector}</span>
+                <div className="flex-1 bg-surface-alt rounded-full h-1.5">
+                  <div className="bg-navy h-1.5 rounded-full transition-all" style={{ width: `${info.weight}%` }} />
                 </div>
-                <span className="text-xs font-mono text-[#2D4A5C] w-10 text-right">{info.weight.toFixed(0)}%</span>
+                <span className="text-xs font-mono text-secondary w-10 text-right">{info.weight.toFixed(0)}%</span>
               </div>
             ))}
           </div>
@@ -236,13 +236,13 @@ export default function PortfolioPage() {
 }
 
 const inputClass =
-  "w-full bg-[#EEF2F6] border border-[#BFD0DC] rounded px-2.5 py-1.5 text-sm " +
-  "text-[#0B1929] placeholder-[#7898AC] focus:outline-none focus:border-[#1E3A5F] transition-colors";
+  "w-full bg-bg border border-edge rounded px-2.5 py-1.5 text-sm " +
+  "text-primary placeholder-muted focus:outline-none focus:border-navy transition-colors";
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="text-[10px] text-[#7898AC] uppercase tracking-wider mb-1 block font-medium">
+      <label className="text-[10px] text-muted uppercase tracking-wider mb-1 block font-medium">
         {label}{required && <span className="text-red-600 ml-0.5">*</span>}
       </label>
       {children}

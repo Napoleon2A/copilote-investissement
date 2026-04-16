@@ -85,13 +85,13 @@ export function ChatWidget() {
       {open && (
         <div
           className="fixed bottom-20 right-3 left-3 sm:left-auto sm:right-4 z-50 sm:w-96 flex flex-col rounded-xl
-                     border border-[#BFD0DC] bg-white shadow-xl max-h-[75vh]"
+                     border border-edge bg-surface shadow-xl max-h-[75vh]"
           style={{ height: "480px" }}
         >
           {/* En-tête */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#BFD0DC] flex-shrink-0 bg-[#1E3A5F] rounded-t-xl">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-edge flex-shrink-0 bg-navy rounded-t-xl">
             <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#5E96B0]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-accent" />
               <span className="text-sm font-medium text-white tracking-wide">Austerlitz IA</span>
             </div>
             <button
@@ -103,7 +103,7 @@ export function ChatWidget() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-[#EEF2F6]">
+          <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-bg">
             {messages.map((msg) => (
               <Bubble key={msg.id} message={msg} />
             ))}
@@ -112,13 +112,13 @@ export function ChatWidget() {
 
           {/* Suggestions */}
           {messages.length <= 1 && (
-            <div className="px-3 pb-2 pt-1 flex flex-wrap gap-1.5 flex-shrink-0 bg-[#EEF2F6] border-t border-[#BFD0DC]">
+            <div className="px-3 pb-2 pt-1 flex flex-wrap gap-1.5 flex-shrink-0 bg-bg border-t border-edge">
               {SUGGESTIONS.map((s) => (
                 <button
                   key={s}
                   onClick={() => sendMessage(s)}
-                  className="text-[10px] px-2.5 py-1 border border-[#BFD0DC] rounded-full
-                             text-[#2D4A5C] bg-white hover:border-[#1E3A5F]/30 hover:text-[#1E3A5F]
+                  className="text-[10px] px-2.5 py-1 border border-edge rounded-full
+                             text-secondary bg-surface hover:border-navy/30 hover:text-navy
                              transition-colors"
                 >
                   {s}
@@ -130,7 +130,7 @@ export function ChatWidget() {
           {/* Input */}
           <form
             onSubmit={handleSubmit}
-            className="flex gap-2 px-3 py-3 border-t border-[#BFD0DC] flex-shrink-0 bg-white rounded-b-xl"
+            className="flex gap-2 px-3 py-3 border-t border-edge flex-shrink-0 bg-surface rounded-b-xl"
           >
             <input
               ref={inputRef}
@@ -138,15 +138,15 @@ export function ChatWidget() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="Question…"
               disabled={loading}
-              className="flex-1 bg-[#EEF2F6] border border-[#BFD0DC] rounded-lg px-3 py-2 text-sm
-                         text-[#0B1929] placeholder-[#7898AC] focus:outline-none focus:border-[#1E3A5F]
+              className="flex-1 bg-bg border border-edge rounded-lg px-3 py-2 text-sm
+                         text-primary placeholder-muted focus:outline-none focus:border-navy
                          disabled:opacity-50 transition-colors"
               autoComplete="off"
             />
             <button
               type="submit"
               disabled={loading || !input.trim()}
-              className="px-3 py-2 bg-[#1E3A5F] hover:bg-[#162d4a] rounded-lg text-white text-sm
+              className="px-3 py-2 bg-navy hover:bg-navy-hover rounded-lg text-white text-sm
                          transition-colors disabled:opacity-40 flex-shrink-0 font-medium"
             >
               {loading ? "…" : "→"}
@@ -158,15 +158,15 @@ export function ChatWidget() {
       {/* Bouton flottant */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full bg-[#1E3A5F] hover:bg-[#162d4a]
-                   flex items-center justify-center shadow-lg shadow-[#1E3A5F]/20 transition-all duration-150
-                   border-2 border-[#5E96B0]/40"
+        className="fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full bg-navy hover:bg-navy-hover
+                   flex items-center justify-center shadow-lg shadow-navy/20 transition-all duration-150
+                   border-2 border-accent/40"
         title="Ouvrir le chatbot"
       >
         {open ? (
           <span className="text-white text-lg leading-none font-medium">×</span>
         ) : (
-          <span className="text-[#5E96B0] text-base font-bold"
+          <span className="text-accent text-base font-bold"
                 style={{ fontFamily: "'Space Grotesk', sans-serif" }}>A</span>
         )}
       </button>
@@ -180,12 +180,12 @@ function Bubble({ message }: { message: Message }) {
   if (message.loading) {
     return (
       <div className="flex gap-2">
-        <div className="w-6 h-6 rounded-full bg-[#1E3A5F] flex-shrink-0 flex items-center justify-center text-[10px] text-[#5E96B0] font-bold"
+        <div className="w-6 h-6 rounded-full bg-navy flex-shrink-0 flex items-center justify-center text-[10px] text-accent font-bold"
              style={{ fontFamily: "'Space Grotesk', sans-serif" }}>A</div>
-        <div className="rounded-lg bg-white border border-[#BFD0DC] px-3 py-2 flex gap-1 items-center shadow-sm">
-          <span className="w-1.5 h-1.5 bg-[#1E3A5F] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-          <span className="w-1.5 h-1.5 bg-[#1E3A5F] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-          <span className="w-1.5 h-1.5 bg-[#1E3A5F] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+        <div className="rounded-lg bg-surface border border-edge px-3 py-2 flex gap-1 items-center shadow-sm">
+          <span className="w-1.5 h-1.5 bg-navy rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+          <span className="w-1.5 h-1.5 bg-navy rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+          <span className="w-1.5 h-1.5 bg-navy rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
         </div>
       </div>
     );
@@ -194,7 +194,7 @@ function Bubble({ message }: { message: Message }) {
   if (isUser) {
     return (
       <div className="flex gap-2 flex-row-reverse">
-        <div className="rounded-lg bg-[#1E3A5F] px-3 py-2 text-xs text-white max-w-[80%] shadow-sm">
+        <div className="rounded-lg bg-navy px-3 py-2 text-xs text-white max-w-[80%] shadow-sm">
           {message.text}
         </div>
       </div>
@@ -203,9 +203,9 @@ function Bubble({ message }: { message: Message }) {
 
   return (
     <div className="flex gap-2">
-      <div className="w-6 h-6 rounded-full bg-[#1E3A5F] flex-shrink-0 flex items-center justify-center text-[10px] text-[#5E96B0] font-bold flex-shrink-0"
+      <div className="w-6 h-6 rounded-full bg-navy flex-shrink-0 flex items-center justify-center text-[10px] text-accent font-bold flex-shrink-0"
            style={{ fontFamily: "'Space Grotesk', sans-serif" }}>A</div>
-      <div className="flex-1 rounded-lg bg-white border border-[#BFD0DC] px-3 py-2 shadow-sm">
+      <div className="flex-1 rounded-lg bg-surface border border-edge px-3 py-2 shadow-sm">
         <MiniMarkdown text={message.text} />
         {!!message.data && <DataLinks data={message.data as Record<string, unknown>} />}
       </div>
@@ -216,14 +216,14 @@ function Bubble({ message }: { message: Message }) {
 function MiniMarkdown({ text }: { text: string }) {
   const lines = text.split("\n");
   return (
-    <div className="text-xs text-[#0B1929] space-y-0.5">
+    <div className="text-xs text-primary space-y-0.5">
       {lines.map((line, i) => {
         if (line.startsWith("## "))
-          return <p key={i} className="text-sm font-semibold text-[#1E3A5F]"
+          return <p key={i} className="text-sm font-semibold text-navy"
                     style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{line.slice(3)}</p>;
         if (line.startsWith("+ ")) return <p key={i} className="text-green-700">{line}</p>;
         if (line.startsWith("− ") || line.startsWith("- ")) return <p key={i} className="text-red-700">{line}</p>;
-        if (line.startsWith("• ") || line.startsWith("* ")) return <p key={i} className="text-[#2D4A5C] pl-1">{line}</p>;
+        if (line.startsWith("• ") || line.startsWith("* ")) return <p key={i} className="text-secondary pl-1">{line}</p>;
         if (line === "") return <div key={i} className="h-0.5" />;
         const parts = line.split(/\*\*(.+?)\*\*/g);
         if (parts.length > 1) {
@@ -231,7 +231,7 @@ function MiniMarkdown({ text }: { text: string }) {
             <p key={i}>
               {parts.map((part, j) =>
                 j % 2 === 1
-                  ? <strong key={j} className="text-[#0B1929] font-semibold">{part}</strong>
+                  ? <strong key={j} className="text-primary font-semibold">{part}</strong>
                   : <span key={j}>{part}</span>
               )}
             </p>
@@ -249,10 +249,10 @@ function DataLinks({ data }: { data: Record<string, unknown> }) {
 
   if (opportunities && opportunities.length > 0) {
     return (
-      <div className="mt-2 flex flex-wrap gap-1.5 border-t border-[#BFD0DC] pt-2">
+      <div className="mt-2 flex flex-wrap gap-1.5 border-t border-edge pt-2">
         {opportunities.slice(0, 4).map((opp) => (
           <Link key={opp.ticker} href={`/company/${opp.ticker}`}
-            className="text-xs px-2 py-0.5 border border-[#1E3A5F]/20 bg-[#EEF2F6] rounded text-[#1E3A5F] hover:bg-[#E2EAF0] transition-colors">
+            className="text-xs px-2 py-0.5 border border-navy/20 bg-bg rounded text-navy hover:bg-surface-alt transition-colors">
             {opp.ticker} ({opp.scores.composite}/10)
           </Link>
         ))}
@@ -262,9 +262,9 @@ function DataLinks({ data }: { data: Record<string, unknown> }) {
 
   if (ticker) {
     return (
-      <div className="mt-2 border-t border-[#BFD0DC] pt-2">
+      <div className="mt-2 border-t border-edge pt-2">
         <Link href={`/company/${ticker}`}
-          className="text-xs px-2 py-0.5 border border-[#1E3A5F]/20 bg-[#EEF2F6] rounded text-[#1E3A5F] hover:bg-[#E2EAF0] transition-colors">
+          className="text-xs px-2 py-0.5 border border-navy/20 bg-bg rounded text-navy hover:bg-surface-alt transition-colors">
           → Voir {ticker}
         </Link>
       </div>
