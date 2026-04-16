@@ -9,8 +9,10 @@ import { getWatchlists, getWatchlistSnapshot, createWatchlist, addToWatchlist, r
 import type { Watchlist, WatchlistSnapshotItem } from "@/lib/api";
 import { ChangeCell } from "@/components/ui/ChangeCell";
 import { ScoreBadge } from "@/components/ui/ScoreBadge";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 export default function WatchlistPage() {
+  useDocumentTitle("Watchlist");
   const [watchlists, setWatchlists] = useState<Watchlist[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [snapshot, setSnapshot] = useState<WatchlistSnapshotItem[]>([]);
@@ -99,8 +101,8 @@ export default function WatchlistPage() {
         <form onSubmit={handleAddTicker} className="flex gap-2 items-center">
           <input value={newTicker} onChange={(e) => setNewTicker(e.target.value.toUpperCase())}
             placeholder="Ajouter un ticker (ex: MSFT)"
-            className="bg-white border border-[#BFD0DC] rounded px-3 py-1.5 text-sm
-                       text-[#0B1929] placeholder-[#7898AC] focus:outline-none focus:border-[#1E3A5F] w-52 transition-colors" />
+            className="flex-1 sm:flex-none bg-white border border-[#BFD0DC] rounded px-3 py-1.5 text-sm
+                       text-[#0B1929] placeholder-[#7898AC] focus:outline-none focus:border-[#1E3A5F] sm:w-52 transition-colors" />
           <button type="submit"
             className="text-sm px-3 py-1.5 bg-[#1E3A5F] hover:bg-[#162d4a] rounded text-white transition-colors font-medium">
             Ajouter
@@ -121,8 +123,8 @@ export default function WatchlistPage() {
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border border-[#BFD0DC] overflow-hidden shadow-sm">
-          <table className="w-full text-sm">
+        <div className="rounded-lg border border-[#BFD0DC] overflow-x-auto shadow-sm">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="border-b border-[#BFD0DC] bg-[#EEF2F6]">
                 {["Ticker", "Nom", "Prix", "1J", "1M", "YTD", "Score", ""].map((h) => (

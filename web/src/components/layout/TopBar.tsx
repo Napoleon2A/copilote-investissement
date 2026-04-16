@@ -14,28 +14,46 @@ export function TopBar() {
     }
   };
 
+  const toggleSidebar = () => {
+    window.dispatchEvent(new Event("toggle-sidebar"));
+  };
+
   return (
-    <header className="h-11 bg-white border-b border-[#BFD0DC] flex items-center px-6 gap-4 flex-shrink-0">
-      <form onSubmit={handleSearch} className="flex items-center gap-2">
+    <header className="h-11 bg-white border-b border-[#BFD0DC] flex items-center px-3 sm:px-6 gap-2 sm:gap-4 flex-shrink-0">
+      {/* Burger button — mobile uniquement */}
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        className="md:hidden flex flex-col items-center justify-center gap-[3px] w-8 h-8 rounded hover:bg-[#EEF2F6] transition-colors"
+        aria-label="Ouvrir le menu"
+      >
+        <span className="block w-4 h-px bg-[#2D4A5C]" />
+        <span className="block w-4 h-px bg-[#2D4A5C]" />
+        <span className="block w-4 h-px bg-[#2D4A5C]" />
+      </button>
+
+      <form onSubmit={handleSearch} className="flex items-center gap-2 flex-1 md:flex-initial">
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Rechercher un ticker…"
+          placeholder="Ticker…"
           className="bg-[#EEF2F6] border border-[#BFD0DC] rounded px-3 py-1.5 text-xs
                      text-[#0B1929] placeholder-[#7898AC] focus:outline-none
-                     focus:border-[#1E3A5F] focus:bg-white transition-colors w-48"
+                     focus:border-[#1E3A5F] focus:bg-white transition-colors
+                     w-full md:w-48"
         />
         <button
           type="submit"
           className="text-xs px-3 py-1.5 bg-[#1E3A5F] hover:bg-[#162d4a]
-                     rounded text-white transition-colors font-medium"
+                     rounded text-white transition-colors font-medium flex-shrink-0"
         >
           →
         </button>
       </form>
 
-      <p className="text-[10px] text-[#7898AC] ml-auto tracking-wide">
+      {/* Disclaimer — masqué sur mobile, visible dès md */}
+      <p className="hidden md:block text-[10px] text-[#7898AC] ml-auto tracking-wide">
         À titre informatif uniquement · Pas un conseil en investissement
       </p>
     </header>

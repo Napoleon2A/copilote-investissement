@@ -8,8 +8,10 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getIdeas, submitIdea, getIdea, reviseIdea } from "@/lib/api";
 import type { IdeaSummary, IdeaDetail } from "@/lib/api";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 function IdeaPageContent() {
+  useDocumentTitle("Idées");
   const searchParams = useSearchParams();
   const prefillTicker = searchParams.get("ticker") || "";
 
@@ -73,11 +75,11 @@ function IdeaPageContent() {
       {/* Formulaire de soumission */}
       <form onSubmit={handleSubmit} className="rounded-lg border border-[#BFD0DC] bg-white p-5 space-y-4 shadow-sm">
         <h2 className="text-xs font-semibold text-[#1E3A5F] uppercase tracking-widest">Nouvelle idée</h2>
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <input value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())}
             placeholder="Ticker (ex: NVDA)"
             className="bg-[#EEF2F6] border border-[#BFD0DC] rounded px-3 py-2 text-sm
-                       text-[#0B1929] placeholder-[#7898AC] focus:outline-none focus:border-[#1E3A5F] w-40 transition-colors"
+                       text-[#0B1929] placeholder-[#7898AC] focus:outline-none focus:border-[#1E3A5F] w-full sm:w-40 transition-colors"
             required />
           <textarea value={userThesis} onChange={(e) => setUserThesis(e.target.value)}
             placeholder="Ta thèse (optionnel) — pourquoi tu trouves ça intéressant…"
@@ -92,7 +94,7 @@ function IdeaPageContent() {
         </button>
       </form>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Liste des idées */}
         <div className="space-y-2">
           <div className="flex items-center gap-2 mb-2">
@@ -120,7 +122,7 @@ function IdeaPageContent() {
         </div>
 
         {/* Détail */}
-        <div className="col-span-2">
+        <div className="md:col-span-2">
           {!selectedIdea ? (
             <div className="rounded-lg border border-[#BFD0DC] bg-white p-6 text-center shadow-sm">
               <p className="text-[#7898AC] text-sm">Soumets une idée ou sélectionnes-en une pour voir l&apos;analyse.</p>
@@ -163,7 +165,7 @@ function IdeaPageContent() {
               )}
 
               {/* Arguments */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {selectedIdea.idea.pro_args && (
                   <div className="rounded border border-green-200 bg-green-50 p-3">
                     <p className="text-[10px] text-green-700 uppercase tracking-wider mb-1.5 font-semibold">+ Pour</p>

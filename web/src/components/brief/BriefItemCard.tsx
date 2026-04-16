@@ -28,7 +28,7 @@ export function BriefItemCard({ item }: { item: BriefItem }) {
           >
             {item.ticker}
           </Link>
-          <div className="flex items-center gap-2 mt-0.5">
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {item.current_price && (
               <span className="text-sm text-[#0B1929] font-mono">
                 {item.current_price.toLocaleString()}
@@ -81,7 +81,7 @@ function PositionPnl({ pos }: { pos: BriefPosition }) {
   const isPositive = pos.pnl >= 0;
   const color = isPositive ? "text-green-700" : "text-red-700";
   return (
-    <div className="mt-2 flex items-center gap-3 text-xs text-[#7898AC] border-t border-[#BFD0DC] pt-2">
+    <div className="mt-2 flex items-center gap-3 text-xs text-[#7898AC] border-t border-[#BFD0DC] pt-2 flex-wrap">
       <span>{pos.quantity} actions × {pos.avg_cost.toFixed(2)} {pos.currency}</span>
       <span>→</span>
       <span className={`font-mono font-medium ${color}`}>

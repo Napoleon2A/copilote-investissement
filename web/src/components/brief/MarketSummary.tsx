@@ -10,7 +10,7 @@ export function MarketSummary({ data }: Props) {
 
   return (
     <div className="rounded-lg border border-[#BFD0DC] bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap gap-8">
+      <div className="flex flex-wrap gap-x-5 gap-y-3 sm:gap-8">
         {Object.entries(data).map(([name, index]) => (
           <div key={name} className="flex flex-col gap-0.5">
             <span className="text-[10px] text-[#7898AC] uppercase tracking-widest font-medium">{name}</span>

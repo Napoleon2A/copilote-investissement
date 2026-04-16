@@ -115,7 +115,7 @@ function NapoleonBanner({ date }: { date?: string }) {
       });
 
   return (
-    <div className="relative w-full rounded-xl overflow-hidden shadow-md" style={{ height: "190px" }}>
+    <div className="relative w-full rounded-xl overflow-hidden shadow-md h-[140px] sm:h-[190px]">
       {/* Tableau de David — Bonaparte franchissant les Alpes (domaine public) */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -135,7 +135,7 @@ function NapoleonBanner({ date }: { date?: string }) {
       />
 
       {/* Texte superposé */}
-      <div className="absolute inset-0 flex flex-col justify-center px-8">
+      <div className="absolute inset-0 flex flex-col justify-center px-5 sm:px-8">
         {/* Règle or supérieure */}
         <div className="flex items-center gap-3 mb-3">
           <div className="w-12 h-px bg-[#5E96B0]" />
@@ -146,7 +146,7 @@ function NapoleonBanner({ date }: { date?: string }) {
 
         {/* Nom du fonds */}
         <h1
-          className="text-white text-3xl font-bold tracking-[0.08em] uppercase"
+          className="text-white text-2xl sm:text-3xl font-bold tracking-[0.08em] uppercase"
           style={{ fontFamily: "'Space Grotesk', sans-serif" }}
         >
           Austerlitz

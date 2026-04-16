@@ -6,8 +6,14 @@ import { ChatWidget } from "@/components/chat/ChatWidget";
 import { BackgroundLines } from "@/components/ui/BackgroundLines";
 
 export const metadata: Metadata = {
-  title: "Austerlitz Hedge Fund",
+  title: {
+    default: "Austerlitz Hedge Fund",
+    template: "%s · Austerlitz",
+  },
   description: "Suivi, analyse et aide à la décision en investissement",
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+  },
 };
 
 
@@ -23,7 +29,7 @@ export default function RootLayout({
           <Sidebar />
           <div className="flex flex-col flex-1 overflow-hidden">
             <TopBar />
-            <main className="flex-1 overflow-y-auto p-6 relative">
+            <main className="flex-1 overflow-y-auto p-3 sm:p-6 relative">
               <BackgroundLines />
               <div className="relative z-10">{children}</div>
             </main>

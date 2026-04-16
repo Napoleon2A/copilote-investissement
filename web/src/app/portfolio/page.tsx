@@ -8,8 +8,10 @@ import Link from "next/link";
 import { getPositions, addTransaction, deletePosition } from "@/lib/api";
 import type { PortfolioData } from "@/lib/api";
 import { ChangeCell } from "@/components/ui/ChangeCell";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 export default function PortfolioPage() {
+  useDocumentTitle("Portefeuille");
   const [data, setData] = useState<PortfolioData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -81,7 +83,7 @@ export default function PortfolioPage() {
       {showForm && (
         <form onSubmit={handleSubmit} className="rounded-lg border border-[#1E3A5F]/20 bg-white p-5 space-y-4 shadow-sm">
           <h2 className="text-sm font-semibold text-[#1E3A5F]">Nouvelle transaction</h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Ticker" required>
               <input value={form.ticker} onChange={(e) => setForm({ ...form, ticker: e.target.value })}
                 placeholder="AAPL" className={inputClass} required />
@@ -125,7 +127,7 @@ export default function PortfolioPage() {
 
       {/* Résumé global */}
       {data && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
             { label: "Valeur totale",
               value: `${data.total_value?.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} ${data.currency}`,
@@ -151,8 +153,8 @@ export default function PortfolioPage() {
 
       {/* Tableau des positions */}
       {data && data.positions.length > 0 ? (
-        <div className="rounded-lg border border-[#BFD0DC] overflow-hidden shadow-sm">
-          <table className="w-full text-sm">
+        <div className="rounded-lg border border-[#BFD0DC] overflow-x-auto shadow-sm">
+          <table className="w-full text-sm min-w-[720px]">
             <thead>
               <tr className="border-b border-[#BFD0DC] bg-[#EEF2F6]">
                 {["Ticker", "Qté", "P. moyen", "Cours", "Valeur", "P&L", "P&L %", "Auj.", ""].map((h) => (
@@ -215,7 +217,7 @@ export default function PortfolioPage() {
           <div className="space-y-2">
             {Object.entries(data.sector_exposure).map(([sector, info]) => (
               <div key={sector} className="flex items-center gap-3">
-                <span className="text-xs text-[#2D4A5C] w-44 truncate">{sector}</span>
+                <span className="text-xs text-[#2D4A5C] w-28 sm:w-44 truncate">{sector}</span>
                 <div className="flex-1 bg-[#E2EAF0] rounded-full h-1.5">
                   <div className="bg-[#1E3A5F] h-1.5 rounded-full transition-all" style={{ width: `${info.weight}%` }} />
                 </div>

@@ -84,8 +84,8 @@ export function ChatWidget() {
       {/* Panneau chat */}
       {open && (
         <div
-          className="fixed bottom-20 right-4 z-50 w-80 sm:w-96 flex flex-col rounded-xl
-                     border border-[#BFD0DC] bg-white shadow-xl"
+          className="fixed bottom-20 right-3 left-3 sm:left-auto sm:right-4 z-50 sm:w-96 flex flex-col rounded-xl
+                     border border-[#BFD0DC] bg-white shadow-xl max-h-[75vh]"
           style={{ height: "480px" }}
         >
           {/* En-tête */}

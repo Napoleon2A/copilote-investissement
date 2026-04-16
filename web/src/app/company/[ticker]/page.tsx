@@ -1,6 +1,7 @@
 /**
  * Page fiche entreprise — /company/[ticker]
  */
+import type { Metadata } from "next";
 import { getCompanyBrief, getCompanyScores } from "@/lib/api";
 import { ChangeCell } from "@/components/ui/ChangeCell";
 import { ScoreBadge } from "@/components/ui/ScoreBadge";
@@ -8,6 +9,11 @@ import Link from "next/link";
 
 interface Props {
   params: Promise<{ ticker: string }>;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { ticker } = await params;
+  return { title: `${ticker.toUpperCase()} · Austerlitz` };
 }
 
 const ACTION_COLORS: Record<string, string> = {
@@ -82,7 +88,7 @@ export default async function CompanyPage({ params }: Props) {
       </div>
 
       {/* Score composite + sous-scores */}
-      <div className="rounded-lg border border-[#BFD0DC] bg-white p-4 shadow-sm flex items-center gap-6">
+      <div className="rounded-lg border border-[#BFD0DC] bg-white p-4 shadow-sm flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
         <div className="flex flex-col items-center">
           <ScoreBadge score={brief.scores.composite} size="md" />
           <span className="text-[10px] text-[#7898AC] mt-1 uppercase tracking-wider">{brief.scores.composite_label}</span>

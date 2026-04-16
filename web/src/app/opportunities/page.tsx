@@ -6,6 +6,7 @@
  */
 "use client";
 import { useState, useEffect } from "react";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 import Link from "next/link";
 import { getScanOpportunities, getMacroScan } from "@/lib/api";
 import type { ScanOpportunity, MacroScan } from "@/lib/api";
@@ -13,6 +14,7 @@ import { ChangeCell } from "@/components/ui/ChangeCell";
 import { ScoreBadge } from "@/components/ui/ScoreBadge";
 
 export default function OpportunitiesPage() {
+  useDocumentTitle("Opportunités");
   const [data, setData] = useState<ScanOpportunity[]>([]);
   const [macro, setMacro] = useState<MacroScan | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,7 +43,7 @@ export default function OpportunitiesPage() {
     <div className="max-w-4xl mx-auto space-y-5">
 
       {/* En-tête */}
-      <div className="flex items-baseline justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2">
         <div>
           <h1 className="text-lg font-semibold text-[#0B1929]"
               style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
@@ -132,7 +134,7 @@ function MacroWidget({ macro }: { macro: MacroScan }) {
       <p className="text-xs text-[#2D4A5C]">{regime.desc}</p>
 
       {/* Indices clés */}
-      <div className="flex gap-6 flex-wrap">
+      <div className="flex gap-x-5 gap-y-3 flex-wrap">
         {Object.entries(macro.macro).map(([name, data]) => {
           const chg = data.change_1d;
           return (
@@ -153,7 +155,7 @@ function MacroWidget({ macro }: { macro: MacroScan }) {
 
       {/* Secteurs */}
       {(macro.outperformers.length > 0 || macro.underperformers.length > 0) && (
-        <div className="flex gap-8 text-xs pt-2 border-t border-[#BFD0DC]">
+        <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 text-xs pt-2 border-t border-[#BFD0DC]">
           {macro.outperformers.length > 0 && (
             <div>
               <p className="text-[#7898AC] mb-1 text-[10px] uppercase tracking-wide">Surperformants YTD</p>
@@ -208,7 +210,7 @@ function OpportunityCard({ opp, rank }: { opp: ScanOpportunity; rank: number }) 
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               {opp.current_price && (
                 <span className="text-sm text-[#0B1929] font-mono font-medium">
                   {opp.current_price.toLocaleString("fr-FR", { minimumFractionDigits: 2 })}
@@ -266,7 +268,7 @@ function OpportunityCard({ opp, rank }: { opp: ScanOpportunity; rank: number }) 
       )}
 
       {/* Scores détail */}
-      <div className="mt-3 flex gap-5 text-xs text-[#7898AC] border-t border-[#BFD0DC] pt-2">
+      <div className="mt-3 grid grid-cols-5 gap-2 sm:gap-5 text-xs text-[#7898AC] border-t border-[#BFD0DC] pt-2">
         {[
           ["Qualité", opp.scores.quality],
           ["Valeur",  opp.scores.valuation],

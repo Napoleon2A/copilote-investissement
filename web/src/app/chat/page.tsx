@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { chatWithBot } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 const SUGGESTIONS = [
   "Meilleures opportunités maintenant",
@@ -24,6 +25,7 @@ type Message = {
 };
 
 export default function ChatPage() {
+  useDocumentTitle("Chat");
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 0,
@@ -66,7 +68,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto flex flex-col h-[calc(100vh-120px)]">
+    <div className="max-w-3xl mx-auto flex flex-col h-[calc(100vh-100px)] sm:h-[calc(100vh-120px)]">
       <div className="flex items-baseline justify-between mb-4">
         <div>
           <h1 className="text-lg font-semibold text-[#0B1929]"
