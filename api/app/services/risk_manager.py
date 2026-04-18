@@ -85,14 +85,19 @@ def suggest_stop_loss(ticker: str, entry_price: float | None = None) -> dict:
     if not price:
         return {"error": "Prix actuel indisponible"}
 
-    low_52w = changes.get("52w_low", 0)
-    high_52w = changes.get("52w_high", 0)
+    # Recalculer les prix 52W à partir des pourcentages retournés par get_price_changes.
+    # pct_from_52w_low = ((price - low) / low) * 100  →  low = price / (1 + pct/100)
+    # pct_from_52w_high = ((price - high) / high) * 100  →  high = price / (1 + pct/100)
+    pct_from_low = changes.get("pct_from_52w_low", 0)
+    pct_from_high = changes.get("pct_from_52w_high", 0)
 
-    if not low_52w or not high_52w:
+    if pct_from_low and pct_from_high:
+        low_52w = price / (1 + pct_from_low / 100)
+        high_52w = price / (1 + pct_from_high / 100)
+        amplitude_pct = ((high_52w - low_52w) / price) * 100
+    else:
         # Fallback : utiliser les changements de prix
         amplitude_pct = abs(changes.get("change_3m", 0) or 15)  # default 15%
-    else:
-        amplitude_pct = ((high_52w - low_52w) / price) * 100
 
     # Trois niveaux de stop
     tight_pct = amplitude_pct * 0.15
