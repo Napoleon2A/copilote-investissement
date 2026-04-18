@@ -281,12 +281,26 @@ export interface StopLossResult {
   };
 }
 
+export interface SectorRotationEntry {
+  sector: string;
+  change_1m: number;
+}
+
+export interface SectorRotation {
+  leaders: SectorRotationEntry[];
+  laggards: SectorRotationEntry[];
+  rotation_signal: string;
+}
+
 export interface MarketContext {
   regime: string;
   regime_label: string;
   regime_advice: string;
   session_mood: string;
   vix?: number;
+  cross_asset_signals?: string[];
+  sector_rotation?: SectorRotation;
+  macro_narrative?: string;
 }
 
 export interface AggregatedNewsItem {

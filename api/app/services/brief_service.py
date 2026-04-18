@@ -317,15 +317,36 @@ def generate_daily_brief(
 
 def _get_market_context(market_summary: dict) -> dict:
     """
-    Génère un contexte de marché lisible basé sur les indices.
-    Retourne un verdict court + le régime de risque détecté.
+    Génère un contexte de marché lisible basé sur les indices, les matières
+    premières, les taux et les secteurs.
+
+    Retourne les champs historiques (regime, regime_label, regime_advice,
+    session_mood, vix) + de nouveaux champs d'intelligence :
+      - cross_asset_signals : signaux inter-marchés
+      - sector_rotation : leaders, laggards et signal de rotation
+      - macro_narrative : synthèse stratégique 2-3 phrases
     """
+    # ── Extraction des données brutes ───────────────────────────────────────
     vix_data = market_summary.get("VIX", {})
     sp500_data = market_summary.get("SP500", {})
+    nasdaq_data = market_summary.get("NASDAQ", {})
+    us10y_data = market_summary.get("US10Y", {})
+    dxy_data = market_summary.get("DXY", {})
+    gold_data = market_summary.get("Or", {})
+    oil_data = market_summary.get("WTI", {})
+    sectors = market_summary.get("_sectors", {})
+
     vix = vix_data.get("price")
     sp500_1d = sp500_data.get("change_1d")
+    sp500_ytd = sp500_data.get("change_ytd")
+    nasdaq_ytd = nasdaq_data.get("change_ytd")
+    us10y_1m = us10y_data.get("change_1m")
+    dxy_1m = dxy_data.get("change_1m")
+    gold_ytd = gold_data.get("change_ytd")
+    gold_1m = gold_data.get("change_1m")
+    oil_1m = oil_data.get("change_1m")
 
-    # Régime de risque
+    # ── 1. Régime de risque (inchangé) ──────────────────────────────────────
     if vix:
         if vix > 35:
             regime = "risk-off"
@@ -352,7 +373,7 @@ def _get_market_context(market_summary: dict) -> dict:
         regime_label = "—"
         regime_advice = ""
 
-    # Verdict court sur la séance
+    # ── 2. Session mood (inchangé) ──────────────────────────────────────────
     if sp500_1d is not None:
         if sp500_1d > 1.5:
             session_mood = f"Forte séance haussière : S&P 500 {sp500_1d:+.2f}%"
@@ -367,28 +388,228 @@ def _get_market_context(market_summary: dict) -> dict:
     else:
         session_mood = "Données de séance non disponibles"
 
+    # ── 3. Cross-asset signals (NOUVEAU) ────────────────────────────────────
+    # Chaque règle vérifie une combinaison d'actifs et produit une phrase
+    # d'interprétation si les conditions sont remplies.
+    cross_asset_signals = []
+
+    # Règle 1 : Or refuge + VIX élevé
+    if gold_ytd is not None and gold_ytd > 10 and vix is not None and vix > 20:
+        cross_asset_signals.append(
+            f"L'or surperforme (+{gold_ytd:.1f}% YTD) dans un contexte de VIX "
+            f"élevé ({vix:.1f}) — signe de recherche de valeur refuge"
+        )
+
+    # Règle 2 : Dollar faible + or fort
+    if (dxy_1m is not None and dxy_1m < -1
+            and gold_1m is not None and gold_1m > 1):
+        cross_asset_signals.append(
+            f"Dollar faible ({dxy_1m:+.1f}% 1M) + or fort ({gold_1m:+.1f}% 1M) "
+            f"= rotation vers les actifs refuges non-dollar"
+        )
+
+    # Règle 3 : Hausse des taux + financières en surperformance
+    xlf_data = sectors.get("Finance", {})
+    xlf_1m = xlf_data.get("change_1m")
+    if (us10y_1m is not None and us10y_1m > 3
+            and xlf_1m is not None and xlf_1m > 2):
+        cross_asset_signals.append(
+            f"Hausse des taux ({us10y_1m:+.1f}% 1M) favorable aux financières "
+            f"({xlf_1m:+.1f}% 1M) — marges d'intérêt en expansion"
+        )
+
+    # Règle 4 : Complaisance — VIX bas + SP500 proche des hauts
+    if (vix is not None and vix < 14
+            and sp500_ytd is not None and sp500_ytd > 10):
+        cross_asset_signals.append(
+            "Complaisance élevée — le marché sous-estime les risques, "
+            "prudence sur les positions surexposées"
+        )
+
+    # Règle 5 : Pétrole et énergie en baisse
+    xle_data = sectors.get("Énergie", {})
+    xle_1m = xle_data.get("change_1m")
+    if (oil_1m is not None and oil_1m < -5
+            and xle_1m is not None and xle_1m < -3):
+        cross_asset_signals.append(
+            f"Pétrole ({oil_1m:+.1f}% 1M) et énergie ({xle_1m:+.1f}% 1M) en "
+            f"baisse — pression sur les marges des producteurs"
+        )
+
+    # Règle 6 : NASDAQ surperforme SP500
+    if (nasdaq_ytd is not None and sp500_ytd is not None
+            and (nasdaq_ytd - sp500_ytd) > 3):
+        ecart = nasdaq_ytd - sp500_ytd
+        cross_asset_signals.append(
+            f"Tech en surperformance (NASDAQ {nasdaq_ytd:+.1f}% vs S&P 500 "
+            f"{sp500_ytd:+.1f}% YTD, écart {ecart:+.1f}pp) — rotation "
+            f"growth/momentum en cours"
+        )
+
+    # ── 4. Rotation sectorielle (NOUVEAU) ──────────────────────────────────
+    # On classe les secteurs par performance 1 mois, on identifie les leaders
+    # et laggards, et on produit un signal de rotation.
+    sector_rotation = _compute_sector_rotation(sectors)
+
+    # ── 5. Macro narrative (NOUVEAU) ────────────────────────────────────────
+    # Synthèse stratégique en 2-3 phrases, combinant régime + rotation +
+    # cross-asset. Doit ressembler à une note matinale de stratégiste.
+    macro_narrative = _build_macro_narrative(
+        regime, regime_label, vix, session_mood,
+        cross_asset_signals, sector_rotation, sp500_ytd,
+    )
+
     return {
+        # Champs historiques — rétro-compatibilité totale
         "regime": regime,
         "regime_label": regime_label,
         "regime_advice": regime_advice,
         "session_mood": session_mood,
         "vix": vix,
+        # Nouveaux champs
+        "cross_asset_signals": cross_asset_signals,
+        "sector_rotation": sector_rotation,
+        "macro_narrative": macro_narrative,
     }
+
+
+def _compute_sector_rotation(sectors: dict) -> dict:
+    """
+    Analyse la rotation sectorielle à partir des ETFs sectoriels.
+    Trie par change_1m, identifie les 2 leaders et 2 laggards,
+    et génère un signal de rotation lisible.
+    """
+    ranked = []
+    for sector_name, data in sectors.items():
+        change_1m = data.get("change_1m")
+        if change_1m is not None:
+            ranked.append({"sector": sector_name, "change_1m": round(float(change_1m), 2)})
+
+    if not ranked:
+        return {
+            "leaders": [],
+            "laggards": [],
+            "rotation_signal": "Données sectorielles insuffisantes",
+        }
+
+    ranked.sort(key=lambda x: x["change_1m"], reverse=True)
+    leaders = ranked[:2]
+    laggards = ranked[-2:]
+
+    # Génération du signal de rotation
+    leader_names = " et ".join(s["sector"] for s in leaders)
+    laggard_names = " et ".join(s["sector"] for s in laggards)
+
+    # Interprétation : si la tech et l'industrie montent, c'est risk-on.
+    # Si la santé et les utilities montent, c'est défensif.
+    risk_on_sectors = {"Tech", "Industrie", "Finance"}
+    defensive_sectors = {"Santé", "Défense"}
+
+    leader_set = {s["sector"] for s in leaders}
+    if leader_set & risk_on_sectors:
+        tone = "Risk-on"
+    elif leader_set & defensive_sectors:
+        tone = "Rotation défensive"
+    else:
+        tone = "Rotation sectorielle"
+
+    rotation_signal = (
+        f"{tone} : argent vers {leader_names} "
+        f"({leaders[0]['change_1m']:+.1f}%, {leaders[1]['change_1m']:+.1f}% 1M), "
+        f"sortie de {laggard_names} "
+        f"({laggards[0]['change_1m']:+.1f}%, {laggards[1]['change_1m']:+.1f}% 1M)"
+    )
+
+    return {
+        "leaders": leaders,
+        "laggards": laggards,
+        "rotation_signal": rotation_signal,
+    }
+
+
+def _build_macro_narrative(
+    regime: str,
+    regime_label: str,
+    vix: float | None,
+    session_mood: str,
+    cross_asset_signals: list[str],
+    sector_rotation: dict,
+    sp500_ytd: float | None,
+) -> str:
+    """
+    Construit une synthèse macro de 2-3 phrases, style note matinale de
+    stratégiste. Combine le régime de marché, la rotation sectorielle et
+    les signaux inter-marchés en un paragraphe actionnable.
+    """
+    parts = []
+
+    # Phrase 1 : contexte général (régime + SP500 YTD)
+    if regime == "risk-off":
+        parts.append(
+            f"Le marché est en mode risk-off (VIX à {vix:.0f}). "
+            f"Les conditions imposent la prudence et la sélectivité."
+        )
+    elif regime == "vigilance":
+        parts.append(
+            f"Vigilance accrue avec un VIX à {vix:.0f}. "
+            f"L'environnement reste incertain, les tailles de position doivent rester modérées."
+        )
+    elif regime == "risk-on":
+        ytd_part = f" (S&P 500 {sp500_ytd:+.1f}% YTD)" if sp500_ytd is not None else ""
+        parts.append(
+            f"Le marché affiche une complaisance rare (VIX à {vix:.0f}){ytd_part}. "
+            f"Historiquement, ces niveaux précèdent souvent des corrections — rester vigilant."
+        )
+    elif regime == "calme":
+        ytd_part = f" S&P 500 à {sp500_ytd:+.1f}% YTD." if sp500_ytd is not None else ""
+        parts.append(
+            f"Conditions de marché favorables (VIX {vix:.0f}).{ytd_part} "
+            f"Environnement propice à la prise de positions raisonnées."
+        )
+    else:
+        parts.append(session_mood)
+
+    # Phrase 2 : rotation sectorielle
+    rotation_signal = sector_rotation.get("rotation_signal", "")
+    if rotation_signal and "insuffisantes" not in rotation_signal:
+        parts.append(rotation_signal + ".")
+
+    # Phrase 3 : le signal cross-asset le plus important (le premier)
+    if cross_asset_signals:
+        parts.append(cross_asset_signals[0] + ".")
+
+    return " ".join(parts) if parts else "Données insuffisantes pour une synthèse macro."
+
+
+def _to_float(val) -> float | None:
+    """Convertit np.float64 ou autre numeric en float Python natif (JSON-safe)."""
+    if val is None:
+        return None
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
 
 
 def _get_market_summary() -> dict:
     """
-    Résumé de marché minimal : S&P 500, CAC 40, VIX, 10Y US.
+    Résumé de marché élargi : indices majeurs + taux + dollar + matières premières + secteurs.
     Ne bloque pas le brief si une donnée manque.
     """
     from app.services.data_service import get_price_changes
 
     summary = {}
+
+    # ── Indices et macro ────────────────────────────────────────────────────
     indices = {
         "SP500": "^GSPC",
         "CAC40": "^FCHI",
         "NASDAQ": "^IXIC",
         "VIX": "^VIX",
+        "US10Y": "^TNX",      # Taux US 10 ans — signal macro clé
+        "DXY": "DX-Y.NYB",    # Dollar index — force du dollar
+        "Or": "GC=F",         # Or (futures) — valeur refuge
+        "WTI": "CL=F",        # Pétrole WTI (futures)
     }
 
     for name, ticker in indices.items():
@@ -396,12 +617,40 @@ def _get_market_summary() -> dict:
             changes = get_price_changes(ticker)
             if changes:
                 summary[name] = {
-                    "price": changes.get("current_price"),
-                    "change_1d": changes.get("change_1d"),
-                    "change_ytd": changes.get("change_ytd"),
+                    "price": _to_float(changes.get("current_price")),
+                    "change_1d": _to_float(changes.get("change_1d")),
+                    "change_1m": _to_float(changes.get("change_1m")),
+                    "change_ytd": _to_float(changes.get("change_ytd")),
                 }
         except Exception:
             pass  # Indice non disponible → on l'ignore silencieusement
+
+    # ── ETFs sectoriels — pour la rotation sectorielle ──────────────────────
+    sector_etfs = {
+        "Tech": "QQQ",
+        "Énergie": "XLE",
+        "Santé": "XLV",
+        "Finance": "XLF",
+        "Industrie": "XLI",
+        "Défense": "ITA",
+    }
+
+    sectors = {}
+    for sector_name, ticker in sector_etfs.items():
+        try:
+            changes = get_price_changes(ticker)
+            if changes:
+                sectors[sector_name] = {
+                    "ticker": ticker,
+                    "price": _to_float(changes.get("current_price")),
+                    "change_1d": _to_float(changes.get("change_1d")),
+                    "change_1m": _to_float(changes.get("change_1m")),
+                    "change_ytd": _to_float(changes.get("change_ytd")),
+                }
+        except Exception:
+            pass
+
+    summary["_sectors"] = sectors
 
     return summary
 

@@ -263,8 +263,11 @@ const REGIME_STYLES: Record<string, string> = {
 
 function MarketContextBanner({ ctx }: { ctx: MarketContext }) {
   const style = REGIME_STYLES[ctx.regime] ?? REGIME_STYLES.neutral;
+  const hasExtra = ctx.macro_narrative || (ctx.cross_asset_signals && ctx.cross_asset_signals.length > 0) || ctx.sector_rotation?.leaders?.length;
+
   return (
-    <div className={`rounded-lg border p-3 shadow-sm ${style}`}>
+    <div className={`rounded-lg border p-3 shadow-sm space-y-2 ${style}`}>
+      {/* Ligne 1 : Régime + Session */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-widest opacity-60">Régime</span>
@@ -275,7 +278,47 @@ function MarketContextBanner({ ctx }: { ctx: MarketContext }) {
         </div>
         <span className="text-xs opacity-70">{ctx.session_mood}</span>
       </div>
-      <p className="text-xs opacity-60 mt-1">{ctx.regime_advice}</p>
+
+      {/* Macro narrative — synthèse stratégique */}
+      {ctx.macro_narrative && (
+        <p className="text-xs leading-relaxed opacity-80">{ctx.macro_narrative}</p>
+      )}
+
+      {/* Signaux cross-asset + Rotation sectorielle */}
+      {hasExtra && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-current/10">
+          {/* Cross-asset signals */}
+          {ctx.cross_asset_signals && ctx.cross_asset_signals.length > 0 && (
+            <div>
+              <span className="text-[9px] font-semibold uppercase tracking-widest opacity-50">Signaux inter-marchés</span>
+              <ul className="mt-1 space-y-0.5">
+                {ctx.cross_asset_signals.map((signal, i) => (
+                  <li key={i} className="text-[11px] leading-snug opacity-70">• {signal}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Rotation sectorielle */}
+          {ctx.sector_rotation?.leaders && ctx.sector_rotation.leaders.length > 0 && (
+            <div>
+              <span className="text-[9px] font-semibold uppercase tracking-widest opacity-50">Rotation sectorielle</span>
+              <div className="mt-1 space-y-0.5">
+                {ctx.sector_rotation.leaders.map((s, i) => (
+                  <div key={`l-${i}`} className="text-[11px] opacity-70">
+                    <span className="text-green-700 dark:text-green-400">↑</span> {s.sector} <span className="font-mono">{s.change_1m > 0 ? "+" : ""}{s.change_1m.toFixed(1)}%</span>
+                  </div>
+                ))}
+                {ctx.sector_rotation.laggards.map((s, i) => (
+                  <div key={`g-${i}`} className="text-[11px] opacity-70">
+                    <span className="text-red-700 dark:text-red-400">↓</span> {s.sector} <span className="font-mono">{s.change_1m > 0 ? "+" : ""}{s.change_1m.toFixed(1)}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
