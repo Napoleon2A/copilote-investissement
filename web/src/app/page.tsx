@@ -152,14 +152,34 @@ export default async function DashboardPage() {
               </div>
             )}
 
-            {/* Placeholder pour le fil d'actualités (Phase 2.3) */}
-            <div className="rounded-lg border border-edge bg-surface p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-accent text-xs">⊕</span>
-                <h2 className="text-[10px] font-semibold text-muted uppercase tracking-widest">Fil d&apos;actualités</h2>
+            {/* Fil d'actualités agrégé */}
+            {brief.aggregated_news && brief.aggregated_news.length > 0 && (
+              <div className="rounded-lg border border-edge bg-surface p-4 shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-accent text-xs">⊕</span>
+                  <h2 className="text-[10px] font-semibold text-muted uppercase tracking-widest">Fil d&apos;actualités</h2>
+                </div>
+                <ul className="space-y-2.5">
+                  {brief.aggregated_news.slice(0, 8).map((item, i) => (
+                    <li key={i} className="border-b border-edge pb-2 last:border-0 last:pb-0">
+                      <div className="flex items-start gap-2">
+                        <span className="text-[10px] font-mono font-bold text-navy flex-shrink-0 mt-0.5">{item.ticker}</span>
+                        <div className="flex-1 min-w-0">
+                          <a href={item.link} target="_blank" rel="noopener noreferrer"
+                            className="text-xs text-primary hover:text-navy leading-snug transition-colors line-clamp-2">
+                            {item.title}
+                          </a>
+                          <p className="text-[10px] text-muted mt-0.5">
+                            {item.publisher}
+                            {item.published && ` · ${new Date(item.published).toLocaleDateString("fr-FR")}`}
+                          </p>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <p className="text-xs text-muted">Les news de tes tickers suivis apparaîtront ici.</p>
-            </div>
+            )}
           </div>
         </div>
       )}

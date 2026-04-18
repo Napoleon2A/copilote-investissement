@@ -49,6 +49,28 @@ export const getCompanyHistory = (ticker: string, period = "1y") =>
 export const syncCompany = (ticker: string) =>
   request(`/companies/${ticker}/sync`, { method: "POST" });
 
+export const getCompetitors = (ticker: string) =>
+  request<CompetitorData>(`/companies/${ticker}/competitors`);
+
+export interface CompetitorEntry {
+  ticker: string;
+  name: string;
+  current_price?: number;
+  change_1d?: number;
+  change_1m?: number;
+  change_ytd?: number;
+  composite_score?: number;
+  quality_score?: number;
+  valuation_score?: number;
+  error?: boolean;
+}
+
+export interface CompetitorData {
+  ticker: string;
+  sector: string | null;
+  competitors: CompetitorEntry[];
+}
+
 // ── Watchlists ────────────────────────────────────────────────────────────────
 
 export const getWatchlists = () => request<Watchlist[]>("/watchlists");
@@ -97,6 +119,38 @@ export const saveThesis = (ticker: string, data: ThesisCreate) =>
 
 export const getThesis = (ticker: string) =>
   request<InvestmentThesis>(`/portfolio/positions/${ticker}/thesis`);
+
+// ── Earnings ─────────────────────────────────────────────────────────────────
+
+export const getUpcomingEarnings = (maxDays = 21) =>
+  request<{ count: number; earnings: EarningsPlay[] }>(`/earnings/upcoming?max_days=${maxDays}`);
+
+export interface EarningsPlay {
+  ticker: string;
+  name: string;
+  sector: string | null;
+  earnings_date: string;
+  days_until: number;
+  current_price?: number;
+  change_1d?: number;
+  change_1m?: number;
+  pct_from_52w_high?: number;
+  volatility_estimate: string;
+  scores: {
+    composite: number;
+    quality: number;
+    valuation: number;
+    growth: number;
+    momentum: number;
+    risk: number;
+  };
+  composite_label: string;
+  recommendation: string;
+  recommendation_label: string;
+  recommendation_reason: string;
+  revenue_estimate?: number;
+  eps_estimate?: number;
+}
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
@@ -147,6 +201,15 @@ export interface MarketContext {
   vix?: number;
 }
 
+export interface AggregatedNewsItem {
+  ticker: string;
+  title: string;
+  link: string;
+  publisher: string;
+  published?: string;
+  priority: number;
+}
+
 export interface Brief {
   date: string;
   generated_at: string;
@@ -154,6 +217,7 @@ export interface Brief {
   items: BriefItem[];
   market_summary: Record<string, MarketIndex>;
   market_context?: MarketContext;
+  aggregated_news?: AggregatedNewsItem[];
   disclaimer: string;
 }
 
@@ -247,6 +311,15 @@ export interface ScoreResult {
   };
 }
 
+export interface CompanyNarrative {
+  summary: string;
+  fundamentals_narrative: string;
+  sector_context: string;
+  competitive_position: string;
+  risk_factors: string;
+  catalyst_watch: string;
+}
+
 export interface CompanyBrief {
   ticker: string;
   name: string;
@@ -255,6 +328,7 @@ export interface CompanyBrief {
   change_1d?: number;
   change_1m?: number;
   change_ytd?: number;
+  narrative?: CompanyNarrative;
   scores: {
     composite: number;
     composite_label: string;

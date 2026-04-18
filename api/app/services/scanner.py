@@ -82,6 +82,18 @@ SCAN_UNIVERSE: dict[str, list[str]] = {
     ],
 }
 
+def get_competitors(ticker: str, max_count: int = 5) -> list[str]:
+    """
+    Retourne les concurrents d'un ticker basé sur le même secteur dans SCAN_UNIVERSE.
+    Si le ticker n'est pas dans l'univers, retourne une liste vide.
+    """
+    ticker = ticker.upper()
+    for sector, tickers in SCAN_UNIVERSE.items():
+        if ticker in tickers:
+            return [t for t in tickers if t != ticker][:max_count]
+    return []
+
+
 # ── Mots-clés news par catégorie ──────────────────────────────────────────────
 # Utilisés pour catégoriser l'impact potentiel d'une news.
 NEWS_BULLISH_KEYWORDS = [

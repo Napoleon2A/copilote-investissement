@@ -2,7 +2,8 @@
  * Page fiche entreprise — /company/[ticker]
  */
 import type { Metadata } from "next";
-import { getCompanyBrief, getCompanyScores } from "@/lib/api";
+import { getCompanyBrief, getCompanyScores, getCompetitors } from "@/lib/api";
+import type { CompetitorEntry } from "@/lib/api";
 import { ChangeCell } from "@/components/ui/ChangeCell";
 import { ScoreBadge } from "@/components/ui/ScoreBadge";
 import Link from "next/link";
@@ -31,12 +32,18 @@ export default async function CompanyPage({ params }: Props) {
 
   let brief = null;
   let scores = null;
+  let competitors: CompetitorEntry[] = [];
 
   try {
     [brief, scores] = await Promise.all([
       getCompanyBrief(upperTicker),
       getCompanyScores(upperTicker),
     ]);
+    // Fetch concurrents en parallèle (non-bloquant)
+    try {
+      const compData = await getCompetitors(upperTicker);
+      competitors = compData.competitors;
+    } catch { /* pas de concurrents trouvés — pas grave */ }
   } catch {
     return (
       <div className="max-w-2xl mx-auto">
@@ -190,6 +197,28 @@ export default async function CompanyPage({ params }: Props) {
         </div>
       )}
 
+      {/* Analyse approfondie (narrative engine) */}
+      {brief.narrative && (
+        <div className="rounded-lg border border-edge bg-surface p-4 shadow-sm space-y-4">
+          <h3 className="text-[10px] font-semibold text-muted uppercase tracking-widest">Analyse approfondie</h3>
+          {[
+            { title: "Résumé", text: brief.narrative.summary },
+            { title: "Fondamentaux", text: brief.narrative.fundamentals_narrative },
+            { title: "Contexte sectoriel", text: brief.narrative.sector_context },
+            { title: "Position concurrentielle", text: brief.narrative.competitive_position },
+            { title: "Facteurs de risque", text: brief.narrative.risk_factors },
+            { title: "Catalyseurs", text: brief.narrative.catalyst_watch },
+          ].map((section) => (
+            section.text && section.text !== "Secteur non couvert par l'univers d'analyse." && (
+              <div key={section.title}>
+                <h4 className="text-xs font-semibold text-navy mb-1">{section.title}</h4>
+                <p className="text-xs text-secondary leading-relaxed">{section.text}</p>
+              </div>
+            )
+          ))}
+        </div>
+      )}
+
       {/* News récentes */}
       {brief.recent_news.length > 0 && (
         <div className="rounded-lg border border-edge bg-surface p-4 shadow-sm">
@@ -208,6 +237,52 @@ export default async function CompanyPage({ params }: Props) {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* Concurrents */}
+      {competitors.length > 0 && (
+        <div className="rounded-lg border border-edge bg-surface p-4 shadow-sm">
+          <h3 className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-3">Concurrents</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[500px]">
+              <thead>
+                <tr className="border-b border-edge">
+                  {["Ticker", "Prix", "1J", "1M", "Score", "Qualité", "Valeur"].map((h) => (
+                    <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold text-muted uppercase tracking-widest">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {competitors.filter((c) => !c.error).map((c) => (
+                  <tr key={c.ticker} className="border-b border-edge hover:bg-bg transition-colors">
+                    <td className="px-3 py-2">
+                      <Link href={`/company/${c.ticker}`} className="font-mono font-bold text-navy hover:text-navy-hover">
+                        {c.ticker}
+                      </Link>
+                      <p className="text-[10px] text-muted truncate max-w-[120px]">{c.name}</p>
+                    </td>
+                    <td className="px-3 py-2 font-mono text-primary">
+                      {c.current_price?.toLocaleString("fr-FR", { minimumFractionDigits: 2 }) ?? "—"}
+                    </td>
+                    <td className="px-3 py-2"><ChangeCell value={c.change_1d} /></td>
+                    <td className="px-3 py-2"><ChangeCell value={c.change_1m} /></td>
+                    <td className="px-3 py-2">
+                      {c.composite_score != null ? <ScoreBadge score={c.composite_score} size="sm" /> : "—"}
+                    </td>
+                    <td className="px-3 py-2">
+                      {c.quality_score != null ? <ScoreBadge score={c.quality_score} size="sm" /> : "—"}
+                    </td>
+                    <td className="px-3 py-2">
+                      {c.valuation_score != null ? <ScoreBadge score={c.valuation_score} size="sm" /> : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

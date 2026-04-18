@@ -16,6 +16,7 @@ from datetime import datetime
 from app.database import get_session
 from app.models import Company
 from app.services import data_service, scoring, brief_service
+from app.services.scanner import get_competitors
 
 router = APIRouter(prefix="/companies", tags=["companies"])
 
@@ -212,3 +213,48 @@ async def get_history(ticker: str, period: str = "1y"):
     df["Date"] = df["Date"].astype(str)
     records = df[["Date", "Open", "High", "Low", "Close", "Volume"]].to_dict(orient="records")
     return {"ticker": ticker, "period": period, "data": records}
+
+
+@router.get("/{ticker}/competitors")
+async def get_ticker_competitors(ticker: str):
+    """
+    Retourne les concurrents du même secteur dans l'univers scanné,
+    avec leurs prix, variations et scores pour comparaison rapide.
+    """
+    ticker = ticker.upper()
+    comp_tickers = get_competitors(ticker)
+
+    if not comp_tickers:
+        return {"ticker": ticker, "competitors": [], "sector": None}
+
+    # Identifier le secteur
+    from app.services.scanner import SCAN_UNIVERSE
+    sector = None
+    for s, tickers in SCAN_UNIVERSE.items():
+        if ticker in tickers:
+            sector = s
+            break
+
+    competitors = []
+    for ct in comp_tickers:
+        try:
+            changes = data_service.get_price_changes(ct)
+            fundamentals = data_service.get_fundamentals(ct)
+            scores = scoring.compute_all_scores(fundamentals, changes)
+            info = data_service.get_company_info(ct)
+            competitors.append({
+                "ticker": ct,
+                "name": info.get("longName") or info.get("shortName") or ct,
+                "current_price": changes.get("current_price"),
+                "change_1d": changes.get("change_1d"),
+                "change_1m": changes.get("change_1m"),
+                "change_ytd": changes.get("change_ytd"),
+                "composite_score": scores["composite"],
+                "quality_score": scores["quality"]["score"],
+                "valuation_score": scores["valuation"]["score"],
+            })
+        except Exception:
+            competitors.append({"ticker": ct, "name": ct, "error": True})
+
+    competitors.sort(key=lambda c: c.get("composite_score", 0), reverse=True)
+    return {"ticker": ticker, "sector": sector, "competitors": competitors}

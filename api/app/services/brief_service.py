@@ -285,6 +285,20 @@ def generate_daily_brief(
     market_summary = _get_market_summary()
     market_context = _get_market_context(market_summary)
 
+    # Agrégation des news de tous les tickers suivis
+    from app.services.news_aggregator import aggregate_news
+    all_tickers = list(set(portfolio_tickers + watchlist_tickers + idea_tickers))
+    aggregated_news = []
+    if all_tickers:
+        try:
+            aggregated_news = aggregate_news(
+                tickers=all_tickers,
+                max_items=10,
+                priority_tickers=portfolio_tickers,
+            )
+        except Exception:
+            pass
+
     return {
         "date": datetime.utcnow().date().isoformat(),
         "generated_at": datetime.utcnow().isoformat(),
@@ -292,6 +306,7 @@ def generate_daily_brief(
         "items": top_items,
         "market_summary": market_summary,
         "market_context": market_context,
+        "aggregated_news": aggregated_news,
         "disclaimer": (
             "Ce brief est généré automatiquement à titre informatif. "
             "Il ne constitue pas un conseil en investissement. "
@@ -524,4 +539,15 @@ def generate_company_brief(ticker: str) -> dict:
             "free_cashflow": fundamentals.get("free_cashflow"),
         },
         "disclaimer": "Analyse automatique — données yfinance. À vérifier avant toute décision.",
+        "narrative": _generate_narrative_safe(ticker, fundamentals, scores, changes, news, info),
     }
+
+
+def _generate_narrative_safe(ticker, fundamentals, scores, changes, news, info):
+    """Appel sécurisé au narrative engine — ne crashe pas si erreur."""
+    try:
+        from app.services.narrative_engine import generate_narrative
+        return generate_narrative(ticker, fundamentals, scores, changes, news, info)
+    except Exception as e:
+        logger.warning(f"Narrative engine failed for {ticker}: {e}")
+        return None
