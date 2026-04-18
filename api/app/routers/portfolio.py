@@ -10,13 +10,17 @@ Routes : portefeuille
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+import logging
 
 from app.database import get_session
 from app.models import Portfolio, Position, Transaction, Company, InvestmentThesis
 from app.services import data_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
@@ -47,8 +51,13 @@ async def _get_or_create_portfolio(session: AsyncSession) -> Portfolio:
     if not portfolio:
         portfolio = Portfolio(name="Mon portefeuille", currency="EUR")
         session.add(portfolio)
-        await session.commit()
-        await session.refresh(portfolio)
+        try:
+            await session.commit()
+            await session.refresh(portfolio)
+        except (IntegrityError, Exception) as e:
+            await session.rollback()
+            logger.error(f"Erreur création portefeuille: {e}", exc_info=True)
+            raise HTTPException(500, "Erreur lors de la création du portefeuille")
     return portfolio
 
 
@@ -116,6 +125,8 @@ async def add_transaction(
             # Recalcul du coût moyen pondéré
             total_cost = position.quantity * position.avg_cost + data.quantity * data.price
             total_qty = position.quantity + data.quantity
+            if total_qty == 0:
+                raise HTTPException(400, "Quantité totale ne peut pas être zéro")
             position.avg_cost = total_cost / total_qty
             position.quantity = total_qty
         else:
@@ -134,7 +145,12 @@ async def add_transaction(
         if position.quantity == 0:
             await session.delete(position)
 
-    await session.commit()
+    try:
+        await session.commit()
+    except (IntegrityError, Exception) as e:
+        await session.rollback()
+        logger.error(f"Erreur enregistrement transaction {ticker}: {e}", exc_info=True)
+        raise HTTPException(500, "Erreur lors de l'enregistrement de la transaction")
     return {"status": "ok", "transaction": tx}
 
 
@@ -260,8 +276,13 @@ async def save_thesis(
         )
         session.add(thesis)
 
-    await session.commit()
-    await session.refresh(thesis)
+    try:
+        await session.commit()
+        await session.refresh(thesis)
+    except (IntegrityError, Exception) as e:
+        await session.rollback()
+        logger.error(f"Erreur sauvegarde thèse {ticker}: {e}", exc_info=True)
+        raise HTTPException(500, "Erreur lors de la sauvegarde de la thèse")
     return thesis
 
 
@@ -327,7 +348,12 @@ async def delete_position(ticker: str, session: AsyncSession = Depends(get_sessi
         await session.delete(thesis)
 
     await session.delete(position)
-    await session.commit()
+    try:
+        await session.commit()
+    except (IntegrityError, Exception) as e:
+        await session.rollback()
+        logger.error(f"Erreur suppression position {ticker}: {e}", exc_info=True)
+        raise HTTPException(500, "Erreur lors de la suppression de la position")
     return {"status": "ok", "message": f"Position {ticker} supprimée"}
 
 

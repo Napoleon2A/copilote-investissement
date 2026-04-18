@@ -32,7 +32,10 @@ class Company(SQLModel, table=True):
     user_ideas: list["UserIdea"] = Relationship(back_populates="company")
     price_snapshots: list["PriceSnapshot"] = Relationship(back_populates="company")
     alerts: list["Alert"] = Relationship(back_populates="company")
-    analysis_logs: list["AnalysisLog"] = Relationship(back_populates="company")
+    analysis_logs: list["AnalysisLog"] = Relationship(
+        back_populates="company",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
 
 
 # ─── Watchlist ────────────────────────────────────────────────────────────────
@@ -44,14 +47,17 @@ class Watchlist(SQLModel, table=True):
     description: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
-    items: list["WatchlistItem"] = Relationship(back_populates="watchlist")
+    items: list["WatchlistItem"] = Relationship(
+        back_populates="watchlist",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
 
 
 class WatchlistItem(SQLModel, table=True):
     """Lien entre une watchlist et une entreprise."""
     id: Optional[int] = Field(default=None, primary_key=True)
-    watchlist_id: int = Field(foreign_key="watchlist.id")
-    company_id: int = Field(foreign_key="company.id")
+    watchlist_id: int = Field(foreign_key="watchlist.id", index=True)
+    company_id: int = Field(foreign_key="company.id", index=True)
     note: Optional[str] = None
     added_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -75,9 +81,9 @@ class Portfolio(SQLModel, table=True):
 class Position(SQLModel, table=True):
     """Position ouverte dans un portefeuille."""
     id: Optional[int] = Field(default=None, primary_key=True)
-    portfolio_id: int = Field(foreign_key="portfolio.id")
-    company_id: int = Field(foreign_key="company.id")
-    quantity: float
+    portfolio_id: int = Field(foreign_key="portfolio.id", index=True)
+    company_id: int = Field(foreign_key="company.id", index=True)
+    quantity: float = Field(ge=0)  # >= 0 car les ventes réduisent la quantité
     avg_cost: float          # Prix moyen d'achat
     currency: str = "EUR"
     opened_at: datetime = Field(default_factory=datetime.utcnow)
@@ -90,10 +96,10 @@ class Position(SQLModel, table=True):
 class Transaction(SQLModel, table=True):
     """Historique des achats et ventes."""
     id: Optional[int] = Field(default=None, primary_key=True)
-    portfolio_id: int = Field(foreign_key="portfolio.id")
-    company_id: int = Field(foreign_key="company.id")
+    portfolio_id: int = Field(foreign_key="portfolio.id", index=True)
+    company_id: int = Field(foreign_key="company.id", index=True)
     type: str                # "buy" | "sell"
-    quantity: float
+    quantity: float = Field(gt=0)  # > 0 obligatoire pour toute transaction
     price: float
     fees: float = 0.0
     date: datetime = Field(default_factory=datetime.utcnow)
@@ -107,7 +113,7 @@ class Transaction(SQLModel, table=True):
 class InvestmentThesis(SQLModel, table=True):
     """Thèse liée à une position — écrite avant ou après achat."""
     id: Optional[int] = Field(default=None, primary_key=True)
-    position_id: int = Field(foreign_key="position.id", unique=True)
+    position_id: int = Field(foreign_key="position.id", unique=True, index=True)
     thesis: str
     catalysts: Optional[str] = None
     risks: Optional[str] = None
@@ -128,7 +134,7 @@ class UserIdea(SQLModel, table=True):
     Le système produit un avis, le date, le révise si les faits changent.
     """
     id: Optional[int] = Field(default=None, primary_key=True)
-    company_id: int = Field(foreign_key="company.id")
+    company_id: int = Field(foreign_key="company.id", index=True)
     user_thesis: Optional[str] = None       # Ce que l'utilisateur pense
     system_opinion: Optional[str] = None    # Avis généré par le système
     pro_args: Optional[str] = None
@@ -147,7 +153,7 @@ class UserIdea(SQLModel, table=True):
 class IdeaRevision(SQLModel, table=True):
     """Historique des révisions d'avis — traçabilité intellectuelle."""
     id: Optional[int] = Field(default=None, primary_key=True)
-    idea_id: int = Field(foreign_key="useridea.id")
+    idea_id: int = Field(foreign_key="useridea.id", index=True)
     previous_opinion: str
     new_opinion: str
     what_changed: str           # Ce qui a changé dans les faits
@@ -164,7 +170,7 @@ class PriceSnapshot(SQLModel, table=True):
     Stocke aussi les métriques fondamentales clés pour éviter de recalculer.
     """
     id: Optional[int] = Field(default=None, primary_key=True)
-    company_id: int = Field(foreign_key="company.id")
+    company_id: int = Field(foreign_key="company.id", index=True)
     date: date
     price: float
     open: Optional[float] = None
@@ -192,12 +198,12 @@ class PriceSnapshot(SQLModel, table=True):
 class Alert(SQLModel, table=True):
     """Alerte sur un ticker — déclenchée par condition."""
     id: Optional[int] = Field(default=None, primary_key=True)
-    company_id: int = Field(foreign_key="company.id")
+    company_id: int = Field(foreign_key="company.id", index=True)
     type: str           # "price_above" | "price_below" | "change_pct" | "earnings"
     condition_value: Optional[float] = None
     message: Optional[str] = None
-    active: bool = True
-    triggered: bool = False
+    active: bool = Field(default=True, index=True)
+    triggered: bool = Field(default=False, index=True)
     triggered_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -228,7 +234,7 @@ class AnalysisLog(SQLModel, table=True):
     et de mesurer l'évolution des scores dans le temps.
     """
     id: Optional[int] = Field(default=None, primary_key=True)
-    company_id: Optional[int] = Field(default=None, foreign_key="company.id")
+    company_id: Optional[int] = Field(default=None, foreign_key="company.id", index=True)
     ticker: str = Field(index=True)
     analysis_type: str          # "chat" | "idea" | "brief" | "scan" | "company_page"
     composite_score: Optional[float] = None
@@ -261,4 +267,4 @@ class Prediction(SQLModel, table=True):
     price_1w: Optional[float] = None
     price_1m: Optional[float] = None
     price_3m: Optional[float] = None
-    resolved: bool = Field(default=False)
+    resolved: bool = Field(default=False, index=True)

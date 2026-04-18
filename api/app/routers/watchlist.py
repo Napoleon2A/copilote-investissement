@@ -11,12 +11,16 @@ Routes : watchlists
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from typing import Optional
+import logging
 
 from app.database import get_session
 from app.models import Watchlist, WatchlistItem, Company
 from app.services import data_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/watchlists", tags=["watchlists"])
 
@@ -41,8 +45,13 @@ async def list_watchlists(session: AsyncSession = Depends(get_session)):
 async def create_watchlist(data: WatchlistCreate, session: AsyncSession = Depends(get_session)):
     wl = Watchlist(name=data.name, description=data.description)
     session.add(wl)
-    await session.commit()
-    await session.refresh(wl)
+    try:
+        await session.commit()
+        await session.refresh(wl)
+    except (IntegrityError, Exception) as e:
+        await session.rollback()
+        logger.error(f"Erreur création watchlist: {e}", exc_info=True)
+        raise HTTPException(500, "Erreur lors de la création de la watchlist")
     return wl
 
 
@@ -78,7 +87,12 @@ async def delete_watchlist(watchlist_id: int, session: AsyncSession = Depends(ge
     if not wl:
         raise HTTPException(404, "Watchlist introuvable")
     await session.delete(wl)
-    await session.commit()
+    try:
+        await session.commit()
+    except (IntegrityError, Exception) as e:
+        await session.rollback()
+        logger.error(f"Erreur suppression watchlist {watchlist_id}: {e}", exc_info=True)
+        raise HTTPException(500, "Erreur lors de la suppression de la watchlist")
     return {"deleted": watchlist_id}
 
 
@@ -134,7 +148,12 @@ async def add_to_watchlist(
         note=data.note,
     )
     session.add(item)
-    await session.commit()
+    try:
+        await session.commit()
+    except (IntegrityError, Exception) as e:
+        await session.rollback()
+        logger.error(f"Erreur ajout {ticker} à watchlist {watchlist_id}: {e}", exc_info=True)
+        raise HTTPException(500, "Erreur lors de l'ajout à la watchlist")
     return {"added": ticker, "watchlist_id": watchlist_id}
 
 
@@ -160,7 +179,12 @@ async def remove_from_watchlist(
         raise HTTPException(404, "Item introuvable dans cette watchlist")
 
     await session.delete(item)
-    await session.commit()
+    try:
+        await session.commit()
+    except (IntegrityError, Exception) as e:
+        await session.rollback()
+        logger.error(f"Erreur suppression {ticker} de watchlist {watchlist_id}: {e}", exc_info=True)
+        raise HTTPException(500, "Erreur lors de la suppression de l'item")
     return {"removed": ticker, "watchlist_id": watchlist_id}
 
 

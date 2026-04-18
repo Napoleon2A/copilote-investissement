@@ -9,25 +9,29 @@ Routes : idées soumises par l'utilisateur (User Idea Review Engine)
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
+import logging
 
 from app.database import get_session
 from app.models import UserIdea, IdeaRevision, Company
 from app.services import data_service, brief_service
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/ideas", tags=["ideas"])
 
 
 class IdeaCreate(BaseModel):
-    ticker: str
-    user_thesis: Optional[str] = None   # Ce que l'utilisateur pense
+    ticker: str = Field(..., min_length=1, max_length=20)
+    user_thesis: Optional[str] = Field(None, max_length=5000)
 
 
 class IdeaRevisionCreate(BaseModel):
-    what_changed: str   # Ce qui a changé dans les faits (obligatoire)
-    new_facts: Optional[str] = None
+    what_changed: str = Field(..., min_length=1, max_length=5000)
+    new_facts: Optional[str] = Field(None, max_length=5000)
 
 
 @router.post("")
@@ -78,8 +82,13 @@ async def submit_idea(data: IdeaCreate, session: AsyncSession = Depends(get_sess
         horizon=brief.get("horizon"),
     )
     session.add(idea)
-    await session.commit()
-    await session.refresh(idea)
+    try:
+        await session.commit()
+        await session.refresh(idea)
+    except (IntegrityError, Exception) as e:
+        await session.rollback()
+        logger.error(f"Erreur soumission idée {ticker}: {e}", exc_info=True)
+        raise HTTPException(500, "Erreur lors de la soumission de l'idée")
 
     return {
         "idea": idea,
@@ -173,8 +182,13 @@ async def revise_idea(
     idea.updated_at = datetime.utcnow()
 
     session.add(revision)
-    await session.commit()
-    await session.refresh(idea)
+    try:
+        await session.commit()
+        await session.refresh(idea)
+    except (IntegrityError, Exception) as e:
+        await session.rollback()
+        logger.error(f"Erreur révision idée {idea_id}: {e}", exc_info=True)
+        raise HTTPException(500, "Erreur lors de la révision de l'idée")
 
     return {
         "idea": idea,

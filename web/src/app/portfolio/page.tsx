@@ -5,8 +5,13 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { getPositions, addTransaction, deletePosition } from "@/lib/api";
-import type { PortfolioData } from "@/lib/api";
+import {
+  getPositions, addTransaction, deletePosition,
+  calculatePositionSize, getStopLoss,
+} from "@/lib/api";
+import type {
+  PortfolioData, PositionSizeResult, StopLossResult,
+} from "@/lib/api";
 import { ChangeCell } from "@/components/ui/ChangeCell";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 import { useToast } from "@/components/ui/Toast";
@@ -67,6 +72,7 @@ export default function PortfolioPage() {
   };
 
   if (loading) return <p className="text-secondary text-sm">Chargement…</p>;
+  if (!data) return <p className="text-red-600 text-sm">Impossible de charger le portefeuille. Vérifiez que le backend est démarré.</p>;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -231,6 +237,9 @@ export default function PortfolioPage() {
           </div>
         </div>
       )}
+
+      {/* Calculateur de risque */}
+      <RiskCalculator portfolioValue={data?.total_value} />
     </div>
   );
 }
@@ -246,6 +255,215 @@ function Field({ label, required, children }: { label: string; required?: boolea
         {label}{required && <span className="text-red-600 ml-0.5">*</span>}
       </label>
       {children}
+    </div>
+  );
+}
+
+/* ── Calculateur de risque ─────────────────────────────────────────────────── */
+
+function RiskCalculator({ portfolioValue }: { portfolioValue?: number }) {
+  const [open, setOpen] = useState(false);
+
+  // Position sizing state
+  const [psForm, setPsForm] = useState({
+    portfolio_value: "",
+    risk_pct: "1",
+    entry_price: "",
+    stop_price: "",
+  });
+  const [psResult, setPsResult] = useState<PositionSizeResult | null>(null);
+  const [psLoading, setPsLoading] = useState(false);
+  const [psError, setPsError] = useState("");
+
+  // Stop-loss state
+  const [slTicker, setSlTicker] = useState("");
+  const [slResult, setSlResult] = useState<StopLossResult | null>(null);
+  const [slLoading, setSlLoading] = useState(false);
+  const [slError, setSlError] = useState("");
+
+  // Pre-fill portfolio value when data is available and form is empty
+  useEffect(() => {
+    if (portfolioValue && !psForm.portfolio_value) {
+      setPsForm((prev) => ({ ...prev, portfolio_value: portfolioValue.toFixed(2) }));
+    }
+  }, [portfolioValue]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handlePositionSize = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPsError("");
+    setPsResult(null);
+    setPsLoading(true);
+    try {
+      const result = await calculatePositionSize({
+        portfolio_value: parseFloat(psForm.portfolio_value),
+        risk_pct: parseFloat(psForm.risk_pct),
+        entry_price: parseFloat(psForm.entry_price),
+        stop_price: parseFloat(psForm.stop_price),
+      });
+      setPsResult(result);
+    } catch (err: unknown) {
+      setPsError(err instanceof Error ? err.message : "Erreur");
+    } finally {
+      setPsLoading(false);
+    }
+  };
+
+  const handleStopLoss = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSlError("");
+    setSlResult(null);
+    if (!slTicker.trim()) return;
+    setSlLoading(true);
+    try {
+      const result = await getStopLoss(slTicker.trim().toUpperCase());
+      setSlResult(result);
+    } catch (err: unknown) {
+      setSlError(err instanceof Error ? err.message : "Erreur");
+    } finally {
+      setSlLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      {/* Header — toggle */}
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 w-full group"
+      >
+        <span className="text-accent text-xs">◆</span>
+        <h2 className="text-[10px] font-semibold text-muted uppercase tracking-widest">
+          Calculateur de risque
+        </h2>
+        <div className="flex-1 h-px bg-edge" />
+        <span className="text-muted text-xs transition-transform group-hover:text-secondary">
+          {open ? "▲" : "▼"}
+        </span>
+      </button>
+
+      {open && (
+        <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* ── Position Sizing ───────────────────────────────────── */}
+          <div className="rounded-lg border border-edge bg-surface p-5 shadow-sm space-y-4">
+            <h3 className="text-sm font-semibold text-navy">Position sizing</h3>
+            <form onSubmit={handlePositionSize} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Valeur portefeuille" required>
+                  <input
+                    type="number" step="any"
+                    value={psForm.portfolio_value}
+                    onChange={(e) => setPsForm({ ...psForm, portfolio_value: e.target.value })}
+                    className={inputClass} required
+                  />
+                </Field>
+                <Field label="Risque %" required>
+                  <input
+                    type="number" step="any" min="0.1" max="100"
+                    value={psForm.risk_pct}
+                    onChange={(e) => setPsForm({ ...psForm, risk_pct: e.target.value })}
+                    className={inputClass} required
+                  />
+                </Field>
+                <Field label="Prix d'entrée" required>
+                  <input
+                    type="number" step="any"
+                    value={psForm.entry_price}
+                    onChange={(e) => setPsForm({ ...psForm, entry_price: e.target.value })}
+                    className={inputClass} required
+                  />
+                </Field>
+                <Field label="Prix stop-loss" required>
+                  <input
+                    type="number" step="any"
+                    value={psForm.stop_price}
+                    onChange={(e) => setPsForm({ ...psForm, stop_price: e.target.value })}
+                    className={inputClass} required
+                  />
+                </Field>
+              </div>
+              <button
+                type="submit" disabled={psLoading}
+                className="text-sm px-4 py-1.5 bg-navy hover:bg-navy-hover rounded text-white font-medium transition-colors disabled:opacity-50"
+              >
+                {psLoading ? "Calcul…" : "Calculer"}
+              </button>
+            </form>
+
+            {psError && <p className="text-red-700 text-xs">{psError}</p>}
+
+            {psResult && (
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-edge">
+                {[
+                  { label: "Actions à acheter", value: psResult.shares.toString(), bold: true },
+                  { label: "Risque en $", value: `$${psResult.dollar_risk.toFixed(2)}` },
+                  { label: "Valeur position", value: `$${psResult.position_value.toLocaleString("fr-FR", { minimumFractionDigits: 2 })}` },
+                  { label: "% du portefeuille", value: `${psResult.pct_of_portfolio.toFixed(1)}%` },
+                ].map(({ label, value, bold }) => (
+                  <div key={label} className="py-1">
+                    <p className="text-[10px] text-muted uppercase tracking-wider">{label}</p>
+                    <p className={`text-sm font-mono ${bold ? "font-bold text-navy" : "text-primary"}`}>
+                      {value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── Stop-Loss ────────────────────────────────────────── */}
+          <div className="rounded-lg border border-edge bg-surface p-5 shadow-sm space-y-4">
+            <h3 className="text-sm font-semibold text-navy">Niveaux de stop-loss</h3>
+            <form onSubmit={handleStopLoss} className="flex gap-2">
+              <input
+                value={slTicker}
+                onChange={(e) => setSlTicker(e.target.value)}
+                placeholder="AAPL"
+                className={inputClass + " flex-1"}
+                required
+              />
+              <button
+                type="submit" disabled={slLoading}
+                className="text-sm px-4 py-1.5 bg-navy hover:bg-navy-hover rounded text-white font-medium transition-colors disabled:opacity-50 whitespace-nowrap"
+              >
+                {slLoading ? "…" : "Analyser"}
+              </button>
+            </form>
+
+            {slError && <p className="text-red-700 text-xs">{slError}</p>}
+
+            {slResult && (
+              <div className="space-y-3 pt-2 border-t border-edge">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-sm font-mono font-bold text-navy">{slResult.ticker}</span>
+                  <span className="text-sm font-mono text-primary">${slResult.current_price.toFixed(2)}</span>
+                </div>
+                <p className="text-[10px] text-muted">
+                  Amplitude 52 sem. : {slResult.amplitude_52w_pct.toFixed(1)}%
+                </p>
+                <div className="space-y-2">
+                  {(["tight", "moderate", "wide"] as const).map((level) => {
+                    const stop = slResult.stops[level];
+                    const colorMap = { tight: "text-red-700", moderate: "text-amber-600", wide: "text-green-700" };
+                    return (
+                      <div key={level} className="flex items-center justify-between rounded bg-surface-alt px-3 py-2">
+                        <div>
+                          <span className="text-xs font-medium text-secondary">{stop.label}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-sm font-mono font-medium text-primary">${stop.price.toFixed(2)}</span>
+                          <span className={`text-xs font-mono ml-2 ${colorMap[level]}`}>
+                            {stop.pct_from_entry.toFixed(1)}%
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

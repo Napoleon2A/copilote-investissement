@@ -11,12 +11,16 @@ Routes : entreprises et analyses
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime
+import logging
 
 from app.database import get_session
 from app.models import Company
 from app.services import data_service, scoring, brief_service
 from app.services.scanner import get_competitors
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/companies", tags=["companies"])
 
@@ -104,8 +108,13 @@ async def sync_company(ticker: str, session: AsyncSession = Depends(get_session)
         session.add(company)
         action = "created"
 
-    await session.commit()
-    await session.refresh(company)
+    try:
+        await session.commit()
+        await session.refresh(company)
+    except (IntegrityError, Exception) as e:
+        await session.rollback()
+        logger.error(f"Erreur sync {ticker}: {e}", exc_info=True)
+        raise HTTPException(500, f"Erreur lors de la synchronisation de '{ticker}'")
     return {"action": action, "company": company}
 
 
@@ -253,7 +262,8 @@ async def get_ticker_competitors(ticker: str):
                 "quality_score": scores["quality"]["score"],
                 "valuation_score": scores["valuation"]["score"],
             })
-        except Exception:
+        except Exception as e:
+            logger.error(f"Erreur données concurrent {ct}: {e}", exc_info=True)
             competitors.append({"ticker": ct, "name": ct, "error": True})
 
     competitors.sort(key=lambda c: c.get("composite_score", 0), reverse=True)

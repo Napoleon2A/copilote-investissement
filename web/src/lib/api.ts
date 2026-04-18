@@ -47,7 +47,7 @@ export const getCompanyHistory = (ticker: string, period = "1y") =>
   request<{ data: OHLCVPoint[] }>(`/companies/${ticker}/history?period=${period}`);
 
 export const syncCompany = (ticker: string) =>
-  request(`/companies/${ticker}/sync`, { method: "POST" });
+  request<{ status: string }>(`/companies/${ticker}/sync`, { method: "POST" });
 
 export const getCompetitors = (ticker: string) =>
   request<CompetitorData>(`/companies/${ticker}/competitors`);
@@ -88,13 +88,13 @@ export const getWatchlistSnapshot = (id: number) =>
   request<WatchlistSnapshot>(`/watchlists/${id}/snapshot`);
 
 export const addToWatchlist = (id: number, ticker: string, note?: string) =>
-  request(`/watchlists/${id}/items`, {
+  request<{ status: string; ticker: string }>(`/watchlists/${id}/items`, {
     method: "POST",
     body: JSON.stringify({ ticker, note }),
   });
 
 export const removeFromWatchlist = (id: number, ticker: string) =>
-  request(`/watchlists/${id}/items/${ticker}`, { method: "DELETE" });
+  request<{ status: string }>(`/watchlists/${id}/items/${ticker}`, { method: "DELETE" });
 
 // ── Portfolio ─────────────────────────────────────────────────────────────────
 
@@ -103,16 +103,16 @@ export const getPositions = () => request<PortfolioData>("/portfolio/positions")
 export const getTransactions = () => request<Transaction[]>("/portfolio/transactions");
 
 export const addTransaction = (data: TransactionCreate) =>
-  request("/portfolio/transactions", {
+  request<{ status: string; transaction: Transaction }>("/portfolio/transactions", {
     method: "POST",
     body: JSON.stringify(data),
   });
 
 export const deletePosition = (ticker: string) =>
-  request(`/portfolio/positions/${ticker}`, { method: "DELETE" });
+  request<{ status: string }>(`/portfolio/positions/${ticker}`, { method: "DELETE" });
 
 export const saveThesis = (ticker: string, data: ThesisCreate) =>
-  request(`/portfolio/positions/${ticker}/thesis`, {
+  request<{ status: string; thesis: InvestmentThesis }>(`/portfolio/positions/${ticker}/thesis`, {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -152,6 +152,49 @@ export interface EarningsPlay {
   eps_estimate?: number;
 }
 
+// ── Alerts ───────────────────────────────────────────────────────────────────
+
+export const fetchAlerts = () =>
+  request<{ count: number; alerts: AlertData[] }>("/alerts");
+
+export const createAlert = (data: AlertCreate) =>
+  request<AlertData>("/alerts", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const deleteAlert = (id: number) =>
+  request<{ id: number; status: string }>(`/alerts/${id}`, { method: "DELETE" });
+
+export const checkAlerts = () =>
+  request<{ checked: number; newly_triggered: number; alerts: AlertData[] }>(
+    "/alerts/check",
+    { method: "POST" }
+  );
+
+export const fetchTriggeredAlerts = () =>
+  request<{ count: number; alerts: AlertData[] }>("/alerts/triggered");
+
+export interface AlertData {
+  id: number;
+  ticker: string;
+  type: AlertType;
+  condition_value?: number | null;
+  message?: string | null;
+  triggered: boolean;
+  triggered_at?: string | null;
+  created_at: string;
+}
+
+export interface AlertCreate {
+  ticker: string;
+  type: AlertType;
+  condition_value?: number;
+  message?: string;
+}
+
+export type AlertType = "price_above" | "price_below" | "change_pct" | "earnings";
+
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
 export const chatWithBot = (
@@ -178,7 +221,7 @@ export const getMacroScan = () => request<MacroScan>("/scanner/macro");
 export const getIdeas = () => request<IdeaSummary[]>("/ideas");
 
 export const submitIdea = (ticker: string, userThesis?: string) =>
-  request("/ideas", {
+  request<{ idea: { id: number }; company: Company }>("/ideas", {
     method: "POST",
     body: JSON.stringify({ ticker, user_thesis: userThesis }),
   });
@@ -186,12 +229,57 @@ export const submitIdea = (ticker: string, userThesis?: string) =>
 export const getIdea = (id: number) => request<IdeaDetail>(`/ideas/${id}`);
 
 export const reviseIdea = (id: number, whatChanged: string) =>
-  request(`/ideas/${id}/revise`, {
+  request<IdeaDetail>(`/ideas/${id}/revise`, {
     method: "POST",
     body: JSON.stringify({ what_changed: whatChanged }),
   });
 
+// ── Risk ──────────────────────────────────────────────────────────────────────
+
+export const calculatePositionSize = (data: PositionSizeRequest) =>
+  request<PositionSizeResult>("/risk/position-size", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const getStopLoss = (ticker: string) =>
+  request<StopLossResult>(`/risk/stop-loss/${ticker}`);
+
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+export interface PositionSizeRequest {
+  portfolio_value: number;
+  risk_pct: number;
+  entry_price: number;
+  stop_price: number;
+}
+
+export interface PositionSizeResult {
+  shares: number;
+  dollar_risk: number;
+  risk_per_share: number;
+  position_value: number;
+  pct_of_portfolio: number;
+  entry_price: number;
+  stop_price: number;
+}
+
+export interface StopLossLevel {
+  price: number;
+  pct_from_entry: number;
+  label: string;
+}
+
+export interface StopLossResult {
+  ticker: string;
+  current_price: number;
+  amplitude_52w_pct: number;
+  stops: {
+    tight: StopLossLevel;
+    moderate: StopLossLevel;
+    wide: StopLossLevel;
+  };
+}
 
 export interface MarketContext {
   regime: string;

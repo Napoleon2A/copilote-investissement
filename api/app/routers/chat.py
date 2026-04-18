@@ -17,7 +17,7 @@ Intentions reconnues :
   - News récentes sur un ticker
 """
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from typing import Optional
@@ -154,7 +154,7 @@ class HistoryMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., min_length=1, max_length=5000)
     context: Optional[str] = None       # ticker actif si l'utilisateur est sur une fiche
     history: list[HistoryMessage] = []  # Historique de la conversation
 
@@ -1162,7 +1162,7 @@ async def chat(
             return await _handle_opportunities(None)
 
     except Exception as e:
-        logger.error(f"Erreur chatbot: {e}")
+        logger.error(f"Erreur chatbot: {e}", exc_info=True)
         return ChatResponse(
             type="error",
             text="Une erreur s'est produite. Réessaie ou reformule ta question.",
