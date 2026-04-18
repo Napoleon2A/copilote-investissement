@@ -449,6 +449,10 @@ export interface ScanOpportunity {
   upside_vs_target?: number | null;
   analyst_count?: number | null;
   market_cap?: number | null;
+  // Historique des opportunités (Phase 1.3)
+  new_opportunity?: boolean;
+  first_seen_at?: string;
+  times_seen?: number;
 }
 
 export interface IdeaSummary {

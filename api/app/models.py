@@ -1,8 +1,9 @@
 """
-Modèle de données — V1
+Modèle de données — V2
 
 Entités : Company, Watchlist, WatchlistItem, Portfolio, Position, Transaction,
-          InvestmentThesis, UserIdea, IdeaRevision, PriceSnapshot, Alert
+          InvestmentThesis, UserIdea, IdeaRevision, PriceSnapshot, Alert,
+          SeenOpportunity, AnalysisLog, Prediction
 """
 from datetime import datetime, date
 from typing import Optional
@@ -31,6 +32,7 @@ class Company(SQLModel, table=True):
     user_ideas: list["UserIdea"] = Relationship(back_populates="company")
     price_snapshots: list["PriceSnapshot"] = Relationship(back_populates="company")
     alerts: list["Alert"] = Relationship(back_populates="company")
+    analysis_logs: list["AnalysisLog"] = Relationship(back_populates="company")
 
 
 # ─── Watchlist ────────────────────────────────────────────────────────────────
@@ -200,3 +202,63 @@ class Alert(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     company: Optional[Company] = Relationship(back_populates="alerts")
+
+
+# ─── Opportunités vues (historique scanner) ──────────────────────────────────
+
+class SeenOpportunity(SQLModel, table=True):
+    """
+    Trace chaque opportunité détectée par le scanner.
+    Permet de distinguer les nouvelles opportunités des récurrentes.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    ticker: str = Field(index=True, unique=True)
+    first_seen_at: datetime = Field(default_factory=datetime.utcnow)
+    last_seen_at: datetime = Field(default_factory=datetime.utcnow)
+    times_seen: int = Field(default=1)
+    last_score: Optional[float] = None
+
+
+# ─── Journal d'analyse (mémoire chatbot + traçabilité) ───────────────────────
+
+class AnalysisLog(SQLModel, table=True):
+    """
+    Chaque analyse d'une entreprise est loggée ici.
+    Permet au chatbot de se souvenir des analyses précédentes,
+    et de mesurer l'évolution des scores dans le temps.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    company_id: Optional[int] = Field(default=None, foreign_key="company.id")
+    ticker: str = Field(index=True)
+    analysis_type: str          # "chat" | "idea" | "brief" | "scan" | "company_page"
+    composite_score: Optional[float] = None
+    quality_score: Optional[float] = None
+    valuation_score: Optional[float] = None
+    growth_score: Optional[float] = None
+    momentum_score: Optional[float] = None
+    risk_score: Optional[float] = None
+    action: Optional[str] = None
+    analyzed_at: datetime = Field(default_factory=datetime.utcnow)
+
+    company: Optional[Company] = Relationship(back_populates="analysis_logs")
+
+
+# ─── Prédictions (conviction tracker) ────────────────────────────────────────
+
+class Prediction(SQLModel, table=True):
+    """
+    Enregistre chaque prédiction du système pour mesurer sa précision.
+    Le prix est capturé au moment de la recommandation, puis résolu
+    après 1 semaine, 1 mois et 3 mois.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    ticker: str = Field(index=True)
+    source: str                 # "scan" | "idea" | "brief"
+    score_at_prediction: float
+    price_at_prediction: float
+    predicted_action: str       # "buy_small" | "read" | "watch" etc.
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    price_1w: Optional[float] = None
+    price_1m: Optional[float] = None
+    price_3m: Optional[float] = None
+    resolved: bool = Field(default=False)

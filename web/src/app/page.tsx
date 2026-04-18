@@ -1,11 +1,11 @@
 /**
- * Page principale — Brief quotidien
+ * Page principale — Brief quotidien (pleine largeur)
  *
- * C'est la sortie centrale du système :
- * - Bandeau Napoléon (identité visuelle du fonds)
- * - Résumé de marché (S&P 500, CAC 40, VIX)
- * - 3 à 7 signaux prioritaires (portefeuille + watchlist + idées)
- * - Chaque signal avec : pourquoi maintenant + action suggérée
+ * Layout 2 colonnes sur desktop :
+ *   Gauche (2/3) : alertes portefeuille, signaux watchlist, idées en suivi
+ *   Droite (1/3) : résumé de marché (sticky), opportunités mini, fil d'actu (futur)
+ *
+ * Mobile : colonne unique empilée.
  */
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -14,6 +14,7 @@ import { getBrief } from "@/lib/api";
 import { BriefItemCard } from "@/components/brief/BriefItemCard";
 import { MarketSummary } from "@/components/brief/MarketSummary";
 import type { Brief, MarketContext } from "@/lib/api";
+import Link from "next/link";
 
 async function fetchBrief(): Promise<Brief | null> {
   try {
@@ -31,10 +32,12 @@ export default async function DashboardPage() {
   const ideaItems       = brief?.items.filter((i) => i.type === "idea_followup")    ?? [];
   const opportunityItems= brief?.items.filter((i) => i.type === "opportunity")      ?? [];
 
-  return (
-    <div className="max-w-3xl mx-auto space-y-5">
+  const hasSignals = portfolioItems.length + watchlistItems.length + ideaItems.length > 0;
 
-      {/* ── Bandeau Napoléon ───────────────────────────────────────────────── */}
+  return (
+    <div className="max-w-7xl mx-auto space-y-5">
+
+      {/* ── Bandeau Napoléon ── pleine largeur ──────────────────────────────── */}
       <NapoleonBanner date={brief?.date} />
 
       {/* Erreur backend */}
@@ -49,14 +52,11 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Contexte de marché */}
+      {/* Contexte de marché — pleine largeur */}
       {brief?.market_context && <MarketContextBanner ctx={brief.market_context} />}
 
-      {/* Résumé de marché */}
-      {brief && <MarketSummary data={brief.market_summary} />}
-
       {/* Brief vide */}
-      {brief && brief.item_count === 0 && (
+      {brief && brief.item_count === 0 && !opportunityItems.length && (
         <div className="rounded-lg border border-edge bg-surface p-6 text-center shadow-sm">
           <p className="text-primary text-sm">Aucun signal notable aujourd&apos;hui.</p>
           <p className="text-muted text-xs mt-1">
@@ -65,32 +65,103 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Alertes portefeuille */}
-      {portfolioItems.length > 0 && (
-        <Section title="Portefeuille" tag="▣">
-          {portfolioItems.map((item, i) => <BriefItemCard key={i} item={item} />)}
-        </Section>
-      )}
+      {/* ── Grille principale ─────────────────────────────────────────────────── */}
+      {brief && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-      {/* Signaux watchlist */}
-      {watchlistItems.length > 0 && (
-        <Section title="Watchlist" tag="◉">
-          {watchlistItems.map((item, i) => <BriefItemCard key={i} item={item} />)}
-        </Section>
-      )}
+          {/* ── Colonne gauche (2/3) — Signaux ────────────────────────────────── */}
+          <div className="lg:col-span-2 space-y-5">
+            {/* Alertes portefeuille */}
+            {portfolioItems.length > 0 && (
+              <Section title="Portefeuille" tag="▣">
+                {portfolioItems.map((item, i) => <BriefItemCard key={i} item={item} />)}
+              </Section>
+            )}
 
-      {/* Idées à revisiter */}
-      {ideaItems.length > 0 && (
-        <Section title="Idées en suivi" tag="◇">
-          {ideaItems.map((item, i) => <BriefItemCard key={i} item={item} />)}
-        </Section>
-      )}
+            {/* Signaux watchlist */}
+            {watchlistItems.length > 0 && (
+              <Section title="Watchlist" tag="◉">
+                {watchlistItems.map((item, i) => <BriefItemCard key={i} item={item} />)}
+              </Section>
+            )}
 
-      {/* Opportunités détectées */}
-      {opportunityItems.length > 0 && (
-        <Section title="Opportunités détectées" tag="◎">
-          {opportunityItems.map((item, i) => <BriefItemCard key={i} item={item} />)}
-        </Section>
+            {/* Idées à revisiter */}
+            {ideaItems.length > 0 && (
+              <Section title="Idées en suivi" tag="◇">
+                {ideaItems.map((item, i) => <BriefItemCard key={i} item={item} />)}
+              </Section>
+            )}
+
+            {/* Si aucun signal : message */}
+            {!hasSignals && (
+              <div className="rounded-lg border border-edge bg-surface p-6 text-center shadow-sm">
+                <p className="text-secondary text-sm">Aucun signal prioritaire.</p>
+                <p className="text-muted text-xs mt-1">
+                  Les alertes portefeuille, watchlist et idées apparaîtront ici.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* ── Colonne droite (1/3) — Marché & Opportunités ──────────────────── */}
+          <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+            {/* Résumé de marché */}
+            <MarketSummary data={brief.market_summary} />
+
+            {/* Opportunités détectées — version compacte */}
+            {opportunityItems.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-accent text-xs">◎</span>
+                    <h2 className="text-[10px] font-semibold text-muted uppercase tracking-widest">
+                      Opportunités
+                    </h2>
+                  </div>
+                  <Link href="/opportunities" className="text-[10px] text-navy hover:text-navy-hover transition-colors">
+                    Voir tout →
+                  </Link>
+                </div>
+                <div className="space-y-2">
+                  {opportunityItems.slice(0, 5).map((item, i) => (
+                    <Link key={i} href={`/company/${item.ticker}`}
+                      className="flex items-center justify-between rounded-lg border border-edge bg-surface px-3 py-2.5
+                                 hover:border-navy/30 hover:shadow-sm transition-all duration-150 group">
+                      <div>
+                        <span className="font-mono font-bold text-sm text-navy group-hover:text-navy-hover">{item.ticker}</span>
+                        {item.change_1d != null && (
+                          <span className={`ml-2 text-xs font-mono ${item.change_1d >= 0 ? "text-green-700" : "text-red-700"}`}>
+                            {item.change_1d > 0 ? "+" : ""}{item.change_1d.toFixed(2)}%
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {item.scores?.composite != null && (
+                          <span className={`text-xs font-mono font-medium px-1.5 py-0.5 rounded border
+                            ${item.scores.composite >= 7.5 ? "bg-green-50 text-green-700 border-green-200"
+                              : item.scores.composite >= 5 ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : "bg-red-50 text-red-700 border-red-200"}`}>
+                            {item.scores.composite.toFixed(1)}
+                          </span>
+                        )}
+                        <span className="text-xs text-muted">→ {item.action_label}</span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Placeholder pour le fil d'actualités (Phase 2.3) */}
+            <div className="rounded-lg border border-edge bg-surface p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-accent text-xs">⊕</span>
+                <h2 className="text-[10px] font-semibold text-muted uppercase tracking-widest">Fil d&apos;actualités</h2>
+              </div>
+              <p className="text-xs text-muted">Les news de tes tickers suivis apparaîtront ici.</p>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Disclaimer */}
@@ -116,7 +187,6 @@ function NapoleonBanner({ date }: { date?: string }) {
 
   return (
     <div className="relative w-full rounded-xl overflow-hidden shadow-md h-[140px] sm:h-[190px]">
-      {/* Tableau de David — Bonaparte franchissant les Alpes (domaine public) */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/napoleon.jpg"
@@ -124,8 +194,6 @@ function NapoleonBanner({ date }: { date?: string }) {
         className="absolute inset-0 w-full h-full object-cover"
         style={{ objectPosition: "50% 18%" }}
       />
-
-      {/* Dégradé overlay : marine gauche → transparent droite */}
       <div
         className="absolute inset-0"
         style={{
@@ -133,18 +201,13 @@ function NapoleonBanner({ date }: { date?: string }) {
             "linear-gradient(to right, rgba(30,58,95,0.90) 0%, rgba(30,58,95,0.65) 45%, rgba(30,58,95,0.10) 100%)",
         }}
       />
-
-      {/* Texte superposé */}
       <div className="absolute inset-0 flex flex-col justify-center px-5 sm:px-8">
-        {/* Règle or supérieure */}
         <div className="flex items-center gap-3 mb-3">
           <div className="w-12 h-px bg-accent" />
           <span className="text-accent text-[9px] tracking-[0.35em] uppercase font-medium opacity-80">
             Est. mmxxiii
           </span>
         </div>
-
-        {/* Nom du fonds */}
         <h1
           className="text-white text-2xl sm:text-3xl font-bold tracking-[0.08em] uppercase"
           style={{ fontFamily: "'Space Grotesk', sans-serif" }}
@@ -154,8 +217,6 @@ function NapoleonBanner({ date }: { date?: string }) {
         <p className="text-accent text-[10px] tracking-[0.3em] uppercase font-medium mt-1">
           Hedge Fund
         </p>
-
-        {/* Règle or inférieure + date */}
         <div className="flex items-center gap-3 mt-4">
           <div className="w-12 h-px bg-accent" />
           <span className="text-white/60 text-[10px] tracking-wider capitalize">
@@ -163,8 +224,6 @@ function NapoleonBanner({ date }: { date?: string }) {
           </span>
         </div>
       </div>
-
-      {/* Coin bas-droit : crédit discret */}
       <p className="absolute bottom-2 right-3 text-white/25 text-[8px] tracking-wide">
         David, 1801 · Domaine public
       </p>

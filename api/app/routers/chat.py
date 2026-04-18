@@ -24,8 +24,10 @@ from typing import Optional
 import re
 import logging
 
+from datetime import datetime
+
 from app.database import get_session
-from app.models import Position, Portfolio, Company
+from app.models import Position, Portfolio, Company, AnalysisLog, UserIdea
 from app.services.data_service import (
     get_price_changes, get_fundamentals, get_news, get_company_info,
 )
@@ -697,8 +699,8 @@ def _detect_intent(message: str) -> dict:
     return {"intent": "opportunities", "ticker": None}
 
 
-async def _handle_analysis(ticker: str) -> ChatResponse:
-    """Analyse complète d'un ticker."""
+async def _handle_analysis(ticker: str, session: Optional[AsyncSession] = None) -> ChatResponse:
+    """Analyse complète d'un ticker, avec mémoire des analyses précédentes."""
     from app.services.data_service import get_earnings_calendar
     changes = get_price_changes(ticker)
     if not changes:
@@ -716,6 +718,60 @@ async def _handle_analysis(ticker: str) -> ChatResponse:
     composite = scores["composite"]
     label = get_score_label(composite)
 
+    # ── Mémoire : contexte historique ──────────────────────────────────────
+    history_context = ""
+    if session:
+        try:
+            # Analyses précédentes
+            prev_result = await session.exec(
+                select(AnalysisLog)
+                .where(AnalysisLog.ticker == ticker)
+                .order_by(AnalysisLog.analyzed_at.desc())  # type: ignore
+                .limit(1)
+            )
+            prev_log = prev_result.first()
+            if prev_log and prev_log.composite_score is not None:
+                days_ago = (datetime.utcnow() - prev_log.analyzed_at).days
+                delta = composite - prev_log.composite_score
+                delta_str = f"{delta:+.1f}" if delta != 0 else "stable"
+                history_context = f"Dernière analyse il y a {days_ago}j — score était {prev_log.composite_score:.1f}/10 ({delta_str})"
+
+            # Thèse utilisateur existante
+            idea_result = await session.exec(
+                select(UserIdea)
+                .join(Company, Company.id == UserIdea.company_id)
+                .where(Company.ticker == ticker)
+                .order_by(UserIdea.created_at.desc())  # type: ignore
+                .limit(1)
+            )
+            user_idea = idea_result.first()
+            if user_idea and user_idea.user_thesis:
+                history_context += f"\nTa thèse : « {user_idea.user_thesis[:100]} »"
+                if user_idea.conviction:
+                    history_context += f" (conviction {user_idea.conviction})"
+
+            # Logger cette analyse
+            log_entry = AnalysisLog(
+                ticker=ticker,
+                analysis_type="chat",
+                composite_score=composite,
+                quality_score=scores["quality"]["score"],
+                valuation_score=scores["valuation"]["score"],
+                growth_score=scores["growth"]["score"],
+                momentum_score=scores["momentum"]["score"],
+                risk_score=scores["risk"]["score"],
+                action=None,  # sera set plus bas
+            )
+            # Chercher le company_id
+            co_result = await session.exec(select(Company).where(Company.ticker == ticker))
+            co = co_result.first()
+            if co:
+                log_entry.company_id = co.id
+            session.add(log_entry)
+            await session.commit()
+        except Exception as e:
+            logger.warning(f"Mémoire chatbot: {e}")
+
     # Construction de la réponse textuelle
     price = changes.get("current_price", 0)
     change_1d = changes.get("change_1d")
@@ -723,6 +779,8 @@ async def _handle_analysis(ticker: str) -> ChatResponse:
     pct_from_high = changes.get("pct_from_52w_high")
 
     lines = [f"## {ticker} — {name}"]
+    if history_context:
+        lines.append(f"↳ {history_context}")
     price_line = f"**Prix :** {price:.2f}"
     if change_1d is not None:
         price_line += f" | **Aujourd'hui :** {change_1d:+.2f}%"
@@ -1076,7 +1134,7 @@ async def chat(
         elif intent == "followup_buy" and ticker:
             return await _handle_followup_buy(ticker)
         elif intent == "analysis" and ticker:
-            return await _handle_analysis(ticker)
+            return await _handle_analysis(ticker, session)
         elif intent == "opportunities":
             return await _handle_opportunities(ticker)
         elif intent == "market":
@@ -1100,7 +1158,7 @@ async def chat(
             )
         else:
             if ticker:
-                return await _handle_analysis(ticker)
+                return await _handle_analysis(ticker, session)
             return await _handle_opportunities(None)
 
     except Exception as e:

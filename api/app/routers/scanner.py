@@ -9,8 +9,10 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from typing import Optional
 
+from datetime import datetime
+
 from app.database import get_session
-from app.models import Position, Portfolio, Company
+from app.models import Position, Portfolio, Company, SeenOpportunity
 from app.services.scanner import run_scan, scan_ticker, SCAN_UNIVERSE, run_macro_scan
 
 router = APIRouter(prefix="/scanner", tags=["scanner"])
@@ -51,6 +53,32 @@ async def get_opportunities(
     # Filtrer par score minimum si différent du défaut
     if min_score != 6.0:
         opportunities = [o for o in opportunities if o["scores"]["composite"] >= min_score]
+
+    # Tagging historique : distinguer nouvelles opportunités des récurrentes
+    for opp in opportunities:
+        t = opp["ticker"]
+        result = await session.exec(
+            select(SeenOpportunity).where(SeenOpportunity.ticker == t)
+        )
+        seen = result.first()
+        if seen:
+            opp["new_opportunity"] = False
+            opp["first_seen_at"] = seen.first_seen_at.isoformat()
+            opp["times_seen"] = seen.times_seen + 1
+            seen.last_seen_at = datetime.utcnow()
+            seen.times_seen += 1
+            seen.last_score = opp["scores"]["composite"]
+            session.add(seen)
+        else:
+            opp["new_opportunity"] = True
+            opp["first_seen_at"] = datetime.utcnow().isoformat()
+            opp["times_seen"] = 1
+            session.add(SeenOpportunity(
+                ticker=t,
+                last_score=opp["scores"]["composite"],
+            ))
+
+    await session.commit()
 
     return {
         "count": len(opportunities),

@@ -9,8 +9,7 @@ const NAV_ITEMS = [
   { href: "/opportunities", label: "Opportunités", icon: "◎" },
   { href: "/watchlist",    label: "Watchlist",    icon: "◉" },
   { href: "/portfolio",    label: "Portefeuille", icon: "▣" },
-  { href: "/idea",         label: "Idée ?",       icon: "◇" },
-  { href: "/company/AAPL", label: "Recherche",    icon: "⊕" },
+  { href: "/idea",         label: "Recherche",    icon: "◇" },
 ];
 
 /**

@@ -204,6 +204,16 @@ function OpportunityCard({ opp, rank }: { opp: ScanOpportunity; rank: number }) 
               >
                 {opp.ticker}
               </Link>
+              {opp.new_opportunity && (
+                <span className="text-[10px] font-semibold text-green-700 border border-green-200 bg-green-50 rounded px-1.5 py-0.5">
+                  NOUVEAU
+                </span>
+              )}
+              {opp.times_seen != null && opp.times_seen > 1 && (
+                <span className="text-[10px] text-muted border border-edge rounded px-1.5 py-0.5 bg-bg">
+                  vu {opp.times_seen}×
+                </span>
+              )}
               {opp.sector_group && (
                 <span className="text-[10px] text-muted border border-edge rounded px-1.5 py-0.5 bg-bg">
                   {opp.sector_group}
