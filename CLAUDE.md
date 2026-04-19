@@ -106,28 +106,63 @@ SeenOpportunity, AnalysisLog, Prediction
 
 ## Interdictions
 
-- Pas de ML opaque — heuristiques explicables uniquement
-- Pas de données inventées — si yfinance ne retourne rien, retourner `None`
+- Pas de données inventées — si une source ne retourne rien, retourner `None`
 - Ne pas casser la compatibilité des routes API sans mise à jour du client TS
 - Ne pas supprimer les champs `reasons` des scores — ils sont affichés en UI
 - Ne pas utiliser de couleurs hardcodées dans le frontend — tokens sémantiques uniquement
+- **JAMAIS d'appel Claude API au chargement de page** — uniquement via bouton + confirmation
+- **JAMAIS de retry automatique** sur les appels Claude API
+- Ne pas dépasser le hard-cap budget mensuel (5$/mois par défaut)
+
+## Philosophie d'analyse — CRUCIAL
+
+Le système ne doit PAS être un "Yahoo Finance bis" qui affiche des ratios.
+Il doit **raisonner comme un investisseur qui met son propre argent** :
+
+- **Du raisonnement, pas du reporting** : pas "P/E = 34x" mais "P/E à 34x, cher vs MSFT (26x), MAIS justifié par un FCF de 106B$ finançant 90B$/an de buybacks"
+- **Comprendre le business** : que fait l'entreprise, pour qui, quel problème elle résout, quel est son avantage concurrentiel durable
+- **La chaîne de valeur** : fournisseurs critiques, concentration clients, pouvoir de négociation
+- **Des risques SPÉCIFIQUES** : pas "risque réglementaire" générique mais "le DMA européen pourrait forcer l'ouverture de l'App Store, menaçant 30% de marge sur les services"
+- **Croiser les sources** : yfinance + SEC EDGAR + Google News + sites corporate
+- **Qualité > quantité** : 5 thèses profondes par semaine valent mieux que 50 scores superficiels
+- **Mâcher le travail** : l'utilisateur ne devrait pas avoir à interpréter les données lui-même
+
+## Claude API — Moteur de raisonnement
+
+Le moteur rule-based (if/else) est conservé pour le scoring rapide et gratuit.
+Claude API (Sonnet) est utilisé pour les analyses deep — avec gardes-fous stricts :
+
+- **Budget** : hard-cap 5$/mois, compteur en DB, endpoint `/analyst/budget`
+- **Déclenchement** : uniquement via bouton manuel + confirmation utilisateur
+- **Anti-hallucination** : Claude reçoit UNIQUEMENT des données collectées et vérifiées. Le prompt interdit d'inventer des faits.
+- **Cache** : analyses valides 7 jours, pas de re-génération inutile
+- **Optimisation coût** : Haiku pour le tri, Sonnet pour le deep uniquement
+
+## Stratégie de découverte d'opportunités
+
+Pas juste un univers fixe scanné bêtement. Process en 3 couches :
+
+1. **Macro-thématique** (Haiku) : mégatrends → sous-segments → tickers candidats
+   Ex: "IA → consommation énergie → refroidissement data centers → Vertiv (VRT)"
+2. **Screening quantitatif** (yfinance, gratuit) : filtres dynamiques sur les secteurs identifiés
+3. **Validation qualitative** (Sonnet) : deep dive business sur les 5 meilleurs candidats
 
 ## Ordre de priorité si modifications
 
 1. Corriger les bugs qui cassent les fonctions existantes
-2. Améliorer la qualité/pertinence des scores, du brief et des analyses
-3. Ajouter de nouvelles pages/features
-4. Refactoring et nettoyage
+2. Améliorer la profondeur et la pertinence des analyses (business, pas juste ratios)
+3. Ajouter de nouvelles sources de données
+4. Améliorer l'UX (navigation, cards extensibles, loading states)
+5. Refactoring et nettoyage
 
-## Pour ajouter un nouveau provider de données
+## Prochaines priorités (Austerlitz v2)
 
-1. Créer `api/app/services/providers/nom_provider.py`
-2. Implémenter le Protocol défini dans `data_provider.py`
-3. Modifier `data_service.py` pour déléguer au provider actif
+1. **Phase 1** : Deep data layer (yfinance enrichi + web research + univers élargi)
+2. **Phase 2** : Moteur Claude API (investment_analyst.py, gardes-fous budget)
+3. **Phase 3** : Modèles DB + endpoints analyst
+4. **Phase 4** : Frontend navigation (loading.tsx, skeletons)
+5. **Phase 5** : Brief 50/50 + cards extensibles
+6. **Phase 6** : Page company enrichie (onglets)
+7. **Phase 7** : Polish
 
-## Prochaines priorités
-
-1. Tests automatisés (pytest) — aucun test n'existe encore
-2. Migrations DB (Alembic) — les changements de schéma ne s'appliquent pas aux bases existantes
-3. Vérification visuelle frontend (dark mode, responsive, nouvelles pages)
-4. IBKR quand l'utilisateur fournira l'accès API
+Plan complet dans `.claude/plans/snazzy-wibbling-sunbeam.md`
