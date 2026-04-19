@@ -112,7 +112,7 @@ SeenOpportunity, AnalysisLog, Prediction
 - Ne pas utiliser de couleurs hardcodées dans le frontend — tokens sémantiques uniquement
 - **JAMAIS d'appel Claude API au chargement de page** — uniquement via bouton + confirmation
 - **JAMAIS de retry automatique** sur les appels Claude API
-- Ne pas dépasser le hard-cap budget mensuel (5$/mois par défaut)
+- Ne pas dépasser le hard-cap budget mensuel (3$/mois) — les appels ratés comptent aussi
 
 ## Philosophie d'analyse — CRUCIAL
 
@@ -132,7 +132,7 @@ Il doit **raisonner comme un investisseur qui met son propre argent** :
 Le moteur rule-based (if/else) est conservé pour le scoring rapide et gratuit.
 Claude API (Sonnet) est utilisé pour les analyses deep — avec gardes-fous stricts :
 
-- **Budget** : hard-cap 5$/mois, compteur en DB, endpoint `/analyst/budget`
+- **Budget** : hard-cap 3$/mois, compteur en DB (appels ratés inclus), endpoint `/analyst/budget`
 - **Déclenchement** : uniquement via bouton manuel + confirmation utilisateur
 - **Anti-hallucination** : Claude reçoit UNIQUEMENT des données collectées et vérifiées. Le prompt interdit d'inventer des faits.
 - **Cache** : analyses valides 7 jours, pas de re-génération inutile
