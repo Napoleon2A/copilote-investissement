@@ -9,13 +9,15 @@ Documentation auto disponible sur :
   http://localhost:8000/redoc  (ReDoc)
 """
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 from app.database import init_db
 from app.config import get_settings
-from app.routers import companies, watchlist, portfolio, ideas, brief, scanner, chat, earnings, alerts, risk, analyst
+from app.routers import companies, watchlist, portfolio, ideas, brief, scanner, chat, earnings, alerts, risk, analyst, news
+from app.services.scanner import trigger_background_scan
+from app.services.rss_aggregator import trigger_background_refresh as trigger_news_refresh
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,6 +33,11 @@ async def lifespan(app: FastAPI):
     logger.info("Démarrage — initialisation de la base de données...")
     await init_db()
     logger.info("Base de données prête.")
+    # Premier scan en background — cache prêt ~60s après démarrage
+    trigger_background_scan(max_results=10)
+    logger.info("Scanner: premier scan lancé en background.")
+    trigger_news_refresh()
+    logger.info("RSS aggregator: premier fetch lancé en background.")
     yield
     logger.info("Arrêt de l'API.")
 
@@ -74,6 +81,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ── Cache HTTP léger : stale-while-revalidate ─────────────────────────────
+# Le navigateur réutilise la donnée stale instantanément (zéro attente)
+# tout en rafraîchissant en arrière-plan. Idéal pour un dashboard.
+_CACHEABLE_PREFIXES = (
+    "/brief", "/news/", "/earnings", "/alerts", "/watchlists",
+    "/portfolio", "/ideas", "/scanner/opportunities",
+    "/companies/",  # historique, fundamentals, etc.
+)
+
+@app.middleware("http")
+async def add_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    if request.method == "GET" and any(request.url.path.startswith(p) for p in _CACHEABLE_PREFIXES):
+        # 10s frais, puis 5 min de stale-while-revalidate (refresh en background)
+        response.headers["Cache-Control"] = "private, max-age=10, stale-while-revalidate=300"
+    return response
+
 # Enregistrement des routes
 app.include_router(companies.router)
 app.include_router(watchlist.router)
@@ -86,6 +111,7 @@ app.include_router(earnings.router)
 app.include_router(alerts.router)
 app.include_router(risk.router)
 app.include_router(analyst.router)
+app.include_router(news.router)
 
 
 @app.get("/", tags=["health"])

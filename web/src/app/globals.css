@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════════════════════
+ * Font-size scalable — taille de base qui s'adapte à la largeur d'écran
+ *   - Petit écran (~1280px) : 14px de base (Tailwind text-sm)
+ *   - Écran moyen (1440px)  : ~15px
+ *   - Grand écran (1920px+) : 16px+
+ * Toutes les classes Tailwind (text-xs, text-sm, etc.) scalent automatiquement.
+ * ═══════════════════════════════════════════════════════════════════════ */
+html {
+  font-size: clamp(15px, 0.5vw + 10px, 19px);
+}
+
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
 
 /*
@@ -43,6 +54,96 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+  letter-spacing: -0.005em;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * Tokens visuels premium — ombres, transitions, surfaces
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/* Card premium : bord doux + double ombre (proche / lointaine) */
+.card-premium {
+  background: rgb(var(--surface));
+  border: 1px solid rgba(var(--edge), 0.7);
+  border-radius: 16px;
+  box-shadow:
+    0 1px 2px rgba(11, 25, 41, 0.04),
+    0 4px 12px rgba(11, 25, 41, 0.03);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.dark .card-premium {
+  background: rgb(var(--surface));
+  border: 1px solid rgba(var(--edge), 0.5);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.2),
+    0 4px 16px rgba(0, 0, 0, 0.15);
+}
+.card-premium:hover {
+  border-color: rgba(var(--accent), 0.4);
+  box-shadow:
+    0 1px 2px rgba(11, 25, 41, 0.06),
+    0 12px 32px rgba(11, 25, 41, 0.08);
+  transform: translateY(-1px);
+}
+.dark .card-premium:hover {
+  border-color: rgba(var(--accent), 0.5);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 12px 32px rgba(0, 0, 0, 0.25);
+}
+
+/* Card avec halo coloré subtil en bas-droite */
+.card-aura::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 100% 100%, rgba(var(--accent), 0.08), transparent 50%);
+  pointer-events: none;
+  border-radius: inherit;
+}
+.dark .card-aura::before {
+  background: radial-gradient(circle at 100% 100%, rgba(var(--accent), 0.12), transparent 50%);
+}
+
+/* Logo container premium */
+.logo-tile {
+  background: linear-gradient(135deg, #fff 0%, #f5f7fa 100%);
+  border: 1px solid rgba(var(--edge), 0.5);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.dark .logo-tile {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 247, 250, 0.85) 100%);
+}
+.group:hover .logo-tile {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(var(--accent), 0.15);
+}
+
+/* Animation fade-in subtile pour le contenu */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in {
+  animation: fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Section titles premium */
+.section-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: rgb(var(--secondary));
+}
+.section-title-hint {
+  font-size: 11px;
+  color: rgb(var(--muted));
+  letter-spacing: 0.005em;
 }
 
 /* Scrollbar — suit le thème */
@@ -50,6 +151,18 @@ body {
 ::-webkit-scrollbar-track { background: rgb(var(--bg)); }
 ::-webkit-scrollbar-thumb { background: rgb(var(--edge)); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: rgb(var(--accent)); }
+
+/* Scrollbar plus visible dans les panneaux scrollables (cards "Comprendre/Macro/Linked") */
+.nice-scroll::-webkit-scrollbar { width: 6px; }
+.nice-scroll::-webkit-scrollbar-track { background: transparent; }
+.nice-scroll::-webkit-scrollbar-thumb {
+  background: rgba(var(--accent), 0.35);
+  border-radius: 3px;
+}
+.nice-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--accent), 0.6);
+}
+.nice-scroll { scrollbar-width: thin; scrollbar-color: rgba(var(--accent), 0.35) transparent; }
 
 /*
  * Surcharges pour les couleurs sémantiques Tailwind (vert = hausse, rouge = baisse, etc.)

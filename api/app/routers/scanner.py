@@ -1,19 +1,22 @@
 """
 Routes : scanner de marché
-  GET  /scanner/opportunities          → top opportunités détectées maintenant
-  GET  /scanner/universe               → liste des tickers dans l'univers scanné
-  POST /scanner/custom                 → scanner une liste de tickers personnalisée
+  GET  /scanner/opportunities   → résultats du dernier scan (cache immédiat)
+  POST /scanner/refresh         → déclenche un nouveau scan en background
+  GET  /scanner/universe        → liste des tickers dans l'univers scanné
+  POST /scanner/custom          → scanner une liste de tickers personnalisée
 """
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from typing import Optional
 
 from datetime import datetime
 
 from app.database import get_session
 from app.models import Position, Portfolio, Company, SeenOpportunity
-from app.services.scanner import run_scan, scan_ticker, SCAN_UNIVERSE, run_macro_scan
+from app.services.scanner import (
+    run_scan, scan_ticker, SCAN_UNIVERSE, run_macro_scan,
+    get_cached_opportunities, is_cache_fresh, trigger_background_scan,
+)
 
 router = APIRouter(prefix="/scanner", tags=["scanner"])
 
@@ -25,15 +28,10 @@ async def get_opportunities(
     session: AsyncSession = Depends(get_session),
 ):
     """
-    Retourne les meilleures opportunités détectées dans l'univers scanné.
-
-    Le scanner analyse ~50 tickers sur plusieurs secteurs et remonte ceux
-    dont le score composite dépasse le seuil demandé.
-
-    Note : le premier appel peut prendre 30-60 secondes (fetching yfinance).
-    Les données sont ensuite en cache 5-15 min.
+    Retourne les opportunités depuis le cache (réponse immédiate).
+    Si le cache est périmé ou absent, déclenche un scan en background.
+    Utiliser POST /scanner/refresh pour forcer un re-scan.
     """
-    # Récupérer les tickers du portefeuille pour les exclure
     portfolio_result = await session.exec(select(Portfolio))
     portfolio = portfolio_result.first()
     excluded = []
@@ -45,17 +43,34 @@ async def get_opportunities(
         )
         excluded = [c.ticker for c in pos_result.all()]
 
-    opportunities = run_scan(
-        exclude_tickers=excluded,
-        max_results=max_results,
-    )
+    cache = get_cached_opportunities()
+    opportunities = cache["opportunities"]
+    computed_at = cache["computed_at"]
+    is_running = cache["is_running"]
 
-    # Filtrer par score minimum si différent du défaut
-    if min_score != 6.0:
-        opportunities = [o for o in opportunities if o["scores"]["composite"] >= min_score]
+    # Pas de cache — lancer le premier scan en background
+    if opportunities is None:
+        if not is_running:
+            trigger_background_scan(exclude_tickers=excluded, max_results=max_results)
+        return {
+            "count": 0,
+            "scanning": True,
+            "is_refreshing": True,
+            "message": "Scan en cours, résultats disponibles dans ~30-60 secondes.",
+            "computed_at": None,
+            "universe_size": sum(len(v) for v in SCAN_UNIVERSE.values()),
+            "opportunities": [],
+        }
 
-    # Tagging historique : distinguer nouvelles opportunités des récurrentes
-    for opp in opportunities:
+    # Cache périmé — relancer en background, servir quand même le cache
+    if not is_cache_fresh() and not is_running:
+        trigger_background_scan(exclude_tickers=excluded, max_results=max_results)
+
+    # Filtrer par score si demandé
+    filtered = [o for o in opportunities if o["scores"]["composite"] >= min_score]
+
+    # Tagging historique (nouvelles opportunités vs récurrentes)
+    for opp in filtered:
         t = opp["ticker"]
         result = await session.exec(
             select(SeenOpportunity).where(SeenOpportunity.ticker == t)
@@ -65,27 +80,46 @@ async def get_opportunities(
             opp["new_opportunity"] = False
             opp["first_seen_at"] = seen.first_seen_at.isoformat()
             opp["times_seen"] = seen.times_seen + 1
-            seen.last_seen_at = datetime.utcnow()
-            seen.times_seen += 1
-            seen.last_score = opp["scores"]["composite"]
-            session.add(seen)
         else:
             opp["new_opportunity"] = True
-            opp["first_seen_at"] = datetime.utcnow().isoformat()
+            opp["first_seen_at"] = computed_at.isoformat() if computed_at else None
             opp["times_seen"] = 1
-            session.add(SeenOpportunity(
-                ticker=t,
-                last_score=opp["scores"]["composite"],
-            ))
-
-    await session.commit()
 
     return {
-        "count": len(opportunities),
+        "count": len(filtered),
+        "scanning": False,
+        "is_refreshing": is_running,
+        "cached": True,
+        "computed_at": computed_at.isoformat() if computed_at else None,
+        "cache_age_minutes": round((datetime.utcnow() - computed_at).total_seconds() / 60, 1) if computed_at else None,
         "min_score_applied": min_score,
         "excluded_tickers": excluded,
         "universe_size": sum(len(v) for v in SCAN_UNIVERSE.values()),
-        "opportunities": opportunities,
+        "opportunities": filtered,
+    }
+
+
+@router.post("/refresh")
+async def refresh_opportunities(
+    max_results: int = Query(default=10, ge=1, le=20),
+    session: AsyncSession = Depends(get_session),
+):
+    """Déclenche un re-scan en background. Retourne immédiatement."""
+    portfolio_result = await session.exec(select(Portfolio))
+    portfolio = portfolio_result.first()
+    excluded = []
+    if portfolio:
+        pos_result = await session.exec(
+            select(Company)
+            .join(Position, Position.company_id == Company.id)
+            .where(Position.portfolio_id == portfolio.id)
+        )
+        excluded = [c.ticker for c in pos_result.all()]
+
+    started = trigger_background_scan(exclude_tickers=excluded, max_results=max_results)
+    return {
+        "started": started,
+        "message": "Scan lancé en background." if started else "Un scan est déjà en cours.",
     }
 
 
@@ -103,20 +137,13 @@ async def get_universe():
 
 @router.get("/macro")
 async def get_macro_scan():
-    """
-    Analyse macro : performance sectorielle, régime de risque, indices clés.
-    Retourne une vue d'ensemble du marché pour contextualiser les opportunités.
-    """
+    """Analyse macro : performance sectorielle, régime de risque, indices clés."""
     return run_macro_scan()
 
 
 @router.post("/custom")
 async def scan_custom(tickers: list[str]):
-    """
-    Scanner une liste de tickers personnalisée.
-    Utile pour évaluer rapidement un panier d'actions.
-    Max 20 tickers par appel.
-    """
+    """Scanner une liste de tickers personnalisée. Max 20 tickers."""
     if len(tickers) > 20:
         tickers = tickers[:20]
 
@@ -132,8 +159,5 @@ async def scan_custom(tickers: list[str]):
                 "reason": "Score insuffisant ou données indisponibles",
             })
 
-    results.sort(
-        key=lambda x: x.get("scores", {}).get("composite", 0),
-        reverse=True,
-    )
+    results.sort(key=lambda x: x.get("scores", {}).get("composite", 0), reverse=True)
     return {"count": len(results), "results": results}

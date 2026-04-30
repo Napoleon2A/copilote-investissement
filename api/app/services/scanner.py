@@ -13,6 +13,7 @@ Trois types de signaux détectés :
 L'univers est délibérément resserré et diversifié (pas 500 titres — ~60 ciblés).
 """
 import logging
+import threading
 from typing import Optional
 from datetime import datetime, timedelta
 from app.services.data_service import (
@@ -22,6 +23,65 @@ from app.services.data_service import (
 from app.services.scoring import compute_all_scores, get_score_label
 
 logger = logging.getLogger(__name__)
+
+# ── Cache en mémoire ──────────────────────────────────────────────────────────
+# Le scan complet prend 30-60s. On le lance en background et on sert le cache.
+CACHE_TTL_SECONDS = 3600  # 1 heure
+
+_cache: dict = {
+    "opportunities": None,   # list[dict] | None
+    "computed_at": None,     # datetime | None
+    "is_running": False,
+    "excluded": [],          # tickers exclus au dernier scan
+}
+_cache_lock = threading.Lock()
+
+
+def get_cached_opportunities() -> dict:
+    with _cache_lock:
+        return {
+            "opportunities": _cache["opportunities"],
+            "computed_at": _cache["computed_at"],
+            "is_running": _cache["is_running"],
+        }
+
+
+def is_cache_fresh() -> bool:
+    with _cache_lock:
+        if _cache["computed_at"] is None:
+            return False
+        age = (datetime.utcnow() - _cache["computed_at"]).total_seconds()
+        return age < CACHE_TTL_SECONDS
+
+
+def trigger_background_scan(exclude_tickers: list[str] | None = None, max_results: int = 10) -> bool:
+    """Lance un scan en background. Retourne False si un scan est déjà en cours."""
+    with _cache_lock:
+        if _cache["is_running"]:
+            return False
+        _cache["is_running"] = True
+        _cache["excluded"] = exclude_tickers or []
+
+    def _run():
+        import time
+        try:
+            logger.info("Scanner background: démarrage...")
+            time.sleep(3)  # Laisse l'API finir de démarrer avant de charger
+            results = run_scan(exclude_tickers=exclude_tickers, max_results=max_results)
+            with _cache_lock:
+                _cache["opportunities"] = results
+                _cache["computed_at"] = datetime.utcnow()
+            logger.info(f"Scanner background: terminé — {len(results)} opportunités.")
+        except Exception as e:
+            logger.error(f"Scanner background: erreur — {e}")
+        finally:
+            with _cache_lock:
+                _cache["is_running"] = False
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    return True
+
 
 # ── Seuils ───────────────────────────────────────────────────────────────────
 OPPORTUNITY_MIN_SCORE = 6.0      # Score composite minimum pour apparaître

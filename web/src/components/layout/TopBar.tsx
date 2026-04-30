@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { ThemeToggle } from "./ThemeToggle";
 
 export function TopBar() {
@@ -15,25 +16,26 @@ export function TopBar() {
     }
   };
 
-  const toggleSidebar = () => {
-    window.dispatchEvent(new Event("toggle-sidebar"));
-  };
-
   return (
-    <header className="h-11 bg-surface border-b border-edge flex items-center px-3 sm:px-6 gap-2 sm:gap-4 flex-shrink-0">
-      {/* Burger button — mobile uniquement */}
-      <button
-        type="button"
-        onClick={toggleSidebar}
-        className="md:hidden flex flex-col items-center justify-center gap-[3px] w-8 h-8 rounded hover:bg-bg transition-colors"
-        aria-label="Ouvrir le menu"
+    <header className="h-11 bg-surface border-b border-edge flex items-center px-4 sm:px-6 gap-4 flex-shrink-0">
+      {/* Logo */}
+      <Link
+        href="/"
+        className="flex items-center gap-2 flex-shrink-0 hover:opacity-80 transition-opacity"
       >
-        <span className="block w-4 h-px bg-secondary" />
-        <span className="block w-4 h-px bg-secondary" />
-        <span className="block w-4 h-px bg-secondary" />
-      </button>
+        <div className="w-4 h-px bg-accent" />
+        <span
+          className="text-xs font-bold tracking-[0.15em] uppercase text-navy dark:text-accent"
+          style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+        >
+          Austerlitz
+        </span>
+      </Link>
 
-      <form onSubmit={handleSearch} className="flex items-center gap-2 flex-1 md:flex-initial">
+      <div className="w-px h-4 bg-edge flex-shrink-0" />
+
+      {/* Recherche ticker */}
+      <form onSubmit={handleSearch} className="flex items-center gap-2">
         <input
           type="text"
           value={query}
@@ -42,7 +44,7 @@ export function TopBar() {
           className="bg-bg border border-edge rounded px-3 py-1.5 text-xs
                      text-primary placeholder-muted focus:outline-none
                      focus:border-navy focus:bg-surface transition-colors
-                     w-full md:w-48"
+                     w-32 sm:w-48"
         />
         <button
           type="submit"
@@ -53,12 +55,10 @@ export function TopBar() {
         </button>
       </form>
 
-      {/* Disclaimer — masqué sur mobile, visible dès md */}
       <p className="hidden md:block text-[10px] text-muted ml-auto tracking-wide">
         À titre informatif uniquement · Pas un conseil en investissement
       </p>
 
-      {/* Toggle dark/light — tout à droite, responsive (auto sur mobile) */}
       <div className="ml-auto md:ml-2">
         <ThemeToggle />
       </div>

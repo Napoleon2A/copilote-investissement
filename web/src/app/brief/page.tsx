@@ -1,0 +1,238 @@
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+import { getBrief } from "@/lib/api";
+import { BriefItemCard } from "@/components/brief/BriefItemCard";
+import { MarketSummary } from "@/components/brief/MarketSummary";
+import type { Brief, MarketContext } from "@/lib/api";
+import Link from "next/link";
+
+async function fetchBrief(): Promise<Brief | null> {
+  try {
+    return await getBrief();
+  } catch {
+    return null;
+  }
+}
+
+export default async function BriefPage() {
+  const brief = await fetchBrief();
+
+  const portfolioItems   = brief?.items.filter((i) => i.type === "portfolio_alert")  ?? [];
+  const watchlistItems   = brief?.items.filter((i) => i.type === "watchlist_signal") ?? [];
+  const ideaItems        = brief?.items.filter((i) => i.type === "idea_followup")    ?? [];
+  const opportunityItems = brief?.items.filter((i) => i.type === "opportunity")      ?? [];
+  const analystItems     = brief?.items.filter((i) => i.type === "analyst_thesis")   ?? [];
+
+  const hasSignals = portfolioItems.length + watchlistItems.length + ideaItems.length + analystItems.length > 0;
+
+  return (
+    <div className="w-full space-y-5">
+
+      {!brief && (
+        <div className="rounded-lg border border-edge bg-surface p-6 text-center shadow-sm">
+          <p className="text-secondary text-sm mb-2">Le backend n&apos;est pas accessible.</p>
+          <p className="text-muted text-xs">
+            Lance <code className="text-navy bg-surface-alt px-1 rounded">uvicorn app.main:app --reload</code> dans <code className="text-navy bg-surface-alt px-1 rounded">api/</code>
+          </p>
+        </div>
+      )}
+
+      {brief?.market_context && <MarketContextBanner ctx={brief.market_context} />}
+
+      {brief && brief.item_count === 0 && !opportunityItems.length && (
+        <div className="rounded-lg border border-edge bg-surface p-6 text-center shadow-sm">
+          <p className="text-primary text-sm">Aucun signal notable aujourd&apos;hui.</p>
+          <p className="text-muted text-xs mt-1">
+            Ajoute des tickers à ta watchlist ou à ton portefeuille pour générer un brief.
+          </p>
+        </div>
+      )}
+
+      {brief && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div className="lg:col-span-2 space-y-5">
+            {portfolioItems.length > 0 && (
+              <Section title="Portefeuille" tag="▣">
+                {portfolioItems.map((item, i) => <BriefItemCard key={i} item={item} />)}
+              </Section>
+            )}
+            {watchlistItems.length > 0 && (
+              <Section title="Watchlist" tag="◉">
+                {watchlistItems.map((item, i) => <BriefItemCard key={i} item={item} />)}
+              </Section>
+            )}
+            {ideaItems.length > 0 && (
+              <Section title="Idées en suivi" tag="◇">
+                {ideaItems.map((item, i) => <BriefItemCard key={i} item={item} />)}
+              </Section>
+            )}
+            {analystItems.length > 0 && (
+              <Section title="Analyses deep" tag="⧫">
+                {analystItems.map((item, i) => <BriefItemCard key={i} item={item} />)}
+              </Section>
+            )}
+            {!hasSignals && (
+              <div className="rounded-lg border border-edge bg-surface p-6 text-center shadow-sm">
+                <p className="text-secondary text-sm">Aucun signal prioritaire.</p>
+                <p className="text-muted text-xs mt-1">
+                  Les alertes portefeuille, watchlist et idées apparaîtront ici.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+            <MarketSummary data={brief.market_summary} />
+            {opportunityItems.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-accent text-xs">◎</span>
+                    <h2 className="text-[10px] font-semibold text-muted uppercase tracking-widest">Opportunités</h2>
+                  </div>
+                  <Link href="/opportunities" className="text-[10px] text-navy hover:text-navy-hover transition-colors">
+                    Voir tout →
+                  </Link>
+                </div>
+                <div className="space-y-2">
+                  {opportunityItems.slice(0, 5).map((item, i) => (
+                    <Link key={i} href={`/company/${item.ticker}`}
+                      className="flex items-center justify-between rounded-lg border border-edge bg-surface px-3 py-2.5
+                                 hover:border-navy/30 hover:shadow-sm transition-all duration-150 group">
+                      <div>
+                        <span className="font-mono font-bold text-sm text-navy group-hover:text-navy-hover">{item.ticker}</span>
+                        {item.change_1d != null && (
+                          <span className={`ml-2 text-xs font-mono ${item.change_1d >= 0 ? "text-green-700" : "text-red-700"}`}>
+                            {item.change_1d > 0 ? "+" : ""}{item.change_1d.toFixed(2)}%
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {item.scores?.composite != null && (
+                          <span className={`text-xs font-mono font-medium px-1.5 py-0.5 rounded border
+                            ${item.scores.composite >= 7.5 ? "bg-green-50 text-green-700 border-green-200"
+                              : item.scores.composite >= 5 ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : "bg-red-50 text-red-700 border-red-200"}`}>
+                            {item.scores.composite.toFixed(1)}
+                          </span>
+                        )}
+                        <span className="text-xs text-muted">→ {item.action_label}</span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+            {brief.aggregated_news && brief.aggregated_news.length > 0 && (
+              <div className="rounded-lg border border-edge bg-surface p-4 shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-accent text-xs">⊕</span>
+                  <h2 className="text-[10px] font-semibold text-muted uppercase tracking-widest">Fil d&apos;actualités</h2>
+                </div>
+                <ul className="space-y-2.5">
+                  {brief.aggregated_news.slice(0, 8).map((item, i) => (
+                    <li key={i} className="border-b border-edge pb-2 last:border-0 last:pb-0">
+                      <div className="flex items-start gap-2">
+                        <span className="text-[10px] font-mono font-bold text-navy flex-shrink-0 mt-0.5">{item.ticker}</span>
+                        <div className="flex-1 min-w-0">
+                          <a href={item.link} target="_blank" rel="noopener noreferrer"
+                            className="text-xs text-primary hover:text-navy leading-snug transition-colors line-clamp-2">
+                            {item.title}
+                          </a>
+                          <p className="text-[10px] text-muted mt-0.5">
+                            {item.publisher}
+                            {item.published && ` · ${new Date(item.published).toLocaleDateString("fr-FR")}`}
+                          </p>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {brief && (
+        <p className="text-[10px] text-muted text-center pb-4 tracking-wide">{brief.disclaimer}</p>
+      )}
+    </div>
+  );
+}
+
+const REGIME_STYLES: Record<string, string> = {
+  "risk-on":   "border-green-200  bg-green-50  text-green-800",
+  "risk-off":  "border-red-200    bg-red-50    text-red-800",
+  "calme":     "border-blue-200   bg-blue-50   text-blue-800",
+  "vigilance": "border-amber-200  bg-amber-50  text-amber-800",
+  "neutral":   "border-edge bg-bg text-secondary",
+};
+
+function MarketContextBanner({ ctx }: { ctx: MarketContext }) {
+  const style = REGIME_STYLES[ctx.regime] ?? REGIME_STYLES.neutral;
+  const hasExtra = ctx.macro_narrative || (ctx.cross_asset_signals && ctx.cross_asset_signals.length > 0) || ctx.sector_rotation?.leaders?.length;
+
+  return (
+    <div className={`rounded-lg border p-3 shadow-sm space-y-2 ${style}`}>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-widest opacity-60">Régime</span>
+          <span className="text-xs font-bold">{ctx.regime_label}</span>
+          {ctx.vix != null && (
+            <span className="text-xs opacity-50">· VIX {ctx.vix.toFixed(1)}</span>
+          )}
+        </div>
+        <span className="text-xs opacity-70">{ctx.session_mood}</span>
+      </div>
+      {ctx.macro_narrative && (
+        <p className="text-xs leading-relaxed opacity-80">{ctx.macro_narrative}</p>
+      )}
+      {hasExtra && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-current/10">
+          {ctx.cross_asset_signals && ctx.cross_asset_signals.length > 0 && (
+            <div>
+              <span className="text-[9px] font-semibold uppercase tracking-widest opacity-50">Signaux inter-marchés</span>
+              <ul className="mt-1 space-y-0.5">
+                {ctx.cross_asset_signals.map((signal, i) => (
+                  <li key={i} className="text-[11px] leading-snug opacity-70">• {signal}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {ctx.sector_rotation?.leaders && ctx.sector_rotation.leaders.length > 0 && (
+            <div>
+              <span className="text-[9px] font-semibold uppercase tracking-widest opacity-50">Rotation sectorielle</span>
+              <div className="mt-1 space-y-0.5">
+                {ctx.sector_rotation.leaders.map((s, i) => (
+                  <div key={`l-${i}`} className="text-[11px] opacity-70">
+                    <span className="text-green-700 dark:text-green-400">↑</span> {s.sector} <span className="font-mono">{s.change_1m > 0 ? "+" : ""}{s.change_1m.toFixed(1)}%</span>
+                  </div>
+                ))}
+                {ctx.sector_rotation.laggards.map((s, i) => (
+                  <div key={`g-${i}`} className="text-[11px] opacity-70">
+                    <span className="text-red-700 dark:text-red-400">↓</span> {s.sector} <span className="font-mono">{s.change_1m > 0 ? "+" : ""}{s.change_1m.toFixed(1)}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Section({ title, tag, children }: { title: string; tag: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-accent text-xs">{tag}</span>
+        <h2 className="text-[10px] font-semibold text-muted uppercase tracking-widest">{title}</h2>
+        <div className="flex-1 h-px bg-edge" />
+      </div>
+      <div className="space-y-2">{children}</div>
+    </div>
+  );
+}

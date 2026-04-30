@@ -12,3 +12,4 @@ pydantic-settings==2.6.1
 redis==5.2.0
 tenacity==9.0.0
 rich==13.9.4
+feedparser==6.0.11
