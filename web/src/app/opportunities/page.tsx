@@ -1,110 +1,108 @@
-/**
- * Page Opportunités — /opportunities
- *
- * Le scanner analyse ~50 actions sur plusieurs secteurs et remonte
- * automatiquement les meilleures opportunités du moment.
- */
 "use client";
-import { useState, useEffect } from "react";
-import { useDocumentTitle } from "@/lib/useDocumentTitle";
+
 import Link from "next/link";
-import { getScanOpportunities, getMacroScan } from "@/lib/api";
-import type { ScanOpportunity, MacroScan } from "@/lib/api";
-import { ChangeCell } from "@/components/ui/ChangeCell";
-import { ScoreBadge } from "@/components/ui/ScoreBadge";
+import { useEffect, useState } from "react";
+import { TickerBadge } from "@/components/ui/TickerBadge";
+import { Sparkline } from "@/components/ui/Sparkline";
+import { getTickerMeta, SECTOR_COLORS, SECTOR_LABEL } from "@/lib/tickerMeta";
+
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+async function fetchJSON<T>(url: string): Promise<T | null> {
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+    return res.json();
+  } catch { return null; }
+}
 
 export default function OpportunitiesPage() {
-  useDocumentTitle("Opportunités");
-  const [data, setData] = useState<ScanOpportunity[]>([]);
-  const [macro, setMacro] = useState<MacroScan | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [scannedAt, setScannedAt] = useState<Date | null>(null);
+  const [opps, setOpps] = useState<any>(undefined);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const runScan = () => {
-    setLoading(true);
-    setError("");
-    Promise.all([
-      getScanOpportunities(10),
-      getMacroScan().catch(() => null),
-    ])
-      .then(([res, macroRes]) => {
-        setData(res.opportunities);
-        setMacro(macroRes);
-        setScannedAt(new Date());
-      })
-      .catch(() => setError("Impossible de contacter le backend"))
-      .finally(() => setLoading(false));
+  const load = async () => {
+    setOpps(undefined);
+    const d = await fetchJSON<any>(`${API}/scanner/opportunities?max_results=15`);
+    setOpps(d);
   };
 
-  useEffect(() => { runScan(); }, []);
+  const refresh = async () => {
+    setRefreshing(true);
+    await fetch(`${API}/scanner/refresh`, { method: "POST" });
+    setTimeout(async () => {
+      await load();
+      setRefreshing(false);
+    }, 60000);  // attend 60s pour le re-scan
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const list: any[] = opps?.opportunities ?? [];
 
   return (
-    <div className="max-w-4xl mx-auto space-y-5">
-
-      {/* En-tête */}
-      <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2">
-        <div>
-          <h1 className="text-lg font-semibold text-primary"
+    <div className="space-y-5 pb-6">
+      {/* Header */}
+      <div className="flex items-end justify-between gap-4 pb-4 border-b border-edge/40">
+        <div className="flex items-center gap-4">
+          <div className="w-1 h-12 bg-gradient-to-b from-emerald-500 to-emerald-700 rounded-full" />
+          <div>
+            <Link href="/" className="text-xs text-muted hover:text-navy dark:hover:text-accent transition-colors flex items-center gap-1 mb-1">
+              <span>←</span> <span>Retour au tableau de bord</span>
+            </Link>
+            <h1 className="text-2xl font-semibold tracking-[-0.02em] text-primary"
               style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-            Opportunités détectées
-          </h1>
-          <p className="text-xs text-muted mt-0.5">
-            Scanner automatique · ~50 actions analysées en temps réel
-          </p>
+              Opportunités du jour
+            </h1>
+            <p className="text-sm text-muted mt-1">
+              Scanner sur {opps?.universe_size ?? "67"} tickers · seuil score ≥ {opps?.min_score_applied ?? 6}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-3">
-          {scannedAt && (
+          {opps?.cache_age_minutes != null && (
             <span className="text-xs text-muted">
-              {scannedAt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+              Cache : {opps.cache_age_minutes < 1 ? "< 1 min" : `${Math.round(opps.cache_age_minutes)} min`}
             </span>
           )}
           <button
-            onClick={runScan}
-            disabled={loading}
-            className="text-xs px-3 py-1.5 bg-navy hover:bg-navy-hover rounded text-white transition-colors disabled:opacity-40 font-medium"
+            onClick={refresh}
+            disabled={refreshing || opps?.is_refreshing}
+            className="text-xs font-medium px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Scan en cours…" : "↻ Rescanner"}
+            {refreshing || opps?.is_refreshing ? "Scan en cours..." : "↻ Relancer le scan"}
           </button>
         </div>
       </div>
 
-      {/* Contexte macro */}
-      {macro && <MacroWidget macro={macro} />}
-
-      {/* Avertissement */}
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-        Opportunités détectées par les scores automatiques. Ce n&apos;est pas un conseil en investissement — toujours vérifier avant d&apos;agir.
-      </div>
-
-      {/* Chargement */}
-      {loading && (
-        <div className="rounded-lg border border-edge bg-surface p-8 text-center shadow-sm">
-          <p className="text-secondary text-sm">Analyse en cours…</p>
-          <p className="text-muted text-xs mt-1">Le premier scan peut prendre 30-60 secondes</p>
+      {/* État scan en cours */}
+      {opps?.scanning && (
+        <div className="card-premium p-8 text-center">
+          <div className="text-4xl mb-3">🔍</div>
+          <p className="text-primary font-medium">Premier scan en cours</p>
+          <p className="text-sm text-muted mt-1">~60 secondes — analyse de 67 tickers en parallèle</p>
         </div>
       )}
 
-      {/* Erreur */}
-      {error && !loading && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-red-700 text-sm">{error}</p>
+      {/* Liste des opportunités */}
+      {!opps?.scanning && list.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {list.map((opp, i) => <OpportunityCard key={opp.ticker} opp={opp} rank={i + 1} />)}
         </div>
       )}
 
-      {/* Vide */}
-      {!loading && !error && data.length === 0 && (
-        <div className="rounded-lg border border-edge bg-surface p-8 text-center shadow-sm">
-          <p className="text-secondary text-sm">Aucune opportunité au-dessus du seuil (score ≥ 6).</p>
-          <p className="text-muted text-xs mt-1">Conditions défavorables ou données incomplètes.</p>
+      {/* Empty state */}
+      {opps && !opps.scanning && list.length === 0 && (
+        <div className="card-premium p-8 text-center">
+          <p className="text-primary">Aucune opportunité détectée actuellement.</p>
+          <p className="text-sm text-muted mt-1">Les conditions de marché ne génèrent pas de signal au-dessus du seuil.</p>
         </div>
       )}
 
-      {/* Résultats */}
-      {!loading && data.length > 0 && (
-        <div className="space-y-3">
-          {data.map((opp, i) => (
-            <OpportunityCard key={opp.ticker} opp={opp} rank={i + 1} />
+      {/* Loading */}
+      {opps === undefined && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="card-premium p-5 h-64 animate-pulse" />
           ))}
         </div>
       )}
@@ -112,187 +110,111 @@ export default function OpportunitiesPage() {
   );
 }
 
-const RISK_REGIME_LABELS: Record<string, { label: string; color: string; desc: string }> = {
-  "risk-on":   { label: "Risk-On",   color: "text-green-700 border-green-200 bg-green-50",   desc: "Appétit pour le risque élevé — actions de croissance favorisées" },
-  "risk-off":  { label: "Risk-Off",  color: "text-red-700 border-red-200 bg-red-50",         desc: "Fuite vers les actifs sûrs — prudence recommandée" },
-  "calme":     { label: "Calme",     color: "text-blue-700 border-blue-200 bg-blue-50",      desc: "Faible volatilité — bonnes conditions pour initier des positions" },
-  "vigilance": { label: "Vigilance", color: "text-amber-700 border-amber-200 bg-amber-50",   desc: "Volatilité modérée — surveiller les développements" },
-  "neutral":   { label: "Neutre",    color: "text-secondary border-edge bg-bg", desc: "Conditions normales" },
-};
-
-function MacroWidget({ macro }: { macro: MacroScan }) {
-  const regime = RISK_REGIME_LABELS[macro.risk_regime] || RISK_REGIME_LABELS.neutral;
+function OpportunityCard({ opp, rank }: { opp: any; rank: number }) {
+  const meta = getTickerMeta(opp.ticker);
+  const sector = meta.sector;
+  const sectorStyle = sector ? SECTOR_COLORS[sector] : null;
+  const change = opp.change_1d;
+  const isUp = (change ?? 0) >= 0;
+  const score = opp.scores?.composite;
+  const scoreColor = score >= 7.5 ? "text-emerald-600 dark:text-emerald-400 stroke-emerald-500"
+                  : score >= 6.5 ? "text-amber-600 dark:text-amber-400 stroke-amber-500"
+                  :                "text-muted stroke-muted";
 
   return (
-    <div className="rounded-lg border border-edge bg-surface p-4 shadow-sm space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-[10px] font-semibold text-muted uppercase tracking-widest">Contexte macro</h2>
-        <span className={`text-xs px-2 py-0.5 rounded border font-medium ${regime.color}`}>
-          {regime.label}
-        </span>
-      </div>
-      <p className="text-xs text-secondary">{regime.desc}</p>
+    <Link href={`/company/${opp.ticker}`} className="block group">
+      <div className="card-premium card-aura relative p-5 h-full flex flex-col">
+        {/* Header : rank + badges */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[0.7rem] font-bold uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-400">
+              #{rank}
+            </span>
+            {sectorStyle && sector && (
+              <span className={`text-[0.625rem] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${sectorStyle.bg} ${sectorStyle.text} ${sectorStyle.border}`}>
+                {SECTOR_LABEL[sector]}
+              </span>
+            )}
+            {opp.new_opportunity && (
+              <span className="text-[0.625rem] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                Nouveau
+              </span>
+            )}
+          </div>
+          {score != null && <ScoreGauge value={score} colorClass={scoreColor} size={48} />}
+        </div>
 
-      {/* Indices clés */}
-      <div className="flex gap-x-5 gap-y-3 flex-wrap">
-        {Object.entries(macro.macro).map(([name, data]) => {
-          const chg = data.change_1d;
-          return (
-            <div key={name}>
-              <p className="text-[10px] text-muted uppercase tracking-wide">{name}</p>
-              <p className="text-sm font-mono text-primary font-medium">
-                {data.price != null ? data.price.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) : "—"}
-                {chg != null && (
-                  <span className={`ml-1 text-xs ${chg > 0 ? "text-green-700" : "text-red-700"}`}>
-                    {chg > 0 ? "+" : ""}{chg.toFixed(1)}%
-                  </span>
-                )}
+        {/* Logo + nom */}
+        <div className="flex items-center gap-3 mb-3">
+          <TickerBadge ticker={opp.ticker} size="lg" showName={false} />
+          <div className="min-w-0">
+            <h3 className="text-lg font-bold text-primary leading-tight truncate"
+              style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+              {meta.name}
+            </h3>
+            <p className="text-xs text-muted font-mono">{opp.ticker} · {opp.action_label}</p>
+          </div>
+        </div>
+
+        {/* Highlights */}
+        {opp.highlights?.length > 0 && (
+          <ul className="space-y-1 mb-3 flex-1">
+            {opp.highlights.slice(0, 3).map((h: string, i: number) => (
+              <li key={i} className="text-xs text-secondary leading-snug flex items-start gap-1.5">
+                <span className="text-emerald-600 dark:text-emerald-400 flex-shrink-0">▸</span>
+                <span className="line-clamp-2">{h}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Bottom : change + sparkline + upside */}
+        <div className="flex items-center justify-between gap-2 pt-3 border-t border-edge/40">
+          <div>
+            <p className="text-[0.625rem] uppercase tracking-widest text-muted">1 jour</p>
+            <p className={`text-sm font-bold font-mono ${isUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+              {isUp ? "+" : ""}{change?.toFixed(2)}%
+            </p>
+          </div>
+          <Sparkline ticker={opp.ticker} width={70} height={22} />
+          {opp.upside_vs_target != null && (
+            <div className="text-right">
+              <p className="text-[0.625rem] uppercase tracking-widest text-muted">Upside</p>
+              <p className={`text-sm font-bold font-mono ${opp.upside_vs_target >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                {opp.upside_vs_target > 0 ? "+" : ""}{opp.upside_vs_target.toFixed(0)}%
               </p>
             </div>
-          );
-        })}
-      </div>
-
-      {/* Secteurs */}
-      {(macro.outperformers.length > 0 || macro.underperformers.length > 0) && (
-        <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 text-xs pt-2 border-t border-edge">
-          {macro.outperformers.length > 0 && (
-            <div>
-              <p className="text-muted mb-1 text-[10px] uppercase tracking-wide">Surperformants YTD</p>
-              {macro.outperformers.slice(0, 2).map((s) => (
-                <p key={s.sector} className="text-green-700">
-                  ▲ {s.sector.split("(")[0].trim()} (+{s.outperformance}%)
-                </p>
-              ))}
-            </div>
-          )}
-          {macro.underperformers.length > 0 && (
-            <div>
-              <p className="text-muted mb-1 text-[10px] uppercase tracking-wide">Sous-performants YTD</p>
-              {macro.underperformers.slice(0, 2).map((s) => (
-                <p key={s.sector} className="text-red-700">
-                  ▼ {s.sector.split("(")[0].trim()} ({s.underperformance}%)
-                </p>
-              ))}
-            </div>
           )}
         </div>
-      )}
-    </div>
+      </div>
+    </Link>
   );
 }
 
-function OpportunityCard({ opp, rank }: { opp: ScanOpportunity; rank: number }) {
-  const actionColor =
-    opp.action === "read"      ? "text-amber-600"
-    : opp.action === "buy_small" ? "text-green-700"
-    : "text-blue-700";
+function ScoreGauge({ value, colorClass, size = 48 }: { value: number; colorClass: string; size?: number }) {
+  const pct = Math.min(100, (value / 10) * 100);
+  const radius = size * 0.36;
+  const stroke = size > 50 ? 3 : 2.5;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (pct / 100) * circumference;
+  const center = size / 2;
 
   return (
-    <div className="rounded-lg border border-edge bg-surface p-4 hover:border-navy/30 hover:shadow-sm transition-all duration-150">
-      <div className="flex items-start justify-between gap-4">
-        {/* Rank + ticker */}
-        <div className="flex items-start gap-3">
-          <span className="text-muted text-sm font-mono mt-0.5 w-4 flex-shrink-0">
-            {rank}.
-          </span>
-          <div>
-            <div className="flex items-center gap-2">
-              <Link
-                href={`/company/${opp.ticker}`}
-                className="text-base font-bold text-navy hover:text-navy-hover font-mono"
-              >
-                {opp.ticker}
-              </Link>
-              {opp.new_opportunity && (
-                <span className="text-[10px] font-semibold text-green-700 border border-green-200 bg-green-50 rounded px-1.5 py-0.5">
-                  NOUVEAU
-                </span>
-              )}
-              {opp.times_seen != null && opp.times_seen > 1 && (
-                <span className="text-[10px] text-muted border border-edge rounded px-1.5 py-0.5 bg-bg">
-                  vu {opp.times_seen}×
-                </span>
-              )}
-              {opp.sector_group && (
-                <span className="text-[10px] text-muted border border-edge rounded px-1.5 py-0.5 bg-bg">
-                  {opp.sector_group}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              {opp.current_price && (
-                <span className="text-sm text-primary font-mono font-medium">
-                  {opp.current_price.toLocaleString("fr-FR", { minimumFractionDigits: 2 })}
-                </span>
-              )}
-              <ChangeCell value={opp.change_1d} />
-              {opp.change_1m !== undefined && (
-                <span className="text-xs text-muted">
-                  1M: <ChangeCell value={opp.change_1m} className="text-xs" />
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Score + action */}
-        <div className="flex flex-col items-end gap-1 flex-shrink-0">
-          <ScoreBadge score={opp.scores.composite} size="sm" />
-          <span className={`text-xs font-medium ${actionColor}`}>
-            → {opp.action_label}
-          </span>
-        </div>
-      </div>
-
-      {/* Points forts */}
-      {opp.highlights.length > 0 && (
-        <ul className="mt-3 space-y-0.5">
-          {opp.highlights.map((h, i) => (
-            <li key={i} className="text-xs text-secondary flex gap-1.5">
-              <span className="text-accent flex-shrink-0">▸</span>
-              <span>{h}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* News headline */}
-      {opp.has_catalyst && opp.key_headlines && opp.key_headlines.length > 0 && (
-        <div className="mt-2 px-2.5 py-1.5 rounded bg-surface-alt border border-edge text-xs text-secondary">
-          📰 {opp.key_headlines[0].length > 90 ? opp.key_headlines[0].slice(0, 90) + "…" : opp.key_headlines[0]}
-        </div>
-      )}
-
-      {/* Upside analystes */}
-      {opp.upside_vs_target != null && (
-        <div className="mt-2 text-xs text-muted">
-          Cible analystes :{" "}
-          <span className={opp.upside_vs_target > 0 ? "text-green-700" : "text-red-700"}>
-            {opp.upside_vs_target > 0 ? "+" : ""}{opp.upside_vs_target.toFixed(1)}%
-          </span>
-          {opp.analyst_count && (
-            <span className="text-edge ml-1">({opp.analyst_count} analystes)</span>
-          )}
-        </div>
-      )}
-
-      {/* Scores détail */}
-      <div className="mt-3 grid grid-cols-5 gap-2 sm:gap-5 text-xs text-muted border-t border-edge pt-2">
-        {[
-          ["Qualité", opp.scores.quality],
-          ["Valeur",  opp.scores.valuation],
-          ["Croiss.", opp.scores.growth],
-          ["Momentum", opp.scores.momentum],
-          ["Risque",  opp.scores.risk],
-        ].map(([label, score]) => (
-          <div key={label as string} className="text-center">
-            <div className={`text-xs font-mono font-medium ${(score as number) >= 6.5 ? "text-navy" : "text-muted"}`}>
-              {(score as number).toFixed(1)}
-            </div>
-            <div className="text-muted text-[10px]">{label}</div>
-          </div>
-        ))}
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+        <circle cx={center} cy={center} r={radius} className="fill-none stroke-edge" strokeWidth={stroke} />
+        <circle cx={center} cy={center} r={radius}
+          className={`fill-none ${colorClass}`}
+          strokeWidth={stroke} strokeLinecap="round"
+          strokeDasharray={circumference} strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset 0.6s ease" }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className={`text-xs font-bold ${colorClass}`}
+          style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+          {value.toFixed(1)}
+        </span>
       </div>
     </div>
   );
