@@ -1,238 +1,442 @@
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+"use client";
 
-import { getBrief } from "@/lib/api";
-import { BriefItemCard } from "@/components/brief/BriefItemCard";
-import { MarketSummary } from "@/components/brief/MarketSummary";
-import type { Brief, MarketContext } from "@/lib/api";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { TickerBadge } from "@/components/ui/TickerBadge";
+import { Sparkline } from "@/components/ui/Sparkline";
+import { getTickerMeta, SECTOR_COLORS, SECTOR_LABEL } from "@/lib/tickerMeta";
+import {
+  explainVix, explainRegime, explainSectorRotation,
+  explainIndex, explainTreasury10Y, explainDollar, explainOil, explainGold,
+  buildMarketReasoning, getNewsImpact,
+} from "@/lib/macroExplainer";
 
-async function fetchBrief(): Promise<Brief | null> {
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+async function fetchJSON<T>(url: string): Promise<T | null> {
   try {
-    return await getBrief();
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+    return res.json();
   } catch {
     return null;
   }
 }
 
-export default async function BriefPage() {
-  const brief = await fetchBrief();
+export default function BriefPage() {
+  const today = new Date().toLocaleDateString("fr-FR", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
 
-  const portfolioItems   = brief?.items.filter((i) => i.type === "portfolio_alert")  ?? [];
-  const watchlistItems   = brief?.items.filter((i) => i.type === "watchlist_signal") ?? [];
-  const ideaItems        = brief?.items.filter((i) => i.type === "idea_followup")    ?? [];
-  const opportunityItems = brief?.items.filter((i) => i.type === "opportunity")      ?? [];
-  const analystItems     = brief?.items.filter((i) => i.type === "analyst_thesis")   ?? [];
+  const [brief, setBrief] = useState<any>(undefined);
+  const [macroNews, setMacroNews] = useState<any>(undefined);
+
+  useEffect(() => {
+    fetchJSON<any>(`${API}/brief`).then(setBrief);
+    fetchJSON<any>(`${API}/news/macro?limit=10`).then(setMacroNews);
+  }, []);
+
+  const items = brief?.items ?? [];
+  const portfolioItems   = items.filter((i: any) => i.type === "portfolio_alert");
+  const watchlistItems   = items.filter((i: any) => i.type === "watchlist_signal");
+  const ideaItems        = items.filter((i: any) => i.type === "idea_followup");
+  const opportunityItems = items.filter((i: any) => i.type === "opportunity");
+  const analystItems     = items.filter((i: any) => i.type === "analyst_thesis");
 
   const hasSignals = portfolioItems.length + watchlistItems.length + ideaItems.length + analystItems.length > 0;
 
   return (
-    <div className="w-full space-y-5">
+    <div className="space-y-6 pb-6">
 
-      {!brief && (
-        <div className="rounded-lg border border-edge bg-surface p-6 text-center shadow-sm">
-          <p className="text-secondary text-sm mb-2">Le backend n&apos;est pas accessible.</p>
-          <p className="text-muted text-xs">
-            Lance <code className="text-navy bg-surface-alt px-1 rounded">uvicorn app.main:app --reload</code> dans <code className="text-navy bg-surface-alt px-1 rounded">api/</code>
-          </p>
-        </div>
-      )}
-
-      {brief?.market_context && <MarketContextBanner ctx={brief.market_context} />}
-
-      {brief && brief.item_count === 0 && !opportunityItems.length && (
-        <div className="rounded-lg border border-edge bg-surface p-6 text-center shadow-sm">
-          <p className="text-primary text-sm">Aucun signal notable aujourd&apos;hui.</p>
-          <p className="text-muted text-xs mt-1">
-            Ajoute des tickers à ta watchlist ou à ton portefeuille pour générer un brief.
-          </p>
-        </div>
-      )}
-
-      {brief && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className="lg:col-span-2 space-y-5">
-            {portfolioItems.length > 0 && (
-              <Section title="Portefeuille" tag="▣">
-                {portfolioItems.map((item, i) => <BriefItemCard key={i} item={item} />)}
-              </Section>
-            )}
-            {watchlistItems.length > 0 && (
-              <Section title="Watchlist" tag="◉">
-                {watchlistItems.map((item, i) => <BriefItemCard key={i} item={item} />)}
-              </Section>
-            )}
-            {ideaItems.length > 0 && (
-              <Section title="Idées en suivi" tag="◇">
-                {ideaItems.map((item, i) => <BriefItemCard key={i} item={item} />)}
-              </Section>
-            )}
-            {analystItems.length > 0 && (
-              <Section title="Analyses deep" tag="⧫">
-                {analystItems.map((item, i) => <BriefItemCard key={i} item={item} />)}
-              </Section>
-            )}
-            {!hasSignals && (
-              <div className="rounded-lg border border-edge bg-surface p-6 text-center shadow-sm">
-                <p className="text-secondary text-sm">Aucun signal prioritaire.</p>
-                <p className="text-muted text-xs mt-1">
-                  Les alertes portefeuille, watchlist et idées apparaîtront ici.
-                </p>
-              </div>
-            )}
+      {/* Header de page */}
+      <div className="flex items-end justify-between gap-4 pb-4 border-b border-edge/40">
+        <div className="flex items-center gap-4">
+          <div className="w-1 h-12 bg-gradient-to-b from-accent to-navy rounded-full" />
+          <div>
+            <Link href="/" className="text-xs text-muted hover:text-navy dark:hover:text-accent transition-colors flex items-center gap-1 mb-1">
+              <span>←</span> <span>Retour au tableau de bord</span>
+            </Link>
+            <h1 className="text-2xl font-semibold tracking-[-0.02em] text-primary leading-tight"
+              style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+              Brief du jour
+            </h1>
+            <p className="text-sm text-muted capitalize mt-1">{today}</p>
           </div>
+        </div>
+        {brief?.item_count != null && (
+          <div className="text-right">
+            <p className="text-3xl font-bold text-primary"
+              style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+              {brief.item_count}
+            </p>
+            <p className="text-xs text-muted uppercase tracking-widest mt-0.5">signaux</p>
+          </div>
+        )}
+      </div>
 
-          <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
-            <MarketSummary data={brief.market_summary} />
-            {opportunityItems.length > 0 && (
+      {/* Contexte macro complet */}
+      {brief?.market_context && (
+        <MacroFullPanel ctx={brief.market_context} marketSummary={brief.market_summary} />
+      )}
+
+      {/* Sections par catégorie de signaux */}
+      {brief && hasSignals && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {portfolioItems.length > 0 && (
+            <CategorySection title="Alertes portefeuille" icon="▣" accent="navy" items={portfolioItems} />
+          )}
+          {watchlistItems.length > 0 && (
+            <CategorySection title="Signaux watchlist" icon="◉" accent="navy" items={watchlistItems} />
+          )}
+          {ideaItems.length > 0 && (
+            <CategorySection title="Idées en suivi" icon="◇" accent="emerald" items={ideaItems} />
+          )}
+          {opportunityItems.length > 0 && (
+            <CategorySection title="Opportunités" icon="◎" accent="emerald" items={opportunityItems} />
+          )}
+          {analystItems.length > 0 && (
+            <CategorySection title="Thèses analyste" icon="⧫" accent="amber" items={analystItems} />
+          )}
+        </div>
+      )}
+
+      {/* Pas de signaux */}
+      {brief && !hasSignals && (
+        <div className="card-premium p-8 text-center">
+          <p className="text-primary">Aucun signal prioritaire aujourd&apos;hui.</p>
+          <p className="text-sm text-muted mt-1">
+            Les alertes apparaîtront ici dès qu&apos;un mouvement justifie ton attention.
+          </p>
+        </div>
+      )}
+
+      {/* Fil d'actualités macro */}
+      <NewsSection news={macroNews} />
+
+      {/* Disclaimer */}
+      {brief?.disclaimer && (
+        <p className="text-xs text-muted text-center pt-2">{brief.disclaimer}</p>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * MACRO FULL PANEL — version étendue de la homepage
+ * ════════════════════════════════════════════════════════════════════════ */
+
+function MacroFullPanel({ ctx, marketSummary }: { ctx: any; marketSummary: any }) {
+  const regimeExp = explainRegime(ctx.regime, ctx.regime_label);
+  const vixExp = explainVix(ctx.vix);
+  const rotationExp = explainSectorRotation(ctx.sector_rotation?.leaders, ctx.sector_rotation?.laggards);
+
+  const ms = marketSummary ?? {};
+  const sp500 = ms.SP500;
+  const nasdaq = ms.NASDAQ;
+  const cac40 = ms.CAC40;
+  const us10y = ms.US10Y;
+  const dxy = ms.DXY;
+  const gold = ms.Or;
+  const wti = ms.WTI;
+
+  const reasoning = buildMarketReasoning(
+    ctx.vix,
+    sp500?.change_ytd ?? null, sp500?.change_1m ?? null,
+    us10y?.price ?? null,
+    dxy?.change_1m ?? null,
+    wti?.change_ytd ?? null,
+    gold?.change_ytd ?? null,
+  );
+
+  const TONE_DOT: Record<string, string> = {
+    positive: "bg-emerald-500", negative: "bg-red-500",
+    neutral: "bg-blue-500", warning: "bg-amber-500",
+  };
+
+  return (
+    <div className="card-premium card-aura relative p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-base">🌍</span>
+        <h2 className="section-title">Comprendre le marché aujourd&apos;hui</h2>
+      </div>
+
+      {/* Synthèse */}
+      <div className="rounded-xl border border-edge/50 bg-surface/60 p-4 mb-4">
+        <p className="text-xs font-bold uppercase tracking-widest text-muted mb-2">📊 Pourquoi ce diagnostic ?</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {reasoning.positive.map((s, i) => (
+            <div key={`p${i}`} className="flex items-start gap-2 text-xs text-secondary">
+              <span className="text-emerald-600 dark:text-emerald-400 flex-shrink-0">✓</span>
+              <span className="leading-snug">{s}</span>
+            </div>
+          ))}
+          {reasoning.negative.map((s, i) => (
+            <div key={`n${i}`} className="flex items-start gap-2 text-xs text-secondary">
+              <span className="text-red-600 dark:text-red-400 flex-shrink-0">⚠</span>
+              <span className="leading-snug">{s}</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-primary mt-3 pt-3 border-t border-edge/40 font-medium leading-relaxed">
+          → {reasoning.conclusion}
+        </p>
+      </div>
+
+      {/* Régime + VIX */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <ExplainBlock dot={TONE_DOT[regimeExp.tone]} title={regimeExp.headline} text={regimeExp.detail} />
+        {vixExp && <ExplainBlock dot={TONE_DOT[vixExp.tone]} title={vixExp.headline} text={vixExp.detail} />}
+      </div>
+
+      {/* Indices boursiers en grille */}
+      {sp500 && (
+        <div className="mb-4">
+          <p className="text-xs font-bold uppercase tracking-widest text-muted mb-2">📈 Indices boursiers</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {sp500 && <IndicatorMini name="S&P 500" data={sp500} exp={explainIndex("Le S&P 500", sp500.change_ytd, sp500.change_1m)} />}
+            {nasdaq && <IndicatorMini name="NASDAQ" data={nasdaq} exp={explainIndex("Le NASDAQ", nasdaq.change_ytd, nasdaq.change_1m)} />}
+            {cac40 && <IndicatorMini name="CAC 40" data={cac40} exp={explainIndex("Le CAC 40", cac40.change_ytd, cac40.change_1m)} />}
+          </div>
+        </div>
+      )}
+
+      {/* Macro indicators (taux, dollar, or, pétrole) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        {us10y && <MacroMini name="Taux 10Y US" value={`${us10y.price?.toFixed(2)}%`} exp={explainTreasury10Y(us10y.price, us10y.change_ytd)} />}
+        {dxy && <MacroMini name="Dollar (DXY)" value={dxy.price?.toFixed(1)} exp={explainDollar(dxy.price, dxy.change_1m)} />}
+        {gold && <MacroMini name="Or" value={`${gold.price?.toFixed(0)}$`} exp={explainGold(gold.price, gold.change_ytd)} />}
+        {wti && <MacroMini name="Pétrole WTI" value={`${wti.price?.toFixed(1)}$`} exp={explainOil(wti.price, wti.change_ytd)} />}
+      </div>
+
+      {/* Rotation sectorielle */}
+      {rotationExp && (
+        <div className="pt-3 border-t border-edge/40">
+          <p className="text-xs font-bold uppercase tracking-widest text-muted mb-2">↻ Rotation sectorielle</p>
+          <p className="text-xs text-secondary leading-relaxed mb-2">{rotationExp}</p>
+          {ctx.sector_rotation?.leaders?.length > 0 && (
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-accent text-xs">◎</span>
-                    <h2 className="text-[10px] font-semibold text-muted uppercase tracking-widest">Opportunités</h2>
-                  </div>
-                  <Link href="/opportunities" className="text-[10px] text-navy hover:text-navy-hover transition-colors">
-                    Voir tout →
-                  </Link>
-                </div>
-                <div className="space-y-2">
-                  {opportunityItems.slice(0, 5).map((item, i) => (
-                    <Link key={i} href={`/company/${item.ticker}`}
-                      className="flex items-center justify-between rounded-lg border border-edge bg-surface px-3 py-2.5
-                                 hover:border-navy/30 hover:shadow-sm transition-all duration-150 group">
-                      <div>
-                        <span className="font-mono font-bold text-sm text-navy group-hover:text-navy-hover">{item.ticker}</span>
-                        {item.change_1d != null && (
-                          <span className={`ml-2 text-xs font-mono ${item.change_1d >= 0 ? "text-green-700" : "text-red-700"}`}>
-                            {item.change_1d > 0 ? "+" : ""}{item.change_1d.toFixed(2)}%
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {item.scores?.composite != null && (
-                          <span className={`text-xs font-mono font-medium px-1.5 py-0.5 rounded border
-                            ${item.scores.composite >= 7.5 ? "bg-green-50 text-green-700 border-green-200"
-                              : item.scores.composite >= 5 ? "bg-amber-50 text-amber-700 border-amber-200"
-                              : "bg-red-50 text-red-700 border-red-200"}`}>
-                            {item.scores.composite.toFixed(1)}
-                          </span>
-                        )}
-                        <span className="text-xs text-muted">→ {item.action_label}</span>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-            {brief.aggregated_news && brief.aggregated_news.length > 0 && (
-              <div className="rounded-lg border border-edge bg-surface p-4 shadow-sm">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-accent text-xs">⊕</span>
-                  <h2 className="text-[10px] font-semibold text-muted uppercase tracking-widest">Fil d&apos;actualités</h2>
-                </div>
-                <ul className="space-y-2.5">
-                  {brief.aggregated_news.slice(0, 8).map((item, i) => (
-                    <li key={i} className="border-b border-edge pb-2 last:border-0 last:pb-0">
-                      <div className="flex items-start gap-2">
-                        <span className="text-[10px] font-mono font-bold text-navy flex-shrink-0 mt-0.5">{item.ticker}</span>
-                        <div className="flex-1 min-w-0">
-                          <a href={item.link} target="_blank" rel="noopener noreferrer"
-                            className="text-xs text-primary hover:text-navy leading-snug transition-colors line-clamp-2">
-                            {item.title}
-                          </a>
-                          <p className="text-[10px] text-muted mt-0.5">
-                            {item.publisher}
-                            {item.published && ` · ${new Date(item.published).toLocaleDateString("fr-FR")}`}
-                          </p>
-                        </div>
-                      </div>
+                <p className="text-[0.625rem] font-semibold uppercase tracking-widest text-emerald-700 dark:text-emerald-400 mb-1">↑ Sur-performance</p>
+                <ul className="space-y-0.5">
+                  {ctx.sector_rotation.leaders.slice(0, 5).map((s: any, i: number) => (
+                    <li key={i} className="flex items-center justify-between text-xs">
+                      <span className="text-secondary">{s.sector}</span>
+                      <span className="font-mono text-emerald-600 dark:text-emerald-400 font-medium">
+                        {s.change_1m > 0 ? "+" : ""}{s.change_1m.toFixed(1)}%
+                      </span>
                     </li>
                   ))}
                 </ul>
               </div>
-            )}
-          </div>
+              {ctx.sector_rotation.laggards?.length > 0 && (
+                <div>
+                  <p className="text-[0.625rem] font-semibold uppercase tracking-widest text-red-700 dark:text-red-400 mb-1">↓ Sous-performance</p>
+                  <ul className="space-y-0.5">
+                    {ctx.sector_rotation.laggards.slice(0, 5).map((s: any, i: number) => (
+                      <li key={i} className="flex items-center justify-between text-xs">
+                        <span className="text-secondary">{s.sector}</span>
+                        <span className="font-mono text-red-600 dark:text-red-400 font-medium">
+                          {s.change_1m > 0 ? "+" : ""}{s.change_1m.toFixed(1)}%
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      )}
-
-      {brief && (
-        <p className="text-[10px] text-muted text-center pb-4 tracking-wide">{brief.disclaimer}</p>
       )}
     </div>
   );
 }
 
-const REGIME_STYLES: Record<string, string> = {
-  "risk-on":   "border-green-200  bg-green-50  text-green-800",
-  "risk-off":  "border-red-200    bg-red-50    text-red-800",
-  "calme":     "border-blue-200   bg-blue-50   text-blue-800",
-  "vigilance": "border-amber-200  bg-amber-50  text-amber-800",
-  "neutral":   "border-edge bg-bg text-secondary",
+function ExplainBlock({ dot, title, text }: { dot: string; title: string; text: string }) {
+  return (
+    <div className="rounded-lg bg-surface/40 p-3 border border-edge/30">
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className={`w-2 h-2 rounded-full ${dot} animate-pulse`} />
+        <h5 className="text-sm font-semibold text-primary"
+          style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{title}</h5>
+      </div>
+      <p className="text-xs text-secondary leading-relaxed pl-4">{text}</p>
+    </div>
+  );
+}
+
+function IndicatorMini({ name, data, exp }: { name: string; data: any; exp: any }) {
+  const isUp = (data.change_ytd ?? 0) >= 0;
+  return (
+    <div className="rounded-lg bg-surface/40 p-3 border border-edge/30">
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-[0.7rem] font-bold uppercase tracking-wider text-secondary">{name}</p>
+        <span className={`text-xs font-mono ${isUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+          {isUp ? "+" : ""}{data.change_ytd?.toFixed(1)}% YTD
+        </span>
+      </div>
+      <p className="text-lg font-bold text-primary mb-1"
+        style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{data.price?.toFixed(0)}</p>
+      <p className="text-[0.7rem] text-secondary leading-snug">{exp.detail}</p>
+    </div>
+  );
+}
+
+function MacroMini({ name, value, exp }: { name: string; value: string; exp: any }) {
+  const TONE_BG: Record<string, string> = {
+    positive: "border-emerald-500/30 bg-emerald-500/5",
+    negative: "border-red-500/30 bg-red-500/5",
+    neutral:  "border-blue-500/30 bg-blue-500/5",
+    warning:  "border-amber-500/30 bg-amber-500/5",
+  };
+  return (
+    <div className={`rounded-lg p-3 border ${TONE_BG[exp.tone]}`}>
+      <p className="text-[0.625rem] font-bold uppercase tracking-wider text-muted">{name}</p>
+      <p className="text-base font-bold text-primary mt-0.5"
+        style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{value}</p>
+      <p className="text-[0.7rem] text-secondary leading-snug mt-1 line-clamp-2">{exp.detail}</p>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * SECTIONS PAR CATÉGORIE D'ITEMS
+ * ════════════════════════════════════════════════════════════════════════ */
+
+function CategorySection({ title, icon, accent, items }: {
+  title: string; icon: string; accent: "navy" | "emerald" | "amber"; items: any[];
+}) {
+  return (
+    <div className="card-premium relative p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2.5">
+          <span className="text-lg">{icon}</span>
+          <h2 className="section-title">{title}</h2>
+        </div>
+        <span className="text-xs text-muted">{items.length}</span>
+      </div>
+
+      <ul className="space-y-2">
+        {items.map((item: any, i: number) => (
+          <BriefItemRow key={i} item={item} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function BriefItemRow({ item }: { item: any }) {
+  const meta = getTickerMeta(item.ticker);
+  const isUp = (item.change_1d ?? 0) >= 0;
+  const score = item.scores?.composite;
+
+  return (
+    <Link href={`/company/${item.ticker}`}
+      className="flex items-start gap-3 p-3 rounded-lg hover:bg-bg/60 transition-colors group">
+      <TickerBadge ticker={item.ticker} size="md" showName={true} showSector />
+      <div className="ml-auto flex flex-col items-end gap-1 flex-shrink-0">
+        <Sparkline ticker={item.ticker} width={70} height={22} />
+        <div className="flex items-center gap-2 text-xs">
+          {item.change_1d != null && (
+            <span className={`font-mono font-medium ${isUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+              {isUp ? "+" : ""}{item.change_1d.toFixed(2)}%
+            </span>
+          )}
+          {score != null && (
+            <span className={`text-[0.625rem] font-bold px-1.5 py-0.5 rounded border
+              ${score >= 7.5 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+                : score >= 6.5 ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                : "bg-surface-alt text-muted border-edge"}`}>
+              {score.toFixed(1)}
+            </span>
+          )}
+        </div>
+        <span className="text-[0.7rem] text-muted">{item.action_label}</span>
+      </div>
+    </Link>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * NEWS SECTION — Fil RSS macro
+ * ════════════════════════════════════════════════════════════════════════ */
+
+function NewsSection({ news }: { news: any }) {
+  if (news === undefined) {
+    return <div className="card-premium p-5 h-32 animate-pulse" />;
+  }
+
+  const articles = news?.articles ?? [];
+
+  return (
+    <div className="card-premium p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2.5">
+          <span className="text-lg">📰</span>
+          <h2 className="section-title">Actualité macro & géopolitique</h2>
+        </div>
+        <span className="text-xs text-muted">{news?.count ?? 0} articles</span>
+      </div>
+
+      {articles.length > 0 ? (
+        <ul className="space-y-3">
+          {articles.slice(0, 8).map((a: any, i: number) => <BriefNewsRow key={i} article={a} />)}
+        </ul>
+      ) : (
+        <p className="text-xs text-muted italic py-4 text-center">Aucune actualité macro disponible.</p>
+      )}
+    </div>
+  );
+}
+
+const CATEGORY_ICON: Record<string, string> = {
+  macro: "🏦", geopolitical: "🌍", regulatory: "⚖️", sector: "🏭", company: "🏢",
+};
+const CATEGORY_LABEL: Record<string, string> = {
+  macro: "Macro", geopolitical: "Géopolitique", regulatory: "Réglementaire", sector: "Sectoriel", company: "Société",
 };
 
-function MarketContextBanner({ ctx }: { ctx: MarketContext }) {
-  const style = REGIME_STYLES[ctx.regime] ?? REGIME_STYLES.neutral;
-  const hasExtra = ctx.macro_narrative || (ctx.cross_asset_signals && ctx.cross_asset_signals.length > 0) || ctx.sector_rotation?.leaders?.length;
+function BriefNewsRow({ article }: { article: any }) {
+  const date = article.published ? new Date(article.published) : null;
+  const dateStr = date ? date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+  const langFlag = article.lang === "fr" ? "🇫🇷" : "🇬🇧";
+  const impact = getNewsImpact(article.title, article.summary || "", article.category);
+  const icon = CATEGORY_ICON[article.category] ?? "🏢";
+  const label = CATEGORY_LABEL[article.category] ?? "Société";
 
   return (
-    <div className={`rounded-lg border p-3 shadow-sm space-y-2 ${style}`}>
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-widest opacity-60">Régime</span>
-          <span className="text-xs font-bold">{ctx.regime_label}</span>
-          {ctx.vix != null && (
-            <span className="text-xs opacity-50">· VIX {ctx.vix.toFixed(1)}</span>
-          )}
-        </div>
-        <span className="text-xs opacity-70">{ctx.session_mood}</span>
-      </div>
-      {ctx.macro_narrative && (
-        <p className="text-xs leading-relaxed opacity-80">{ctx.macro_narrative}</p>
-      )}
-      {hasExtra && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-current/10">
-          {ctx.cross_asset_signals && ctx.cross_asset_signals.length > 0 && (
-            <div>
-              <span className="text-[9px] font-semibold uppercase tracking-widest opacity-50">Signaux inter-marchés</span>
-              <ul className="mt-1 space-y-0.5">
-                {ctx.cross_asset_signals.map((signal, i) => (
-                  <li key={i} className="text-[11px] leading-snug opacity-70">• {signal}</li>
-                ))}
-              </ul>
+    <li className="border-l-2 border-accent/30 pl-3 py-1 hover:bg-bg/30 transition-colors rounded-r">
+      <a href={article.link} target="_blank" rel="noopener noreferrer" className="group/news block">
+        <div className="flex items-start gap-2">
+          <span className="text-base flex-shrink-0">{icon}</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+              <span className="text-[0.625rem] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border bg-surface-alt text-secondary border-edge">
+                {label}
+              </span>
+              <span className="text-[0.625rem] text-muted">{langFlag} {article.publisher}</span>
+              {dateStr && <span className="text-[0.625rem] text-muted">· {dateStr}</span>}
             </div>
-          )}
-          {ctx.sector_rotation?.leaders && ctx.sector_rotation.leaders.length > 0 && (
-            <div>
-              <span className="text-[9px] font-semibold uppercase tracking-widest opacity-50">Rotation sectorielle</span>
-              <div className="mt-1 space-y-0.5">
-                {ctx.sector_rotation.leaders.map((s, i) => (
-                  <div key={`l-${i}`} className="text-[11px] opacity-70">
-                    <span className="text-green-700 dark:text-green-400">↑</span> {s.sector} <span className="font-mono">{s.change_1m > 0 ? "+" : ""}{s.change_1m.toFixed(1)}%</span>
-                  </div>
-                ))}
-                {ctx.sector_rotation.laggards.map((s, i) => (
-                  <div key={`g-${i}`} className="text-[11px] opacity-70">
-                    <span className="text-red-700 dark:text-red-400">↓</span> {s.sector} <span className="font-mono">{s.change_1m > 0 ? "+" : ""}{s.change_1m.toFixed(1)}%</span>
-                  </div>
+            <p className="text-sm text-primary leading-snug group-hover/news:text-navy dark:group-hover/news:text-accent transition-colors line-clamp-2">
+              {article.title}
+            </p>
+            {article.tickers_mentioned?.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {article.tickers_mentioned.slice(0, 5).map((t: string) => (
+                  <span key={t} className="text-[0.625rem] font-mono font-bold text-navy dark:text-accent bg-navy/5 dark:bg-accent/10 px-1 py-px rounded">
+                    {t}
+                  </span>
                 ))}
               </div>
+            )}
+            <div className="mt-1.5 pl-2 border-l-2 border-amber-500/40 bg-amber-500/5 rounded-r py-1 px-2">
+              <p className="text-[0.7rem] text-secondary leading-relaxed">💡 {impact.text}</p>
+              {impact.affects && (
+                <p className="text-[0.625rem] text-muted mt-1 font-medium">📊 {impact.affects}</p>
+              )}
             </div>
-          )}
+          </div>
         </div>
-      )}
-    </div>
-  );
-}
-
-function Section({ title, tag, children }: { title: string; tag: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-accent text-xs">{tag}</span>
-        <h2 className="text-[10px] font-semibold text-muted uppercase tracking-widest">{title}</h2>
-        <div className="flex-1 h-px bg-edge" />
-      </div>
-      <div className="space-y-2">{children}</div>
-    </div>
+      </a>
+    </li>
   );
 }
