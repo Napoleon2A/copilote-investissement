@@ -15,6 +15,7 @@ import { getIdeas, submitIdea, getIdea, reviseIdea, getCompanyBrief } from "@/li
 import type { IdeaSummary, IdeaDetail, CompanyBrief } from "@/lib/api";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 import { CompanyPreview } from "@/components/idea/CompanyPreview";
+import { TickerBadge } from "@/components/ui/TickerBadge";
 
 // Recherches récentes stockées en localStorage
 type RecentSearch = { ticker: string; name: string; date: string };
@@ -123,19 +124,28 @@ function IdeaPageContent() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-5">
-      <div>
-        <h1 className="text-lg font-semibold text-primary"
-            style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-          Recherche & Idées
-        </h1>
-        <p className="text-xs text-muted mt-0.5">
-          Tape un ticker pour voir l&apos;analyse, puis soumets-le comme idée pour le suivre.
-        </p>
+    <div className="space-y-5 pb-6">
+      {/* Header style premium */}
+      <div className="flex items-end justify-between gap-4 pb-4 border-b border-edge/40">
+        <div className="flex items-center gap-4">
+          <div className="w-1 h-12 bg-gradient-to-b from-emerald-500 to-emerald-700 rounded-full" />
+          <div>
+            <Link href="/" className="text-xs text-muted hover:text-navy dark:hover:text-accent transition-colors flex items-center gap-1 mb-1">
+              <span>←</span> <span>Retour au tableau de bord</span>
+            </Link>
+            <h1 className="text-2xl font-semibold tracking-[-0.02em] text-primary"
+              style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+              Recherche & Idées
+            </h1>
+            <p className="text-sm text-muted mt-1">
+              Tape un ticker pour voir l&apos;analyse, puis soumets-le comme idée pour le suivre · {ideas.length} idée{ideas.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Barre de recherche */}
-      <form onSubmit={handleSearchSubmit} className="rounded-lg border border-edge bg-surface p-4 shadow-sm">
+      <form onSubmit={handleSearchSubmit} className="card-premium p-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <input value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())}
             placeholder="Ticker (ex: NVDA, AAPL, MC.PA)"
@@ -173,20 +183,14 @@ function IdeaPageContent() {
         <div className="lg:col-span-1 space-y-4">
           {/* Recherches récentes */}
           {recentSearches.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-accent text-xs">⊕</span>
-                <h2 className="text-[10px] font-semibold text-muted uppercase tracking-widest">
-                  Recherches récentes
-                </h2>
-              </div>
+            <div className="card-premium p-3">
+              <h2 className="section-title mb-2">⊕ Récentes</h2>
               <div className="flex flex-wrap lg:flex-col gap-1.5">
                 {recentSearches.map((s) => (
                   <button key={s.ticker} onClick={() => { setTicker(s.ticker); handleSearch(s.ticker); }}
-                    className="text-left rounded border border-edge bg-surface px-2.5 py-1.5
-                               hover:border-navy/30 transition-all text-xs">
-                    <span className="font-mono font-bold text-navy">{s.ticker}</span>
-                    <span className="text-muted ml-1.5 truncate">{s.name}</span>
+                    className="text-left rounded-lg border border-edge bg-bg/40 px-2.5 py-1.5
+                               hover:border-navy/30 hover:bg-bg/80 transition-all">
+                    <TickerBadgeInline ticker={s.ticker} name={s.name} />
                   </button>
                 ))}
               </div>
@@ -194,29 +198,29 @@ function IdeaPageContent() {
           )}
 
           {/* Idées soumises */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-accent text-xs">◇</span>
-              <h2 className="text-[10px] font-semibold text-muted uppercase tracking-widest">
-                Idées ({ideas.length})
-              </h2>
-            </div>
+          <div className="card-premium p-3">
+            <h2 className="section-title mb-2">◇ Idées ({ideas.length})</h2>
             {ideas.length === 0 ? (
-              <p className="text-muted text-xs">Aucune idée soumise.</p>
+              <p className="text-muted text-xs italic">Aucune idée soumise.</p>
             ) : (
               <div className="space-y-1.5">
-                {ideas.map((idea) => (
-                  <button key={idea.id} onClick={() => handleSelectIdea(idea.id)}
-                    className={`w-full text-left rounded border p-2.5 transition-all duration-150 ${
-                      mode === "idea" && selectedIdea?.idea.id === idea.id
-                        ? "border-navy bg-navy/5 shadow-sm"
-                        : "border-edge bg-surface hover:border-navy/30"
-                    }`}>
-                    <p className="text-sm font-mono font-bold text-navy">{idea.ticker}</p>
-                    <p className="text-xs text-secondary mt-0.5 truncate">{idea.name}</p>
-                    <p className="text-[10px] text-muted mt-1">{idea.action} · {idea.conviction}</p>
-                  </button>
-                ))}
+                {ideas.map((idea) => {
+                  const isActive = mode === "idea" && selectedIdea?.idea.id === idea.id;
+                  return (
+                    <button key={idea.id} onClick={() => handleSelectIdea(idea.id)}
+                      className={`w-full text-left rounded-lg border p-2.5 transition-all duration-150 ${
+                        isActive
+                          ? "border-navy bg-navy/5 shadow-sm dark:border-accent dark:bg-accent/10"
+                          : "border-edge bg-bg/40 hover:border-navy/30 hover:bg-bg/80"
+                      }`}>
+                      <TickerBadgeInline ticker={idea.ticker} name={idea.name} />
+                      <p className="text-[0.7rem] text-muted mt-1.5 flex items-center gap-1.5">
+                        <ConvictionDot level={idea.conviction ?? ""} />
+                        <span>{idea.action}</span>
+                      </p>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -342,5 +346,33 @@ export default function IdeaPage() {
     <Suspense fallback={<div className="text-muted text-sm">Chargement…</div>}>
       <IdeaPageContent />
     </Suspense>
+  );
+}
+
+/* ── Helpers ─────────────────────────────────────────────────────────── */
+
+function TickerBadgeInline({ ticker, name }: { ticker: string; name: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <TickerBadge ticker={ticker} size="xs" showName={false} />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-mono font-bold text-navy dark:text-accent leading-none">{ticker}</p>
+        <p className="text-[0.625rem] text-secondary truncate mt-0.5">{name}</p>
+      </div>
+    </div>
+  );
+}
+
+function ConvictionDot({ level }: { level: string }) {
+  const colors: Record<string, string> = {
+    "fort": "bg-emerald-500",
+    "moyen": "bg-amber-500",
+    "faible": "bg-red-400",
+  };
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className={`w-1.5 h-1.5 rounded-full ${colors[level] ?? "bg-muted"}`} />
+      <span className="capitalize">{level}</span>
+    </span>
   );
 }
