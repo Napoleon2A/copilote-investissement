@@ -35,15 +35,24 @@ export default function EarningsPage() {
   }, []);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-5">
-      <div>
-        <h1 className="text-lg font-semibold text-primary"
-            style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-          Earnings Play
-        </h1>
-        <p className="text-xs text-muted mt-0.5">
-          Publications de résultats imminentes — analyse pré-earnings pour anticiper les mouvements
-        </p>
+    <div className="space-y-5 pb-6">
+      {/* Header style premium */}
+      <div className="flex items-end justify-between gap-4 pb-4 border-b border-edge/40">
+        <div className="flex items-center gap-4">
+          <div className="w-1 h-12 bg-gradient-to-b from-amber-500 to-amber-700 rounded-full" />
+          <div>
+            <a href="/" className="text-xs text-muted hover:text-navy dark:hover:text-accent transition-colors flex items-center gap-1 mb-1">
+              <span>←</span> <span>Retour au tableau de bord</span>
+            </a>
+            <h1 className="text-2xl font-semibold tracking-[-0.02em] text-primary"
+              style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+              Earnings Play
+            </h1>
+            <p className="text-sm text-muted mt-1">
+              Publications de résultats imminentes — analyse pré-earnings pour anticiper les mouvements
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Avertissement */}
