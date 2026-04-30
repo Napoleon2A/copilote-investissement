@@ -506,6 +506,125 @@ const IMPACT_RULES: NewsImpactRule[] = [
     impact: "Une hausse du dividende est un signal de confiance fort sur la génération de cash. Particulièrement apprécié sur les staples et les utilities.",
     affects: "Titre ↑ · Profil défensif",
   },
+
+  /* ── Règles supplémentaires : géopolitique avancée ── */
+  {
+    keywords: ["nato"], altKeywords: ["expansion", "membership"],
+    impact: "Toute évolution de l'OTAN affecte l'équilibre géopolitique européen. Bénéficie aux valeurs de défense (Lockheed, RTX, Airbus) et peut peser sur l'énergie russe et les marchés émergents proches.",
+    affects: "Défense ↑ · Énergie russe ↓",
+  },
+  {
+    keywords: ["opec"], altKeywords: ["cut", "production"],
+    impact: "Les coupes de production OPEC font monter le pétrole, profitant aux pétrolières (Exxon, Chevron, TotalEnergies) mais pesant sur les compagnies aériennes, l'automobile et la consommation.",
+    affects: "Pétrolières ↑ · Aérien ↓",
+  },
+  {
+    keywords: ["yuan"], altKeywords: ["devaluation", "weak", "fall"],
+    impact: "Un yuan faible rend les exportations chinoises plus compétitives mais augmente la pression déflationniste mondiale. Pénalise les exportateurs européens (luxe, auto allemande, semi-conducteurs).",
+    affects: "Exportateurs UE ↓",
+  },
+  {
+    keywords: ["bank of japan"], altKeywords: ["intervention", "yen"],
+    impact: "Une intervention de la BoJ sur le yen recalibre les flux de carry trade mondiaux. Peut déclencher des ventes massives sur les actifs risqués (tech US, marchés émergents).",
+    affects: "Actifs risqués sensibles",
+  },
+
+  /* ── Tech & IA ── */
+  {
+    keywords: ["openai"],
+    impact: "Tout ce qui touche OpenAI affecte directement Microsoft (partenaire principal) et indirectement Nvidia (puces), Google/Anthropic (concurrents), Meta (open-source LLaMA).",
+    affects: "MSFT, NVDA, GOOG affectés",
+  },
+  {
+    keywords: ["nvidia"], altKeywords: ["earnings", "demand"],
+    impact: "Nvidia est le baromètre principal de l'IA. Une beat/miss dicte la trajectoire de tous les semi-conducteurs IA (AMD, ASML, Marvell) et des hyperscalers (MSFT, GOOG, META).",
+    affects: "Toute la chaîne IA",
+  },
+  {
+    keywords: ["semiconductor"], altKeywords: ["shortage", "supply"],
+    impact: "Une pénurie de semi-conducteurs ralentit l'auto (Tesla, BMW), l'électronique (Apple) mais profite aux fondeurs avec capacité (TSMC, Samsung, Intel).",
+    affects: "TSMC ↑ · Auto, Apple ↓",
+  },
+  {
+    keywords: ["chip"], altKeywords: ["export", "restrict", "ban"],
+    impact: "Les restrictions d'export de puces vers la Chine pénalisent Nvidia et AMD (~25% des ventes en Chine) et obligent les Chinois à se tourner vers leurs propres fondeurs (SMIC).",
+    affects: "NVDA, AMD ↓ · SMIC ↑",
+  },
+
+  /* ── Énergie ── */
+  {
+    keywords: ["solar"], altKeywords: ["subsid", "incentive", "tariff"],
+    impact: "Les subventions au solaire profitent aux fabricants américains (First Solar, Enphase) et chinois (Longi). Les tarifs sur les panneaux chinois protègent les Américains.",
+    affects: "FSLR, ENPH affectés",
+  },
+  {
+    keywords: ["nuclear"], altKeywords: ["restart", "reactor", "approval"],
+    impact: "Le retour du nucléaire bénéficie aux uraniers (Cameco, Kazatomprom), aux constructeurs (Westinghouse) et aux utilities qui rouvrent (Constellation, Vistra).",
+    affects: "Uranium ↑ · Utilities ↑",
+  },
+
+  /* ── Devises & Macro ── */
+  {
+    keywords: ["recession"], altKeywords: ["confirm", "official", "declared"],
+    impact: "Une récession confirmée déclenche un repli sur les défensives (Coca-Cola, P&G, utilities) et l'or. Les cycliques (auto, banque, tech) souffrent fortement.",
+    affects: "Défensives ↑ · Cycliques ↓",
+  },
+  {
+    keywords: ["yield curve"], altKeywords: ["invert", "inversion"],
+    impact: "Une inversion de la courbe des taux est historiquement précurseur de récession (12-18 mois). Signal de prudence, rotation vers défensives et qualité.",
+    affects: "Signal récession",
+  },
+  {
+    keywords: ["debt ceiling"],
+    impact: "Toute crise du plafond de la dette US fait monter le VIX, baisser le dollar, monter l'or. Les bons du Trésor courts paniquent. Effet temporaire mais brutal.",
+    affects: "VIX ↑ · USD ↓",
+  },
+
+  /* ── M&A & corporate ── */
+  {
+    keywords: ["bid"], altKeywords: ["hostile", "rejected"],
+    impact: "Une OPA hostile fait bondir la cible et baisser l'acquéreur. Si la cible refuse, surveiller les concurrents qui pourraient surenchérir.",
+    affects: "Cible ↑ fortement",
+  },
+  {
+    keywords: ["spin-off"],
+    impact: "Une scission isole une activité pour la valoriser séparément. Le titre principal monte généralement (recentrage), la nouvelle entité dépend de sa thèse propre.",
+    affects: "Titre principal ↑",
+  },
+  {
+    keywords: ["activist"], altKeywords: ["investor", "stake"],
+    impact: "L'arrivée d'un investisseur activiste annonce des changements (cessions, buyback, board change). Hausse temporaire du titre, le succès dépend de la qualité du management.",
+    affects: "Titre ↑ court terme",
+  },
+
+  /* ── Réglementations spécifiques ── */
+  {
+    keywords: ["dma"], altKeywords: ["digital markets"],
+    impact: "Le Digital Markets Act européen force l'ouverture des plateformes (App Store, Play Store). Pénalise Apple/Google (perte de commission 30%) et bénéficie aux développeurs tiers.",
+    affects: "AAPL marges, GOOG affectés",
+  },
+  {
+    keywords: ["ai act"], altKeywords: ["eu", "regulation"],
+    impact: "Le règlement IA européen impose des obligations de transparence et de supervision. Coûts de conformité pour OpenAI, Microsoft, Google, mais barrière à l'entrée pour les concurrents.",
+    affects: "Coûts conformité IA ↑",
+  },
+
+  /* ── Earnings spécifiques ── */
+  {
+    keywords: ["margin"], altKeywords: ["compression", "decline"],
+    impact: "Une compression de marges signale soit pression sur les prix, soit hausse des coûts. Sanctionné fortement, surtout sur les valeurs de croissance avec multiples élevés.",
+    affects: "Titre ↓ · Multiples sous pression",
+  },
+  {
+    keywords: ["forward guidance"], altKeywords: ["raised", "increase"],
+    impact: "Un relèvement des prévisions trimestrielles est l'un des signaux les plus puissants. Le titre monte généralement de 5-15% et entraîne le secteur dans son sillage.",
+    affects: "Titre + secteur ↑",
+  },
+  {
+    keywords: ["forward guidance"], altKeywords: ["cut", "lower"],
+    impact: "Un abaissement des prévisions est sanctionné brutalement (-10 à -25%). Effet de halo négatif sur les concurrents directs.",
+    affects: "Titre + secteur ↓",
+  },
 ];
 
 export interface ImpactDetail {
