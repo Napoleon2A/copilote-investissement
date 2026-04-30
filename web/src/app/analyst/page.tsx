@@ -177,26 +177,37 @@ export default function AnalystPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-primary">Analyste IA</h1>
-          <p className="text-sm text-secondary mt-0.5">
-            Analyses deep via Claude API — raisonnement investisseur
-          </p>
+    <div className="space-y-6 pb-6">
+      {/* Header style premium */}
+      <div className="flex items-end justify-between gap-4 pb-4 border-b border-edge/40 flex-wrap">
+        <div className="flex items-center gap-4">
+          <div className="w-1 h-12 bg-gradient-to-b from-emerald-500 to-emerald-700 rounded-full" />
+          <div>
+            <a href="/" className="text-xs text-muted hover:text-navy dark:hover:text-accent transition-colors flex items-center gap-1 mb-1">
+              <span>←</span> <span>Retour au tableau de bord</span>
+            </a>
+            <h1 className="text-2xl font-semibold tracking-[-0.02em] text-primary"
+              style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+              Analyste IA
+            </h1>
+            <p className="text-sm text-muted mt-1">
+              Thèses deep via Claude API · raisonnement investisseur · 12 sources croisées
+            </p>
+          </div>
         </div>
 
         {/* Budget badge */}
         {budget && (
-          <div className="rounded-lg border border-edge bg-surface px-3 py-2 text-xs">
-            <span className="text-muted">Budget {budget.month} : </span>
-            <span className="font-mono font-bold text-primary">
-              {budget.monthly_spend.toFixed(2)}$
-            </span>
-            <span className="text-muted"> / {budget.monthly_limit.toFixed(2)}$</span>
-            <span className={`ml-2 font-mono ${budget.remaining > 1 ? "text-green-700 dark:text-green-400" : budget.remaining > 0 ? "text-amber-700 dark:text-amber-400" : "text-red-700 dark:text-red-400"}`}>
-              ({budget.remaining.toFixed(2)}$ restant)
+          <div className="card-premium px-4 py-3 text-xs">
+            <p className="text-[0.625rem] font-bold uppercase tracking-widest text-muted mb-1">Budget {budget.month}</p>
+            <div className="flex items-baseline gap-1">
+              <span className="font-mono font-bold text-primary text-lg">
+                {budget.monthly_spend.toFixed(2)}$
+              </span>
+              <span className="text-muted text-xs"> / {budget.monthly_limit.toFixed(2)}$</span>
+            </div>
+            <span className={`text-[0.7rem] font-mono ${budget.remaining > 1 ? "text-emerald-700 dark:text-emerald-400" : budget.remaining > 0 ? "text-amber-700 dark:text-amber-400" : "text-red-700 dark:text-red-400"}`}>
+              {budget.remaining.toFixed(2)}$ restant
             </span>
           </div>
         )}
