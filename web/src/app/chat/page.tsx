@@ -68,16 +68,22 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto flex flex-col h-[calc(100vh-100px)] sm:h-[calc(100vh-120px)]">
-      <div className="flex items-baseline justify-between mb-4">
-        <div>
-          <h1 className="text-lg font-semibold text-primary"
+    <div className="flex flex-col h-[calc(100vh-100px)] sm:h-[calc(100vh-120px)]">
+      <div className="flex items-end justify-between gap-4 pb-4 border-b border-edge/40 mb-4">
+        <div className="flex items-center gap-4">
+          <div className="w-1 h-12 bg-gradient-to-b from-emerald-500 to-emerald-700 rounded-full" />
+          <div>
+            <a href="/" className="text-xs text-muted hover:text-navy dark:hover:text-accent transition-colors flex items-center gap-1 mb-1">
+              <span>←</span> <span>Retour au tableau de bord</span>
+            </a>
+            <h1 className="text-2xl font-semibold tracking-[-0.02em] text-primary"
               style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-            Chatbot
-          </h1>
-          <p className="text-xs text-muted mt-0.5">
-            Analyse, opportunités, news, concepts — en langage naturel
-          </p>
+              Chatbot
+            </h1>
+            <p className="text-sm text-muted mt-1">
+              Analyse, opportunités, news, concepts — en langage naturel
+            </p>
+          </div>
         </div>
       </div>
 

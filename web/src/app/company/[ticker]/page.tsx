@@ -59,21 +59,24 @@ export default async function CompanyPage({ params }: Props) {
   const actionColor = ACTION_COLORS[brief.action] ?? ACTION_COLORS.hold;
 
   return (
-    <div className="max-w-3xl mx-auto space-y-5">
+    <div className="space-y-5 pb-6">
 
-      {/* En-tête */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <Link href="/" className="text-xs text-muted hover:text-navy transition-colors">
-            ← Brief
-          </Link>
-          <h1 className="mt-1 text-2xl font-bold font-mono text-navy">
-            {upperTicker}
-          </h1>
-          {brief.name && <p className="text-sm text-secondary">{brief.name}</p>}
-          {brief.sector && <p className="text-[10px] text-muted mt-0.5 uppercase tracking-wide">{brief.sector}</p>}
+      {/* En-tête style premium */}
+      <div className="flex items-start justify-between gap-4 pb-4 border-b border-edge/40">
+        <div className="flex items-center gap-4">
+          <div className="w-1 h-14 bg-gradient-to-b from-accent to-navy rounded-full" />
+          <div>
+            <Link href="/" className="text-xs text-muted hover:text-navy dark:hover:text-accent transition-colors flex items-center gap-1 mb-1">
+              <span>←</span> <span>Retour au tableau de bord</span>
+            </Link>
+            <h1 className="text-3xl font-bold font-mono text-navy dark:text-accent leading-none">
+              {upperTicker}
+            </h1>
+            {brief.name && <p className="text-base text-primary mt-1.5 font-medium">{brief.name}</p>}
+            {brief.sector && <p className="text-xs text-muted mt-0.5 uppercase tracking-wide">{brief.sector}</p>}
+          </div>
         </div>
-        <div className={`rounded-full border px-4 py-1.5 text-xs font-semibold flex-shrink-0 ${actionColor}`}>
+        <div className={`rounded-full border px-4 py-2 text-sm font-semibold flex-shrink-0 ${actionColor}`}>
           → {brief.action_label}
         </div>
       </div>
