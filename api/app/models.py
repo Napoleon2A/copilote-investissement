@@ -268,3 +268,59 @@ class Prediction(SQLModel, table=True):
     price_1m: Optional[float] = None
     price_3m: Optional[float] = None
     resolved: bool = Field(default=False, index=True)
+
+
+# ─── Analyse deep Claude API ────────────────────────────────────────────────
+
+class InvestmentAnalysis(SQLModel, table=True):
+    """Analyse deep générée par Claude pour un ticker."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    ticker: str = Field(index=True)
+    # Sections flexibles — certaines peuvent être vides si non pertinentes
+    business_summary: Optional[str] = None
+    competitive_moat: Optional[str] = None
+    value_chain: Optional[str] = None
+    financial_dynamics: Optional[str] = None
+    current_momentum: Optional[str] = None
+    specific_risks: Optional[str] = None
+    investment_thesis: Optional[str] = None
+    # Verdict (obligatoire)
+    verdict_action: str          # buy / watch / avoid
+    verdict_conviction: str      # faible / moyen / élevé
+    verdict_horizon: Optional[str] = None
+    ideal_entry_price: Optional[float] = None
+    one_liner: Optional[str] = None  # Résumé en une phrase de la thèse
+    # Métadonnées
+    data_sources: Optional[str] = None  # JSON des sources utilisées
+    llm_model: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: float = 0.0
+    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    expires_at: Optional[datetime] = None  # Cache 7 jours
+
+
+class WeeklySelection(SQLModel, table=True):
+    """Sélection hebdomadaire des meilleures thèses."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    week_start: date
+    tickers: str                 # JSON list
+    selection_rationale: str     # Pourquoi ces tickers
+    generated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class LLMUsageLog(SQLModel, table=True):
+    """
+    Log de chaque appel à l'API Claude — pour le suivi budget.
+    Les appels ratés sont aussi loggés (l'input est facturé même en cas d'erreur).
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    purpose: str                 # "deep_analysis" | "weekly_triage" | "weekly_selection"
+    ticker: Optional[str] = None
+    model: str                   # "claude-sonnet-4-20250514" etc.
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: float = 0.0
+    success: bool = True
+    error_message: Optional[str] = None
+    called_at: datetime = Field(default_factory=datetime.utcnow)

@@ -31,8 +31,9 @@ export default async function DashboardPage() {
   const watchlistItems  = brief?.items.filter((i) => i.type === "watchlist_signal") ?? [];
   const ideaItems       = brief?.items.filter((i) => i.type === "idea_followup")    ?? [];
   const opportunityItems= brief?.items.filter((i) => i.type === "opportunity")      ?? [];
+  const analystItems    = brief?.items.filter((i) => i.type === "analyst_thesis")   ?? [];
 
-  const hasSignals = portfolioItems.length + watchlistItems.length + ideaItems.length > 0;
+  const hasSignals = portfolioItems.length + watchlistItems.length + ideaItems.length + analystItems.length > 0;
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
@@ -89,6 +90,13 @@ export default async function DashboardPage() {
             {ideaItems.length > 0 && (
               <Section title="Idées en suivi" tag="◇">
                 {ideaItems.map((item, i) => <BriefItemCard key={i} item={item} />)}
+              </Section>
+            )}
+
+            {/* Thèses analyste */}
+            {analystItems.length > 0 && (
+              <Section title="Analyses deep" tag="⧫">
+                {analystItems.map((item, i) => <BriefItemCard key={i} item={item} />)}
               </Section>
             )}
 

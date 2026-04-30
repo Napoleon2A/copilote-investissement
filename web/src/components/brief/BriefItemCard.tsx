@@ -4,14 +4,21 @@ import { ScoreBadge } from "@/components/ui/ScoreBadge";
 import type { BriefItem, BriefPosition } from "@/lib/api";
 
 const ACTION_COLORS: Record<string, string> = {
-  watch:         "text-blue-700",
-  read:          "text-amber-700",
-  buy_small:     "text-green-700",
-  add:           "text-green-700",
-  reduce:        "text-orange-600",
-  avoid:         "text-red-700",
+  watch:         "text-blue-700 dark:text-blue-400",
+  read:          "text-amber-700 dark:text-amber-400",
+  buy_small:     "text-green-700 dark:text-green-400",
+  buy:           "text-green-700 dark:text-green-400",
+  add:           "text-green-700 dark:text-green-400",
+  reduce:        "text-orange-600 dark:text-orange-400",
+  avoid:         "text-red-700 dark:text-red-400",
   hold:          "text-secondary",
-  review_thesis: "text-purple-700",
+  review_thesis: "text-purple-700 dark:text-purple-400",
+};
+
+const VERDICT_BADGE: Record<string, string> = {
+  buy: "bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700",
+  watch: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700",
+  avoid: "bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700",
 };
 
 export function BriefItemCard({ item }: { item: BriefItem }) {
@@ -57,6 +64,49 @@ export function BriefItemCard({ item }: { item: BriefItem }) {
         <p className="text-sm text-secondary mt-2 leading-relaxed">
           {item.why_now}
         </p>
+      )}
+
+      {/* Analyst thesis — rendu enrichi */}
+      {item.analyst_data && (
+        <div className="mt-3 space-y-2 border-t border-edge pt-2">
+          {/* Verdict badges */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border uppercase ${VERDICT_BADGE[item.analyst_data.verdict_action] ?? VERDICT_BADGE.watch}`}>
+              {item.analyst_data.verdict_action}
+            </span>
+            <span className="text-[10px] text-muted">
+              Conviction : <strong className="text-primary">{item.analyst_data.verdict_conviction}</strong>
+            </span>
+            {item.analyst_data.verdict_horizon && (
+              <span className="text-[10px] text-muted">
+                Horizon : <strong className="text-primary">{item.analyst_data.verdict_horizon}</strong>
+              </span>
+            )}
+            {item.analyst_data.ideal_entry_price != null && (
+              <span className="text-[10px] text-muted">
+                Entrée : <strong className="text-primary font-mono">${item.analyst_data.ideal_entry_price.toFixed(0)}</strong>
+              </span>
+            )}
+          </div>
+          {/* Business summary court */}
+          {item.analyst_data.business_summary && (
+            <p className="text-xs text-secondary leading-relaxed line-clamp-3">
+              {item.analyst_data.business_summary}
+            </p>
+          )}
+          {/* Risques */}
+          {item.analyst_data.specific_risks && (
+            <p className="text-[10px] text-muted leading-relaxed line-clamp-2">
+              Risques : {item.analyst_data.specific_risks}
+            </p>
+          )}
+          {/* Date */}
+          {item.analyst_data.generated_at && (
+            <p className="text-[10px] text-muted">
+              Analyse du {new Date(item.analyst_data.generated_at).toLocaleDateString("fr-FR")}
+            </p>
+          )}
+        </div>
       )}
 
       {/* P&L de la position */}

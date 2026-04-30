@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/watchlist",    label: "Watchlist",    icon: "◉" },
   { href: "/portfolio",    label: "Portefeuille", icon: "▣" },
   { href: "/idea",         label: "Recherche",    icon: "◇" },
+  { href: "/analyst",      label: "Analyste",     icon: "⧫" },
 ];
 
 /**

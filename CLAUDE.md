@@ -23,9 +23,9 @@ Le DataProvider Protocol est prêt pour brancher d'autres sources de données.
 
 ## Architecture backend
 
-### Routers (12)
+### Routers (13)
 `companies`, `watchlist`, `portfolio`, `ideas`, `brief`, `scanner`, `chat`,
-`earnings`, `alerts`, `risk` + health/root
+`earnings`, `alerts`, `risk`, `analyst` + health/root
 
 ### Services
 | Service | Rôle |
@@ -41,12 +41,16 @@ Le DataProvider Protocol est prêt pour brancher d'autres sources de données.
 | `earnings_service.py` | Scanner des publications de résultats à venir |
 | `news_aggregator.py` | Agrégation et déduplication des news multi-tickers |
 | `company_utils.py` | Utilitaire partagé get_or_create_company |
+| `web_research.py` | Google News RSS, SEC EDGAR API, scraping site corporate, comparaison concurrents |
+| `llm_service.py` | Client Claude API avec hard-cap 3$/mois, BudgetTracker, logging tokens |
+| `investment_analyst.py` | Agent Warren Buffett : collecte multi-sources → prompt → Claude → thèse. Prompt clipboard gratuit |
 | `data_provider.py` | Interface Protocol pour futurs providers (IBKR) |
 
 ### Modèles DB (models.py)
 Company, Watchlist, WatchlistItem, Portfolio, Position, Transaction,
 InvestmentThesis, UserIdea, IdeaRevision, PriceSnapshot, Alert,
-SeenOpportunity, AnalysisLog, Prediction
+SeenOpportunity, AnalysisLog, Prediction, InvestmentAnalysis,
+WeeklySelection, LLMUsageLog
 
 ### Données yfinance — clés snake_case
 `get_fundamentals()` retourne des clés snake_case (ex: `operating_margin`, `debt_to_equity`,
@@ -58,7 +62,7 @@ SeenOpportunity, AnalysisLog, Prediction
 ### Pages (app/)
 `/` (Brief), `/opportunities`, `/earnings`, `/alerts`, `/watchlist`,
 `/portfolio` (avec calculateur de risque), `/idea` (recherche + idée fusionnées),
-`/chat`, `/company/[ticker]`
+`/chat`, `/company/[ticker]`, `/analyst` (analyse deep + sélection hebdo)
 
 ### Style
 - Dark mode via `darkMode: "class"` + CSS variables RGB channels dans `globals.css`
@@ -74,6 +78,8 @@ SeenOpportunity, AnalysisLog, Prediction
 | `globals.css` | Variables CSS (light + dark), animations |
 | `tailwind.config.js` | Tokens sémantiques, darkMode: "class" |
 | `components/layout/Sidebar.tsx` | Navigation principale |
+| `components/analyst/ExpandableThesisCard.tsx` | Card extensible pour thèses d'investissement |
+| `components/ui/Skeleton.tsx` | Composants skeleton pour loading states |
 
 ## Conventions
 
@@ -137,6 +143,19 @@ Claude API (Sonnet) est utilisé pour les analyses deep — avec gardes-fous str
 - **Anti-hallucination** : Claude reçoit UNIQUEMENT des données collectées et vérifiées. Le prompt interdit d'inventer des faits.
 - **Cache** : analyses valides 7 jours, pas de re-génération inutile
 - **Optimisation coût** : Haiku pour le tri, Sonnet pour le deep uniquement
+
+## Approche prompt clipboard (prioritaire)
+
+Le système privilégie la génération de prompts à copier-coller dans claude.ai (gratuit avec
+l'abonnement) plutôt que l'API Claude payante. Le flux :
+
+1. L'utilisateur clique "Générer le prompt" sur la page Analyste
+2. Le backend collecte 12+ sources gratuites (yfinance deep, Google News, SEC EDGAR, site corporate, macro)
+3. Un prompt de ~20k caractères est construit avec toutes les données + instructions pour Claude
+4. L'utilisateur copie → colle dans claude.ai → Claude analyse + complète avec ses propres recherches
+5. L'utilisateur colle la réponse dans la zone d'import → stockée en DB → affichée dans Brief + Analyste
+
+L'option API (0.15$/analyse) reste disponible mais secondaire.
 
 ## Stratégie de découverte d'opportunités
 

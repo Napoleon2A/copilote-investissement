@@ -245,6 +245,97 @@ export const calculatePositionSize = (data: PositionSizeRequest) =>
 export const getStopLoss = (ticker: string) =>
   request<StopLossResult>(`/risk/stop-loss/${ticker}`);
 
+// ── Analyst (Claude API) ─────────────────────────────────────────────────────
+
+export const analyzeDeep = (ticker: string) =>
+  request<DeepAnalysis>(`/analyst/analyze/${ticker}`, { method: "POST" });
+
+export const runWeeklySelection = () =>
+  request<WeeklySelectionResult>("/analyst/run-weekly", { method: "POST" });
+
+export const getWeeklySelection = () =>
+  request<WeeklySelectionResult>("/analyst/weekly-selection");
+
+export const getAnalystBudget = () =>
+  request<AnalystBudget>("/analyst/budget");
+
+export const getAnalysis = (ticker: string) =>
+  request<{ analysis: DeepAnalysis | null }>(`/analyst/analysis/${ticker}`);
+
+export const getPromptForClipboard = (ticker: string) =>
+  request<PromptResult>(`/analyst/prompt/${ticker}`);
+
+export const getWeeklyPromptForClipboard = () =>
+  request<WeeklyPromptResult>("/analyst/prompt/weekly");
+
+export interface WeeklyPromptResult {
+  tickers: string[];
+  scan_count: number;
+  prompt: string;
+  data_sources: Record<string, boolean>;
+  char_count: number;
+  estimated_tokens: number;
+}
+
+export interface PromptResult {
+  ticker: string;
+  company_name: string;
+  prompt: string;
+  data_sources: Record<string, boolean>;
+  char_count: number;
+  estimated_tokens: number;
+}
+
+export interface DeepAnalysis {
+  ticker: string;
+  business_summary?: string | null;
+  competitive_moat?: string | null;
+  value_chain?: string | null;
+  financial_dynamics?: string | null;
+  current_momentum?: string | null;
+  specific_risks?: string | null;
+  investment_thesis?: string | null;
+  verdict_action: string;
+  verdict_conviction: string;
+  verdict_horizon?: string | null;
+  ideal_entry_price?: number | null;
+  one_liner?: string | null;
+  generated_at: string;
+  cost_usd: number;
+  from_cache?: boolean;
+}
+
+export interface WeeklySelectionResult {
+  selection: {
+    week_start: string;
+    rationale: string;
+    generated_at: string;
+  } | null;
+  theses: DeepAnalysis[];
+}
+
+export interface AnalystBudget {
+  monthly_spend: number;
+  monthly_limit: number;
+  remaining: number;
+  month: string;
+}
+
+export const importAnalysis = (ticker: string, analysisText: string) =>
+  request<DeepAnalysis>(`/analyst/import/${ticker}`, {
+    method: "POST",
+    body: JSON.stringify({ analysis_text: analysisText }),
+  });
+
+export const importWeeklyAnalysis = (tickers: string[], analysisText: string) =>
+  request<{ id: number; tickers: string[]; selection_rationale: string }>(
+    "/analyst/import-weekly",
+    {
+      method: "POST",
+      body: JSON.stringify({ analysis_text: analysisText, tickers }),
+    }
+  );
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface PositionSizeRequest {
@@ -333,6 +424,18 @@ export interface BriefPosition {
   currency: string;
 }
 
+export interface BriefAnalystData {
+  verdict_action: string;
+  verdict_conviction: string;
+  verdict_horizon?: string | null;
+  ideal_entry_price?: number | null;
+  one_liner?: string | null;
+  business_summary?: string | null;
+  investment_thesis?: string | null;
+  specific_risks?: string | null;
+  generated_at?: string | null;
+}
+
 export interface BriefItem {
   ticker: string;
   type: string;
@@ -347,6 +450,7 @@ export interface BriefItem {
   priority: number;
   why_now: string;
   position?: BriefPosition | null;
+  analyst_data?: BriefAnalystData | null;
 }
 
 export interface MarketIndex {

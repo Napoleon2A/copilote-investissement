@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -17,6 +18,10 @@ class Settings(BaseSettings):
 
     # Providers de données
     market_data_provider: str = "yfinance"
+
+    # Claude API (moteur de raisonnement pour analyses deep)
+    anthropic_api_key: Optional[str] = None
+    analyst_monthly_budget_usd: float = 3.0  # Hard-cap mensuel en dollars
 
     # Scheduler
     scheduler_enabled: bool = True

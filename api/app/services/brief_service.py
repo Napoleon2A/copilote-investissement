@@ -285,6 +285,97 @@ def generate_daily_brief(
     market_summary = _get_market_summary()
     market_context = _get_market_context(market_summary)
 
+    # ── Thèses analyste récentes (depuis la DB) ──────────────────────────
+    try:
+        import asyncio
+        from app.database import AsyncSessionLocal
+        from sqlmodel import select
+        from app.models import InvestmentAnalysis
+
+        async def _fetch_recent_theses():
+            async with AsyncSessionLocal() as session:
+                stmt = (
+                    select(InvestmentAnalysis)
+                    .where(InvestmentAnalysis.expires_at > datetime.utcnow())
+                    .order_by(InvestmentAnalysis.generated_at.desc())
+                    .limit(5)
+                )
+                result = await session.exec(stmt)
+                return result.all()
+
+        # Exécuter l'async dans le contexte sync du brief
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # On est dans un contexte async (FastAPI) — créer une task
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    recent_theses = pool.submit(
+                        lambda: asyncio.run(_fetch_recent_theses())
+                    ).result(timeout=5)
+            else:
+                recent_theses = loop.run_until_complete(_fetch_recent_theses())
+        except Exception:
+            recent_theses = []
+
+        # Enrichir les items existants avec les données analyste si disponibles
+        # et ajouter les thèses qui ne sont pas encore dans le brief
+        existing_tickers = {item["ticker"]: item for item in top_items}
+        for thesis in recent_theses:
+            if thesis.ticker in existing_tickers:
+                # Enrichir l'item existant avec les données analyste
+                existing_tickers[thesis.ticker]["analyst_data"] = {
+                    "verdict_action": thesis.verdict_action,
+                    "verdict_conviction": thesis.verdict_conviction,
+                    "verdict_horizon": thesis.verdict_horizon,
+                    "ideal_entry_price": thesis.ideal_entry_price,
+                    "one_liner": thesis.one_liner,
+                    "business_summary": thesis.business_summary,
+                    "investment_thesis": thesis.investment_thesis,
+                    "specific_risks": thesis.specific_risks,
+                    "generated_at": thesis.generated_at.isoformat() if thesis.generated_at else None,
+                }
+                continue
+            thesis_item = {
+                "ticker": thesis.ticker,
+                "type": "analyst_thesis",
+                "context": "analyst",
+                "current_price": None,
+                "change_1d": None,
+                "change_1m": None,
+                "signals": [],
+                "scores": {},
+                "action": thesis.verdict_action or "watch",
+                "action_label": ACTIONS.get(thesis.verdict_action, "Surveiller"),
+                "priority": 3,  # haute priorité — c'est du raisonnement deep
+                "why_now": thesis.one_liner or f"Analyse deep : {thesis.verdict_action} — conviction {thesis.verdict_conviction}",
+                "position": None,
+                "analyst_data": {
+                    "verdict_action": thesis.verdict_action,
+                    "verdict_conviction": thesis.verdict_conviction,
+                    "verdict_horizon": thesis.verdict_horizon,
+                    "ideal_entry_price": thesis.ideal_entry_price,
+                    "one_liner": thesis.one_liner,
+                    "business_summary": thesis.business_summary,
+                    "investment_thesis": thesis.investment_thesis,
+                    "specific_risks": thesis.specific_risks,
+                    "generated_at": thesis.generated_at.isoformat() if thesis.generated_at else None,
+                },
+                "generated_at": thesis.generated_at.isoformat() if thesis.generated_at else datetime.utcnow().isoformat(),
+            }
+            # Enrichir avec prix actuel
+            try:
+                changes = get_price_changes(thesis.ticker)
+                if changes:
+                    thesis_item["current_price"] = changes.get("current_price")
+                    thesis_item["change_1d"] = changes.get("change_1d")
+                    thesis_item["change_1m"] = changes.get("change_1m")
+            except Exception:
+                pass
+            top_items.append(thesis_item)
+    except Exception as e:
+        logger.error(f"Erreur chargement thèses analyste: {e}")
+
     # Agrégation des news de tous les tickers suivis
     from app.services.news_aggregator import aggregate_news
     all_tickers = list(set(portfolio_tickers + watchlist_tickers + idea_tickers))

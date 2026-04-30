@@ -285,6 +285,249 @@ def get_earnings_calendar(ticker: str) -> dict:
         return {}
 
 
+def get_deep_profile(ticker: str) -> dict:
+    """
+    Profil approfondi d'une entreprise — exploite toutes les données yfinance disponibles.
+
+    Retourne un dict structuré avec :
+      - identity : description business, management, employés, site web
+      - ownership : insiders, institutionnels, insider transactions récentes
+      - analyst_view : recommendations, price targets, upgrades/downgrades
+      - earnings_track : historique EPS actual vs estimate (streak de beats)
+      - financials : income statement, balance sheet, cashflow (3 dernières années)
+      - governance : scores de risque audit/board/compensation
+      - short_interest : short ratio, short % of float
+
+    Cache 30 min. Chaque sous-appel est isolé en try/except pour ne jamais casser
+    même si une donnée est indisponible.
+    """
+    key = (ticker.upper(), "deep_profile")
+    cached = _cache_get(key, 1800)  # 30 min
+    if cached is not None:
+        return cached
+
+    stock = yf.Ticker(ticker.upper())
+    info = get_company_info(ticker)
+    result = {}
+
+    # ── Identity ──────────────────────────────────────────────────────────
+    result["identity"] = {
+        "long_business_summary": info.get("longBusinessSummary"),
+        "full_time_employees": info.get("fullTimeEmployees"),
+        "website": info.get("website"),
+        "beta": info.get("beta"),
+        "city": info.get("city"),
+        "state": info.get("state"),
+        "country": info.get("country"),
+        "sector": info.get("sector"),
+        "industry": info.get("industry"),
+    }
+
+    # Management (companyOfficers)
+    try:
+        officers = info.get("companyOfficers", [])
+        result["identity"]["officers"] = [
+            {
+                "name": o.get("name"),
+                "title": o.get("title"),
+                "total_pay": o.get("totalPay"),
+                "age": o.get("age"),
+            }
+            for o in (officers or [])[:5]
+        ]
+    except Exception:
+        result["identity"]["officers"] = []
+
+    # ── Ownership ─────────────────────────────────────────────────────────
+    result["ownership"] = {
+        "held_percent_insiders": info.get("heldPercentInsiders"),
+        "held_percent_institutions": info.get("heldPercentInstitutions"),
+    }
+
+    # Top institutional holders
+    try:
+        inst = stock.institutional_holders
+        if inst is not None and not inst.empty:
+            result["ownership"]["top_institutional"] = [
+                {
+                    "holder": row.get("Holder", ""),
+                    "shares": int(row.get("Shares", 0)),
+                    "pct_out": float(row.get("pctHeld", 0)) if row.get("pctHeld") else None,
+                    "value": float(row.get("Value", 0)) if row.get("Value") else None,
+                }
+                for _, row in inst.head(10).iterrows()
+            ]
+        else:
+            result["ownership"]["top_institutional"] = []
+    except Exception as e:
+        logger.debug(f"Deep profile {ticker}: institutional_holders indispo: {e}")
+        result["ownership"]["top_institutional"] = []
+
+    # Insider transactions
+    try:
+        insiders = stock.insider_transactions
+        if insiders is not None and not insiders.empty:
+            result["ownership"]["insider_transactions"] = [
+                {
+                    "insider": row.get("Insider", ""),
+                    "relation": row.get("Insider Relation", ""),
+                    "transaction": row.get("Transaction", ""),
+                    "shares": int(row.get("Shares", 0)) if pd.notna(row.get("Shares")) else None,
+                    "date": str(row.get("Start Date", ""))[:10] if pd.notna(row.get("Start Date")) else None,
+                }
+                for _, row in insiders.head(10).iterrows()
+            ]
+        else:
+            result["ownership"]["insider_transactions"] = []
+    except Exception as e:
+        logger.debug(f"Deep profile {ticker}: insider_transactions indispo: {e}")
+        result["ownership"]["insider_transactions"] = []
+
+    # ── Analyst view ──────────────────────────────────────────────────────
+    result["analyst_view"] = {}
+
+    # Recommendations summary
+    try:
+        reco = stock.recommendations
+        if reco is not None and not reco.empty:
+            latest = reco.tail(1).iloc[0]
+            result["analyst_view"]["recommendations"] = {
+                "strong_buy": int(latest.get("strongBuy", 0)),
+                "buy": int(latest.get("buy", 0)),
+                "hold": int(latest.get("hold", 0)),
+                "sell": int(latest.get("sell", 0)),
+                "strong_sell": int(latest.get("strongSell", 0)),
+            }
+        else:
+            result["analyst_view"]["recommendations"] = None
+    except Exception as e:
+        logger.debug(f"Deep profile {ticker}: recommendations indispo: {e}")
+        result["analyst_view"]["recommendations"] = None
+
+    # Analyst price targets
+    try:
+        targets = stock.analyst_price_targets
+        if targets is not None:
+            if isinstance(targets, dict):
+                result["analyst_view"]["price_targets"] = {
+                    "high": targets.get("high"),
+                    "low": targets.get("low"),
+                    "mean": targets.get("mean"),
+                    "median": targets.get("median"),
+                    "current": targets.get("current"),
+                }
+            elif isinstance(targets, pd.DataFrame) and not targets.empty:
+                result["analyst_view"]["price_targets"] = {
+                    "high": float(targets.get("high", [None])[0]) if "high" in targets else None,
+                    "low": float(targets.get("low", [None])[0]) if "low" in targets else None,
+                    "mean": float(targets.get("mean", [None])[0]) if "mean" in targets else None,
+                    "median": float(targets.get("median", [None])[0]) if "median" in targets else None,
+                }
+            else:
+                result["analyst_view"]["price_targets"] = None
+        else:
+            result["analyst_view"]["price_targets"] = None
+    except Exception as e:
+        logger.debug(f"Deep profile {ticker}: price_targets indispo: {e}")
+        result["analyst_view"]["price_targets"] = None
+
+    # Upgrades/downgrades récents
+    try:
+        upgrades = stock.upgrades_downgrades
+        if upgrades is not None and not upgrades.empty:
+            recent = upgrades.head(10)
+            result["analyst_view"]["upgrades_downgrades"] = [
+                {
+                    "date": str(idx)[:10] if hasattr(idx, 'strftime') else str(idx)[:10],
+                    "firm": row.get("Firm", ""),
+                    "to_grade": row.get("ToGrade", ""),
+                    "from_grade": row.get("FromGrade", ""),
+                    "action": row.get("Action", ""),
+                }
+                for idx, row in recent.iterrows()
+            ]
+        else:
+            result["analyst_view"]["upgrades_downgrades"] = []
+    except Exception as e:
+        logger.debug(f"Deep profile {ticker}: upgrades_downgrades indispo: {e}")
+        result["analyst_view"]["upgrades_downgrades"] = []
+
+    # ── Earnings track record ─────────────────────────────────────────────
+    try:
+        earnings_hist = stock.earnings_history
+        if earnings_hist is not None and not earnings_hist.empty:
+            records = []
+            for _, row in earnings_hist.iterrows():
+                records.append({
+                    "quarter": str(row.get("Quarter", "")),
+                    "eps_estimate": float(row.get("epsEstimate", 0)) if pd.notna(row.get("epsEstimate")) else None,
+                    "eps_actual": float(row.get("epsActual", 0)) if pd.notna(row.get("epsActual")) else None,
+                    "surprise_pct": float(row.get("surprisePercent", 0)) if pd.notna(row.get("surprisePercent")) else None,
+                })
+            result["earnings_track"] = records
+
+            # Streak de beats consécutifs
+            beats = 0
+            for r in reversed(records):
+                if r["surprise_pct"] is not None and r["surprise_pct"] > 0:
+                    beats += 1
+                else:
+                    break
+            result["earnings_beat_streak"] = beats
+        else:
+            result["earnings_track"] = []
+            result["earnings_beat_streak"] = 0
+    except Exception as e:
+        logger.debug(f"Deep profile {ticker}: earnings_history indispo: {e}")
+        result["earnings_track"] = []
+        result["earnings_beat_streak"] = 0
+
+    # ── Financial statements (3 dernières années) ─────────────────────────
+    def _df_to_dict(df: pd.DataFrame) -> dict:
+        """Convertit un DataFrame yfinance (colonnes = dates) en dict lisible."""
+        if df is None or df.empty:
+            return {}
+        out = {}
+        for col in df.columns[:3]:  # 3 dernières années max
+            year_label = str(col)[:4] if hasattr(col, 'strftime') else str(col)[:4]
+            out[year_label] = {
+                str(idx): (float(val) if pd.notna(val) else None)
+                for idx, val in df[col].items()
+            }
+        return out
+
+    try:
+        result["financials"] = {
+            "income_stmt": _df_to_dict(stock.income_stmt),
+            "balance_sheet": _df_to_dict(stock.balance_sheet),
+            "cashflow": _df_to_dict(stock.cashflow),
+        }
+    except Exception as e:
+        logger.debug(f"Deep profile {ticker}: financial statements indispo: {e}")
+        result["financials"] = {"income_stmt": {}, "balance_sheet": {}, "cashflow": {}}
+
+    # ── Governance ────────────────────────────────────────────────────────
+    result["governance"] = {
+        "audit_risk": info.get("auditRisk"),
+        "board_risk": info.get("boardRisk"),
+        "compensation_risk": info.get("compensationRisk"),
+        "shareholder_rights_risk": info.get("shareHolderRightsRisk"),
+        "overall_risk": info.get("overallRisk"),
+    }
+
+    # ── Short interest ────────────────────────────────────────────────────
+    result["short_interest"] = {
+        "short_ratio": info.get("shortRatio"),
+        "short_pct_of_float": info.get("shortPercentOfFloat"),
+        "shares_short": info.get("sharesShort"),
+        "shares_short_prior_month": info.get("sharesShortPriorMonth"),
+        "date_short_interest": str(info.get("dateShortInterest", ""))[:10] if info.get("dateShortInterest") else None,
+    }
+
+    _cache_set(key, result)
+    return result
+
+
 def search_ticker(query: str) -> list[dict]:
     """
     Recherche de tickers par nom ou symbole.

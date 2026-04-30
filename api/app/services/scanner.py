@@ -36,11 +36,20 @@ SCAN_UNIVERSE: dict[str, list[str]] = {
     "Tech US": [
         "MSFT", "AAPL", "GOOGL", "META", "NVDA",
         "AMD", "CRM", "ADBE", "NOW", "PANW",
+        "AVGO", "UBER", "ORCL",
     ],
     # Semi-conducteurs — cycle très lisible
     "Semi-conducteurs": [
         "ASML", "TSM", "AMAT", "LRCX", "KLAC",
-        "MU", "INTC", "STM",
+        "MU", "INTC", "STM", "MRVL",
+    ],
+    # Cybersécurité — croissance séculaire
+    "Cybersécurité": [
+        "CRWD", "ZS", "FTNT", "S", "PANW",
+    ],
+    # Cloud / SaaS — recurring revenue
+    "Cloud & SaaS": [
+        "SNOW", "DDOG", "NET", "MDB", "TEAM",
     ],
     # Finance US — sensible aux taux
     "Finance US": [
@@ -52,6 +61,10 @@ SCAN_UNIVERSE: dict[str, list[str]] = {
         "LLY", "UNH", "ABBV", "MRK", "ISRG",
         "DXCM", "VEEV",
     ],
+    # Biotech — innovation pure, plus risqué
+    "Biotech": [
+        "AMGN", "GILD", "REGN", "VRTX", "MRNA",
+    ],
     # Énergie traditionnelle + transition
     "Énergie": [
         "XOM", "CVX", "COP", "NEE",
@@ -61,15 +74,32 @@ SCAN_UNIVERSE: dict[str, list[str]] = {
     "Consommation US": [
         "AMZN", "TSLA", "NKE", "COST", "HD",
     ],
-    # Industriels / Défense — contexte géopolotique
+    # Consumer Staples — défensif, dividende
+    "Consumer Staples": [
+        "PG", "KO", "PEP", "WMT",
+    ],
+    # Industriels / Défense — contexte géopolitique
     "Industriels & Défense": [
         "RTX", "LMT", "NOC", "GE", "CAT", "DE",
+        "BA", "LHX",
     ],
-    # Europe — grandes capitalisations liquides
-    # Note : ASML est aussi dans Semi-conducteurs — on évite le doublon ici
+    # REITs / Infrastructure — rendement + data centers
+    "REITs & Infra": [
+        "PLD", "AMT", "EQIX", "DLR",
+    ],
+    # Europe Large Caps — diversification géographique
     "Europe Large Caps": [
         "MC.PA", "AIR.PA", "OR.PA", "TTE.PA",
         "SAP", "NOVO-B.CO",
+        "BNP.PA", "SAN.PA", "DG.PA", "KER.PA",
+    ],
+    # UK — London Stock Exchange
+    "UK": [
+        "SHEL.L", "AZN.L", "RIO.L", "LSEG.L",
+    ],
+    # Marchés émergents — croissance + risque
+    "Emerging Markets": [
+        "BABA", "PDD", "MELI", "NU", "SE",
     ],
     # Small/Mid caps croissance — plus spéculatif, potentiel élevé
     "Growth / Spéculatif": [
