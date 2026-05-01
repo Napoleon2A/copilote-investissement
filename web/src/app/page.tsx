@@ -9,7 +9,7 @@ import { LinkedNewsPanel } from "@/components/dashboard/LinkedNewsPanel";
 import {
   RichEarningsCard, RichPortfolioCard, RichWatchlistCard, RichAlertsCard,
 } from "@/components/dashboard/StatCards";
-import { PortfolioInsightsPanel } from "@/components/dashboard/PortfolioInsightsPanel";
+import { EarningsCalendarPanel } from "@/components/dashboard/EarningsCalendarPanel";
 import { fetchJSON, API } from "@/components/dashboard/shared";
 import type { MarketSnapshot } from "@/lib/macroExplainer";
 
@@ -127,20 +127,8 @@ export default function HomePage() {
 
       <PicksHero picks={topPicks} loading={opps === undefined} scanning={opps?.scanning} />
 
-      {/* Row 1 : Analyse personnalisée (50%) ↔ Actualité des cibles (50%) — scroll vertical sur les deux */}
+      {/* Row 1 : Actualité des cibles (50%) ↔ Calendrier earnings (50%) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:h-[520px]">
-        <div className="min-h-0">
-          <PortfolioInsightsPanel
-            snapshot={snapshot}
-            portfolio={portfolio}
-            ideas={ideas}
-            picks={topPicks}
-            earnings={earnings}
-            linkedNews={allLinkedNews}
-            sectorRotation={brief?.market_context?.sector_rotation}
-            tickerScores={tickerScores}
-          />
-        </div>
         <div className="min-h-0">
           <LinkedNewsPanel
             data={linkedNewsRSS}
@@ -148,6 +136,13 @@ export default function HomePage() {
             portfolioTickers={portfolioTickers}
             ideasTickers={ideasTickers}
             picksTickers={picksTickers}
+          />
+        </div>
+        <div className="min-h-0">
+          <EarningsCalendarPanel
+            earnings={earnings}
+            portfolioTickers={portfolioTickers}
+            ideasTickers={ideasTickers}
           />
         </div>
       </div>
