@@ -205,30 +205,6 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
     }
   }
 
-  if (snapshot.wti_ytd != null && snapshot.wti_ytd > 30 && positions.length > 0) {
-    const aggregateImpact = aggregateSectorImpact(exposureBySector, "oil_high");
-    macroExposure.push({
-      factor: `Pétrole +${snapshot.wti_ytd.toFixed(0)}% YTD`,
-      impact: aggregateImpact,
-      comment: impactToPortfolioComment(aggregateImpact, exposureBySector, "oil_high", "du pétrole en hausse"),
-    });
-    if (aggregateImpact === "very_negative" || aggregateImpact === "negative") {
-      insights.push({
-        category: "sensitivity",
-        tone: "warning",
-        title: `Pétrole +${snapshot.wti_ytd.toFixed(0)}% YTD : pression inflation sur ton portefeuille`,
-        detail: "Tes positions sont sensibles à l'inflation énergétique (pression sur les marges et la consommation). Aucune exposition aux pétrolières (XOM, CVX, TTE) qui aurait permis de profiter du rallye.",
-      });
-    } else if (aggregateImpact === "very_positive") {
-      insights.push({
-        category: "sensitivity",
-        tone: "good",
-        title: `Pétrole +${snapshot.wti_ytd.toFixed(0)}% YTD : ton portefeuille profite du rallye`,
-        detail: "Tes positions énergie/matières premières bénéficient directement de la flambée. Surveiller les sommets — les pétrolières corrigent vite quand l'OPEC change de pied.",
-      });
-    }
-  }
-
   if (snapshot.dxy_1m != null && Math.abs(snapshot.dxy_1m) > 3) {
     const dollarStrong = snapshot.dxy_1m > 0;
     const aggregateImpact = aggregateSectorImpact(exposureBySector, "dollar_strong");
