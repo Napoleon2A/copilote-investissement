@@ -170,37 +170,34 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
     }))
     .sort((a, b) => b.weight - a.weight);
 
-  // ── PERFORMANCE INDIVIDUELLE DES POSITIONS ─────────────────────────────
+  // ── PERFORMANCE INDIVIDUELLE DES POSITIONS (faits + comparaisons) ───
+  const sp500Ytd = snapshot.sp500_ytd ?? 0;
   for (const p of positions) {
     const meta = TICKER_META[p.ticker.toUpperCase()];
     const name = meta?.name ?? p.ticker;
 
-    // Rebond exceptionnel
     if (p.pnl_pct != null && p.pnl_pct > 50) {
+      const vsSp = p.pnl_pct - sp500Ytd;
+      const drawdownInfo = p.pct_from_52w_high != null
+        ? ` Actuellement à ${p.pct_from_52w_high >= 0 ? "+" : ""}${p.pct_from_52w_high.toFixed(0)}% du plus haut 52w.`
+        : "";
+      const dailyMove = p.change_1d != null
+        ? ` Aujourd'hui ${p.change_1d >= 0 ? "+" : ""}${p.change_1d.toFixed(2)}%.`
+        : "";
       insights.push({
         category: "sensitivity",
         tone: "good",
-        title: `${p.ticker} : performance exceptionnelle (+${p.pnl_pct.toFixed(0)}%)`,
-        detail: `${name} affiche +${p.pnl_pct.toFixed(0)}% depuis l'achat. À ce niveau, considérer : sécuriser une partie (vendre 25-50%), placer un stop suiveur, ou conserver si la thèse fondamentale s'est renforcée. Les biggest winners se transforment en gros perdants quand on les laisse rouler sans discipline.`,
+        title: `${p.ticker} : +${p.pnl_pct.toFixed(0)}% (vs S&P 500 +${sp500Ytd.toFixed(1)}% YTD = ${vsSp >= 0 ? "+" : ""}${vsSp.toFixed(0)} pt d'écart)`,
+        detail: `${name} surperforme le S&P de ${vsSp.toFixed(0)} points.${drawdownInfo}${dailyMove}`,
         tickers: [p.ticker],
       });
     } else if (p.pnl_pct != null && p.pnl_pct < -20) {
+      const vsSp = p.pnl_pct - sp500Ytd;
       insights.push({
         category: "sensitivity",
         tone: "warning",
-        title: `${p.ticker} : forte perte (${p.pnl_pct.toFixed(0)}%)`,
-        detail: `${name} est à ${p.pnl_pct.toFixed(0)}% sous ton prix d'achat. Question clé : la thèse initiale est-elle compromise (raison fondamentale) ou est-ce du bruit de marché (raison technique) ? Si compromise → couper. Si bruit → moyenner peut être judicieux à condition de garder du cash.`,
-        tickers: [p.ticker],
-      });
-    }
-
-    // Drawdown important
-    if (p.pct_from_52w_high != null && p.pct_from_52w_high < -30) {
-      insights.push({
-        category: "sensitivity",
-        tone: "info",
-        title: `${p.ticker} à ${Math.abs(p.pct_from_52w_high).toFixed(0)}% sous son plus haut 52 semaines`,
-        detail: `${name} a perdu ${Math.abs(p.pct_from_52w_high).toFixed(0)}% depuis son record. Soit le marché a corrigé excessivement (opportunité), soit la thèse a fondamentalement changé (risque réel). Vérifier : earnings récents, guidance, news catalyseurs négatifs récents.`,
+        title: `${p.ticker} : ${p.pnl_pct.toFixed(0)}% (vs S&P 500 +${sp500Ytd.toFixed(1)}% YTD = ${vsSp.toFixed(0)} pt d'écart)`,
+        detail: `${name} sous-performe le S&P de ${Math.abs(vsSp).toFixed(0)} points. ${p.pct_from_52w_high != null ? `À ${p.pct_from_52w_high.toFixed(0)}% du plus haut 52w. ` : ""}${p.change_1d != null ? `Aujourd'hui ${p.change_1d >= 0 ? "+" : ""}${p.change_1d.toFixed(2)}%.` : ""}`,
         tickers: [p.ticker],
       });
     }
@@ -277,28 +274,24 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
     const isIdea = ideas.some(i => i.ticker.toUpperCase() === e.ticker.toUpperCase());
     const source = isPosition ? "ta position" : isIdea ? "ton idée en suivi" : "un ticker que tu suis";
 
+    const score = e.scores?.composite;
+    const scoreInfo = score != null ? ` Score scanner ${score.toFixed(1)}/10.` : "";
+    const moveInfo = e.change_1d != null ? ` Aujourd'hui ${e.change_1d >= 0 ? "+" : ""}${e.change_1d.toFixed(2)}%.` : "";
+
     if (e.days_until === 0) {
       insights.push({
         category: "earnings",
         tone: "warning",
-        title: `📊 ${e.ticker} publie ses résultats AUJOURD'HUI`,
-        detail: `${e.name ?? e.ticker} publie ce soir/matin. ${source.charAt(0).toUpperCase() + source.slice(1)} sera fortement impactée — la volatilité moyenne post-earnings est de ±5-15% selon les surprises. Décision possible : couper le risque AVANT, ou laisser courir.`,
-        tickers: [e.ticker],
-      });
-    } else if (e.days_until <= 3) {
-      insights.push({
-        category: "earnings",
-        tone: "info",
-        title: `📊 ${e.ticker} publie dans ${e.days_until}j`,
-        detail: `${e.name ?? e.ticker} (${source}) — préparer la décision : tenir, alléger, ou attendre la publication. Vérifier les attentes des analystes pour calibrer ce qui serait considéré comme "beat" ou "miss".`,
+        title: `📊 ${e.ticker} publie aujourd'hui (${source})`,
+        detail: `${e.name ?? e.ticker}.${scoreInfo}${moveInfo}`,
         tickers: [e.ticker],
       });
     } else if (e.days_until <= 7) {
       insights.push({
         category: "earnings",
         tone: "info",
-        title: `📊 ${e.ticker} publie dans ${e.days_until}j`,
-        detail: `${e.name ?? e.ticker} (${source}) — pas urgent mais préparer la thèse. Lire les dernières news pour anticiper.`,
+        title: `📊 ${e.ticker} publie dans ${e.days_until}j (${source})`,
+        detail: `${e.name ?? e.ticker}.${scoreInfo}${moveInfo}`,
         tickers: [e.ticker],
       });
     }
@@ -319,11 +312,12 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
 
   if (criticalNews.length > 0) {
     const uniqTickers = Array.from(new Set(criticalNews.map(c => c.ticker)));
+    const sample = criticalNews.slice(0, 2).map(c => `${c.ticker} : "${c.title.slice(0, 80)}${c.title.length > 80 ? "…" : ""}"`).join(" · ");
     insights.push({
       category: "news",
       tone: "warning",
-      title: `⚠ ${criticalNews.length} actualité${criticalNews.length > 1 ? "s" : ""} négative${criticalNews.length > 1 ? "s" : ""} sur tes titres`,
-      detail: `Sur ${uniqTickers.join(", ")}. Lire le détail dans la card "Actualité des cibles" pour évaluer si la thèse est compromise.`,
+      title: `${criticalNews.length} actualité${criticalNews.length > 1 ? "s" : ""} négative${criticalNews.length > 1 ? "s" : ""} sur ${uniqTickers.join(", ")}`,
+      detail: sample,
       tickers: uniqTickers,
     });
   }
@@ -335,13 +329,15 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
   for (const pick of picks.slice(0, 3)) {
     const meta = TICKER_META[pick.ticker.toUpperCase()];
     if (!meta?.sector) continue;
-    if (!myTickers.has(pick.ticker.toUpperCase()) && !sectorsInPortfolio.has(meta.sector)) {
+    if (!myTickers.has(pick.ticker.toUpperCase())) {
       const score = pick.scores?.composite;
+      const move = pick.change_1d != null ? ` Aujourd'hui ${pick.change_1d >= 0 ? "+" : ""}${pick.change_1d.toFixed(2)}%.` : "";
+      const move1m = pick.change_1m != null ? ` Sur 1M : ${pick.change_1m >= 0 ? "+" : ""}${pick.change_1m.toFixed(1)}%.` : "";
       insights.push({
         category: "missed",
         tone: "info",
-        title: `💡 Opportunité : ${pick.ticker} (${SECTOR_LABELS[meta.sector] ?? meta.sector})`,
-        detail: `Le scanner a détecté ${meta.name} avec un score de ${score?.toFixed(1) ?? "?"} sur 10, action « ${pick.action_label} ». Tu n'as aucune exposition au secteur ${SECTOR_LABELS[meta.sector] ?? meta.sector} — ouvrirait une ligne de diversification.`,
+        title: `${pick.ticker} (${SECTOR_LABELS[meta.sector] ?? meta.sector}) : score ${score?.toFixed(1) ?? "?"}/10`,
+        detail: `${meta.name}, action « ${pick.action_label} ».${move}${move1m}`,
         tickers: [pick.ticker],
       });
     }
@@ -424,11 +420,13 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
             );
           })
           .map(p => p.ticker);
+        const sp500_1m = snapshot.sp500_1m ?? 0;
+        const overSP = topLeader.change_1m - sp500_1m;
         insights.push({
           category: "sensitivity",
           tone: "good",
-          title: `Tu es exposé au secteur leader : ${topLeader.sector} (+${topLeader.change_1m.toFixed(1)}% 1M)`,
-          detail: `${matchingTickers.join(", ")} bénéficie du momentum sectoriel. Mais la rotation peut être brutale : surveiller les signes d'essoufflement (volume en baisse, news mitigées, valorisations tendues).`,
+          title: `${topLeader.sector} +${topLeader.change_1m.toFixed(1)}% 1M (vs S&P +${sp500_1m.toFixed(1)}% = ${overSP >= 0 ? "+" : ""}${overSP.toFixed(1)} pt)`,
+          detail: `Tes positions ${matchingTickers.join(", ")} sont dans le secteur le plus performant du mois. Le secteur surperforme le S&P de ${overSP.toFixed(1)} points sur 1 mois.`,
           tickers: matchingTickers,
         });
       }
@@ -452,11 +450,13 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
             );
           })
           .map(p => p.ticker);
+        const sp500_1m = snapshot.sp500_1m ?? 0;
+        const underSP = topLaggard.change_1m - sp500_1m;
         insights.push({
           category: "sensitivity",
           tone: "warning",
-          title: `Tu es exposé à un secteur en repli : ${topLaggard.sector} (${topLaggard.change_1m.toFixed(1)}% 1M)`,
-          detail: `${matchingTickers.join(", ")} subit la pression sectorielle. Vérifier : la cause (cyclique vs structurelle), si tes sociétés sont les mieux positionnées du secteur (plutôt que les pires), si la valorisation devient attractive après la chute.`,
+          title: `${topLaggard.sector} ${topLaggard.change_1m.toFixed(1)}% 1M (vs S&P +${sp500_1m.toFixed(1)}% = ${underSP.toFixed(1)} pt)`,
+          detail: `Tes positions ${matchingTickers.join(", ")} sont dans le secteur le moins performant du mois. Le secteur sous-performe le S&P de ${Math.abs(underSP).toFixed(1)} points sur 1 mois.`,
           tickers: matchingTickers,
         });
       }
@@ -472,11 +472,12 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
     const score = e.scores?.composite;
     if (score != null && score >= 7.5 && e.days_until > 0 && e.days_until <= 14) {
       const meta = TICKER_META[e.ticker.toUpperCase()];
+      const move1m = e.change_1m != null ? ` 1M : ${e.change_1m >= 0 ? "+" : ""}${e.change_1m.toFixed(1)}%.` : "";
       insights.push({
         category: "sensitivity",
         tone: "good",
-        title: `${e.ticker} (score ${score.toFixed(1)}/10) : earnings dans ${e.days_until}j`,
-        detail: `${meta?.name ?? e.ticker} cumule un score scanner élevé (${score.toFixed(1)}/10) ET des earnings imminents. Conjugaison rare : si beat + relèvement de guidance, le titre peut bondir 10-20%. Risque inverse si miss. Position de scénario à préparer.`,
+        title: `${e.ticker} : score ${score.toFixed(1)}/10 + earnings J-${e.days_until}`,
+        detail: `${meta?.name ?? e.ticker}.${move1m}`,
         tickers: [e.ticker],
       });
     }
