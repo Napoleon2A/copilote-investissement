@@ -28,6 +28,7 @@ export default function HomePage() {
   const [macroNewsRSS, setMacroNewsRSS] = useState<any>(undefined);
   const [linkedNewsRSS, setLinkedNewsRSS] = useState<any>(undefined);
   const [perTickerNews, setPerTickerNews] = useState<any>(undefined);
+  const [tickerScores, setTickerScores] = useState<Record<string, any>>({});
 
   // Fetch initial — 8 endpoints en parallèle
   useEffect(() => {
@@ -52,9 +53,25 @@ export default function HomePage() {
     if (list) {
       fetchJSON<any>(`${API}/news/linked?tickers=${list}&limit=20`).then(setLinkedNewsRSS);
       fetchJSON<any>(`${API}/news/per-ticker?tickers=${list}&max_per_ticker=5`).then(setPerTickerNews);
+
+      // Fetch les scores pour chaque ticker (alimente les insights enrichis)
+      const tickersList = Array.from(tickers).filter(Boolean);
+      Promise.all(
+        tickersList.map(async (t) => {
+          const data = await fetchJSON<any>(`${API}/companies/${t}/scores`);
+          return [t, data] as const;
+        })
+      ).then((results) => {
+        const map: Record<string, any> = {};
+        for (const [t, data] of results) {
+          if (data) map[t] = data;
+        }
+        setTickerScores(map);
+      });
     } else {
       setLinkedNewsRSS({ count: 0, articles: [] });
       setPerTickerNews({ count: 0, articles: [] });
+      setTickerScores({});
     }
   }, [portfolio, ideas, opps]);
 
@@ -119,6 +136,7 @@ export default function HomePage() {
         earnings={earnings}
         linkedNews={allLinkedNews}
         sectorRotation={brief?.market_context?.sector_rotation}
+        tickerScores={tickerScores}
       />
 
       {/* Row 1 : Comprendre marché ↔ Actualité des cibles */}

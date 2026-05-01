@@ -14,10 +14,11 @@ interface PortfolioInsightsPanelProps {
   earnings: any;
   linkedNews: any[];
   sectorRotation?: any;
+  tickerScores?: Record<string, any>;
 }
 
 export function PortfolioInsightsPanel({
-  snapshot, portfolio, ideas, picks, earnings, linkedNews, sectorRotation,
+  snapshot, portfolio, ideas, picks, earnings, linkedNews, sectorRotation, tickerScores,
 }: PortfolioInsightsPanelProps) {
   // Loading
   if (!snapshot || portfolio === undefined || ideas === undefined) {
@@ -55,6 +56,7 @@ export function PortfolioInsightsPanel({
     upcomingEarnings,
     linkedNews,
     sectorRotation,
+    tickerScores,
   });
 
   const {

@@ -95,6 +95,18 @@ interface PortfolioInsightsInput {
     leaders?: Array<{ sector: string; change_1m: number }>;
     laggards?: Array<{ sector: string; change_1m: number }>;
   };
+  /** Scores par ticker (depuis /companies/{ticker}/scores) avec reasons fondamentaux */
+  tickerScores?: Record<string, {
+    scores?: {
+      composite?: number;
+      quality?: { score: number; reasons: string[] };
+      valuation?: { score: number; reasons: string[] };
+      growth?: { score: number; reasons: string[] };
+      momentum?: { score: number; reasons: string[] };
+      risk?: { score: number; reasons: string[] };
+    };
+    composite_label?: string;
+  }>;
 }
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -295,6 +307,112 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
           tone: "info",
           title: `${ticker} (idée à éviter) confirmée par la dynamique sectorielle`,
           detail: `${meta.name} est dans un secteur en queue du marché. Ta lecture "Éviter" est cohérente avec le mouvement sectoriel actuel — les sociétés du secteur subissent une rotation hors des capitaux institutionnels.`,
+          tickers: [ticker],
+        });
+      }
+    }
+  }
+
+  // ── ANALYSE FONDAMENTALE ENRICHIE (utilise tickerScores avec reasons) ────
+  const tickerScores = input.tickerScores ?? {};
+  const myTickerSet = new Set([
+    ...positions.map(p => p.ticker.toUpperCase()),
+    ...ideas.map(i => i.ticker.toUpperCase()),
+  ]);
+
+  for (const ticker of myTickerSet) {
+    const scoreData = tickerScores[ticker];
+    if (!scoreData?.scores) continue;
+    const meta = TICKER_META[ticker];
+    const name = meta?.name ?? ticker;
+    const sc = scoreData.scores;
+    const isPosition = positions.some(p => p.ticker.toUpperCase() === ticker);
+    const role = isPosition ? "ta position" : "ton idée en suivi";
+
+    // Détection de cas combinés : qualité fragile × taux élevés
+    const qualityReasons = sc.quality?.reasons ?? [];
+    const hasNegFCF = qualityReasons.some(r => r.toLowerCase().includes("fcf négatif") || r.toLowerCase().includes("cash-burn"));
+    const hasNegMargin = qualityReasons.some(r => r.toLowerCase().includes("marge") && r.toLowerCase().includes("négative"));
+    const us10y = snapshot.us10y;
+
+    if (hasNegFCF && us10y != null && us10y > 4) {
+      insights.push({
+        category: "sensitivity",
+        tone: "warning",
+        title: `${ticker} : cash-burn × taux 10Y à ${us10y.toFixed(2)}%`,
+        detail: `${name} (${role}) brûle du cash sans FCF positif. Avec un coût du capital à ${us10y.toFixed(2)}%, le refinancement (dette ou augmentation de capital) coûte cher : chaque tour de financement dilue plus les actionnaires existants. C'est le profil le plus exposé au cycle actuel des taux.`,
+        tickers: [ticker],
+      });
+    }
+
+    // Cas : croissance très forte × momentum cassé
+    const growthReasons = sc.growth?.reasons ?? [];
+    const momentumReasons = sc.momentum?.reasons ?? [];
+    const hasStrongGrowth = growthReasons.some(r => r.toLowerCase().includes("très forte") || r.toLowerCase().includes("forte croissance"));
+    const hasBrokenMomentum = momentumReasons.some(r => r.toLowerCase().includes("chute") || r.toLowerCase().includes("sous son plus haut") && r.includes("52W"));
+
+    if (hasStrongGrowth && hasBrokenMomentum) {
+      const growthDetail = growthReasons.find(r => r.toLowerCase().includes("croissance"));
+      const momentumDetail = momentumReasons.find(r => r.toLowerCase().includes("chute") || r.toLowerCase().includes("sous"));
+      insights.push({
+        category: "sensitivity",
+        tone: "info",
+        title: `${ticker} : décorrélation croissance × prix`,
+        detail: `${name} (${role}) : ${growthDetail?.toLowerCase()} mais ${momentumDetail?.toLowerCase()}. Le marché ne valorise pas la croissance — soit elle n'est pas durable (sceptique), soit le prix anticipe une normalisation. Lire les derniers earnings pour trancher.`,
+        tickers: [ticker],
+      });
+    }
+
+    // Cas : upside analystes important
+    const valReasons = sc.valuation?.reasons ?? [];
+    const upsideMatch = valReasons.join(" ").match(/Upside.*?(\+?-?\d+)%/i);
+    if (upsideMatch) {
+      const upside = parseInt(upsideMatch[1], 10);
+      if (upside > 25) {
+        insights.push({
+          category: "sensitivity",
+          tone: "info",
+          title: `${ticker} : analystes voient +${upside}% d'upside`,
+          detail: `${name} (${role}) — le consensus des analystes implique un potentiel de +${upside}% par rapport au cours actuel. Attention : le consensus est en retard sur les changements rapides — vérifier la date des dernières mises à jour analystes et si les fondamentaux les justifient encore.`,
+          tickers: [ticker],
+        });
+      } else if (upside < -10) {
+        insights.push({
+          category: "sensitivity",
+          tone: "warning",
+          title: `${ticker} : analystes anticipent ${upside}% (cours surévalué)`,
+          detail: `${name} (${role}) — selon le consensus, le titre est ${Math.abs(upside)}% au-dessus du juste prix. Soit le marché valorise un scénario que les analystes n'ont pas intégré (positif), soit il y a un excès d'enthousiasme à corriger.`,
+          tickers: [ticker],
+        });
+      }
+    }
+
+    // Cas : volatilité extrême
+    const riskReasons = sc.risk?.reasons ?? [];
+    const volatileMatch = riskReasons.join(" ").match(/amplitude.*?(\d+)\s*%/i);
+    if (volatileMatch) {
+      const amplitude = parseInt(volatileMatch[1], 10);
+      if (amplitude > 200) {
+        insights.push({
+          category: "sensitivity",
+          tone: "warning",
+          title: `${ticker} : titre extrêmement volatile (amplitude 52W ${amplitude}%)`,
+          detail: `${name} (${role}) a oscillé de ${amplitude}% entre son plus bas et son plus haut sur 52 semaines. C'est un profil de small-cap spéculative — les mouvements de ±20% en quelques jours sont normaux. Position sizing critique : limiter à 2-5% du portefeuille pour ne pas dépendre d'un mouvement.`,
+          tickers: [ticker],
+        });
+      }
+    }
+
+    // Cas : momentum 1M très fort (rebond ou poursuite)
+    const m1Match = momentumReasons.join(" ").match(/Forte hausse.*?(\+\d+)/i);
+    if (m1Match) {
+      const m1 = parseInt(m1Match[1].replace("+", ""), 10);
+      if (m1 > 25) {
+        insights.push({
+          category: "sensitivity",
+          tone: "good",
+          title: `${ticker} : rebond +${m1}% sur 1 mois`,
+          detail: `${name} (${role}) a bondi de ${m1}% sur le mois écoulé. Soit changement de narratif (news, beat earnings, upgrade), soit short squeeze, soit accumulation institutionnelle. Lire la dernière news pour identifier la cause — un rebond ${m1}% sans catalyseur identifiable se retourne souvent vite.`,
           tickers: [ticker],
         });
       }
