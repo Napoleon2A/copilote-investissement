@@ -84,12 +84,17 @@ export interface PortfolioInsightsResult {
 
 interface PortfolioInsightsInput {
   snapshot: MarketSnapshot;
-  positions: Array<{ ticker: string; market_value?: number; pnl_pct?: number; sector?: string }>;
+  positions: Array<{ ticker: string; market_value?: number; pnl_pct?: number; change_1d?: number; change_1m?: number; change_ytd?: number; pct_from_52w_high?: number; sector?: string }>;
   totalValue?: number;
   ideas: Array<{ ticker: string; conviction?: string; action?: string }>;
-  picks: Array<{ ticker: string; sector_group?: string; scores?: any; action_label?: string }>;
-  upcomingEarnings: Array<{ ticker: string; days_until: number; name?: string }>;
+  picks: Array<{ ticker: string; sector_group?: string; scores?: any; action_label?: string; change_1d?: number; change_1m?: number }>;
+  upcomingEarnings: Array<{ ticker: string; days_until: number; name?: string; change_1d?: number; change_1m?: number; scores?: any }>;
   linkedNews: Array<{ title: string; ticker?: string; tickers_mentioned?: string[]; category: string }>;
+  /** Rotation sectorielle issue de brief.market_context */
+  sectorRotation?: {
+    leaders?: Array<{ sector: string; change_1m: number }>;
+    laggards?: Array<{ sector: string; change_1m: number }>;
+  };
 }
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -165,25 +170,38 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
     }))
     .sort((a, b) => b.weight - a.weight);
 
-  // Concentration
-  if (positions.length > 0) {
-    const dominant = exposureBySector[0];
-    if (dominant && dominant.weight > 60) {
+  // ── PERFORMANCE INDIVIDUELLE DES POSITIONS ─────────────────────────────
+  for (const p of positions) {
+    const meta = TICKER_META[p.ticker.toUpperCase()];
+    const name = meta?.name ?? p.ticker;
+
+    // Rebond exceptionnel
+    if (p.pnl_pct != null && p.pnl_pct > 50) {
       insights.push({
-        category: "concentration",
-        tone: dominant.weight > 80 ? "danger" : "warning",
-        title: `Concentration extrême : ${dominant.weight}% en ${dominant.label}`,
-        detail: `${dominant.tickers.join(", ")} représente ${dominant.weight}% du portefeuille. En cas de choc sectoriel, le portefeuille subit ce choc à plein. Diversifier sur 3-5 secteurs réduirait fortement le risque.`,
-        tickers: dominant.tickers,
+        category: "sensitivity",
+        tone: "good",
+        title: `${p.ticker} : performance exceptionnelle (+${p.pnl_pct.toFixed(0)}%)`,
+        detail: `${name} affiche +${p.pnl_pct.toFixed(0)}% depuis l'achat. À ce niveau, considérer : sécuriser une partie (vendre 25-50%), placer un stop suiveur, ou conserver si la thèse fondamentale s'est renforcée. Les biggest winners se transforment en gros perdants quand on les laisse rouler sans discipline.`,
+        tickers: [p.ticker],
+      });
+    } else if (p.pnl_pct != null && p.pnl_pct < -20) {
+      insights.push({
+        category: "sensitivity",
+        tone: "warning",
+        title: `${p.ticker} : forte perte (${p.pnl_pct.toFixed(0)}%)`,
+        detail: `${name} est à ${p.pnl_pct.toFixed(0)}% sous ton prix d'achat. Question clé : la thèse initiale est-elle compromise (raison fondamentale) ou est-ce du bruit de marché (raison technique) ? Si compromise → couper. Si bruit → moyenner peut être judicieux à condition de garder du cash.`,
+        tickers: [p.ticker],
       });
     }
-    if (positions.length === 1) {
+
+    // Drawdown important
+    if (p.pct_from_52w_high != null && p.pct_from_52w_high < -30) {
       insights.push({
-        category: "risk",
-        tone: "danger",
-        title: "Position unique : risque idiosyncratique majeur",
-        detail: `Une seule société (${positions[0].ticker}) = exposition à 100% à ses risques propres : management, fraude, échec produit, etc. Une diversification minimum de 5-10 lignes est recommandée pour amortir ce risque non-systémique.`,
-        tickers: [positions[0].ticker],
+        category: "sensitivity",
+        tone: "info",
+        title: `${p.ticker} à ${Math.abs(p.pct_from_52w_high).toFixed(0)}% sous son plus haut 52 semaines`,
+        detail: `${name} a perdu ${Math.abs(p.pct_from_52w_high).toFixed(0)}% depuis son record. Soit le marché a corrigé excessivement (opportunité), soit la thèse a fondamentalement changé (risque réel). Vérifier : earnings récents, guidance, news catalyseurs négatifs récents.`,
+        tickers: [p.ticker],
       });
     }
   }
@@ -348,96 +366,128 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
     }
   }
 
-  // ── 7. POSITION MAX (règle des 25% max) ──────────────────────────────
-  if (positions.length > 1 && totalValue && totalValue > 0) {
-    const sorted = [...positions].sort((a, b) => (b.market_value ?? 0) - (a.market_value ?? 0));
-    const top = sorted[0];
-    const topWeight = ((top.market_value ?? 0) / totalValue) * 100;
-    if (topWeight > 25) {
-      insights.push({
-        category: "concentration",
-        tone: topWeight > 40 ? "danger" : "warning",
-        title: `Position dominante : ${top.ticker} = ${topWeight.toFixed(0)}% du portefeuille`,
-        detail: `Règle classique : aucune position ne devrait dépasser 20-25% du portefeuille pour limiter le risque idiosyncratique. Actuellement ${top.ticker} pèse ${topWeight.toFixed(0)}% — un choc spécifique sur cette société impacterait directement ${topWeight.toFixed(0)}% du capital.`,
-        tickers: [top.ticker],
-      });
+  // ── PERFORMANCE VS SECTEUR (sur/sous-performance) ────────────────────
+  if (input.sectorRotation && positions.length > 0) {
+    const allSectors = [
+      ...(input.sectorRotation.leaders ?? []),
+      ...(input.sectorRotation.laggards ?? []),
+    ];
+
+    for (const p of positions) {
+      const meta = TICKER_META[p.ticker.toUpperCase()];
+      if (!meta?.sector || p.change_1m == null) continue;
+
+      // Trouver la performance moyenne du secteur
+      const sectorMatch = allSectors.find(s =>
+        s.sector.toLowerCase().includes(SECTOR_LABELS[meta.sector!]?.toLowerCase() ?? "")
+        || SECTOR_LABELS[meta.sector!]?.toLowerCase().includes(s.sector.toLowerCase())
+      );
+
+      if (sectorMatch) {
+        const delta = p.change_1m - sectorMatch.change_1m;
+        if (Math.abs(delta) > 5) {
+          const isOver = delta > 0;
+          insights.push({
+            category: "sensitivity",
+            tone: isOver ? "good" : "warning",
+            title: `${p.ticker} : ${isOver ? "sur" : "sous"}-performance vs ${sectorMatch.sector}`,
+            detail: `${meta.name} : ${p.change_1m >= 0 ? "+" : ""}${p.change_1m.toFixed(1)}% sur 1M, vs secteur ${sectorMatch.sector} à ${sectorMatch.change_1m >= 0 ? "+" : ""}${sectorMatch.change_1m.toFixed(1)}%. ${isOver ? "Surperforme" : "Sous-performe"} de ${Math.abs(delta).toFixed(1)} pt. ${isOver ? "Catalyseur propre à la société (good news, beat earnings, etc.). Vérifier la durabilité." : "Soit retard de phase rattrapable, soit problème spécifique (concurrence, exécution, news négatives). À investiguer."}`,
+            tickers: [p.ticker],
+          });
+        }
+      }
     }
   }
 
-  // ── 8. DIVERSIFICATION GÉOGRAPHIQUE ──────────────────────────────────
-  if (positions.length > 0) {
-    const usWeight = exposureByGeo.find(g => g.geo === "us")?.weight ?? 0;
-    const europeWeight = exposureByGeo.find(g => g.geo === "europe")?.weight ?? 0;
-    const otherWeight = 100 - usWeight - europeWeight;
+  // ── DYNAMIQUE DES SECTEURS DES POSITIONS ─────────────────────────────
+  if (input.sectorRotation && positions.length > 0) {
+    const myPortfolioSectors = new Set(
+      positions.map(p => TICKER_META[p.ticker.toUpperCase()]?.sector).filter(Boolean) as SectorKey[]
+    );
 
-    if (usWeight === 100) {
-      insights.push({
-        category: "concentration",
-        tone: "warning",
-        title: "100% USA : aucune diversification géographique",
-        detail: "Tout le portefeuille est exposé au dollar US, à la Fed et au cycle américain. Une diversification 60-70% US / 20-30% Europe / 0-10% émergents est généralement recommandée pour amortir les chocs régionaux et limiter le risque devise.",
-      });
-    } else if (usWeight > 90 && positions.length >= 3) {
-      insights.push({
-        category: "concentration",
-        tone: "info",
-        title: `${usWeight}% USA : forte concentration géographique`,
-        detail: "Considérer un peu d'exposition Europe (LVMH, Sanofi, ASML) ou émergents (TSMC, Alibaba) pour amortir le risque dollar et bénéficier de cycles différents.",
-      });
-    }
-  }
+    // Si un secteur du portefeuille est en tête des leaders
+    const topLeader = input.sectorRotation.leaders?.[0];
+    if (topLeader && topLeader.change_1m > 5) {
+      // Vérifier si le secteur leader est dans le portefeuille
+      const isInPortfolio = Array.from(myPortfolioSectors).some(s =>
+        SECTOR_LABELS[s]?.toLowerCase().includes(topLeader.sector.toLowerCase())
+        || topLeader.sector.toLowerCase().includes(SECTOR_LABELS[s]?.toLowerCase() ?? "")
+      );
 
-  // ── 9. COUVERTURE MÉGATRENDS ─────────────────────────────────────────
-  if (positions.length > 0) {
-    const trendsCovered = exposureByTrend.length;
-    if (trendsCovered === 0) {
-      insights.push({
-        category: "concentration",
-        tone: "info",
-        title: "Aucune exposition aux mégatendances structurelles",
-        detail: "Les mégatendances (IA, énergie verte, démographie/obésité, défense) tirent les marchés à 5-10 ans. Sans exposition, le portefeuille manque les vagues structurelles. Considérer NVDA/MSFT (IA), LLY/NVO (obésité), FSLR/ENPH (énergie verte), LMT/RTX (défense).",
-      });
-    } else if (trendsCovered >= 3) {
-      const topTrend = exposureByTrend[0];
-      if (topTrend.weight < 90) {
+      if (isInPortfolio) {
+        const matchingTickers = positions
+          .filter(p => {
+            const sec = TICKER_META[p.ticker.toUpperCase()]?.sector;
+            return sec && (
+              SECTOR_LABELS[sec]?.toLowerCase().includes(topLeader.sector.toLowerCase())
+              || topLeader.sector.toLowerCase().includes(SECTOR_LABELS[sec]?.toLowerCase() ?? "")
+            );
+          })
+          .map(p => p.ticker);
         insights.push({
-          category: "concentration",
+          category: "sensitivity",
           tone: "good",
-          title: `${trendsCovered} mégatendances couvertes`,
-          detail: `Bonne diversification thématique : ${exposureByTrend.slice(0, 3).map(t => `${t.label} (${t.weight}%)`).join(", ")}. Le portefeuille est exposé à plusieurs vagues structurelles.`,
-          tickers: exposureByTrend.flatMap(t => t.tickers).slice(0, 5),
+          title: `Tu es exposé au secteur leader : ${topLeader.sector} (+${topLeader.change_1m.toFixed(1)}% 1M)`,
+          detail: `${matchingTickers.join(", ")} bénéficie du momentum sectoriel. Mais la rotation peut être brutale : surveiller les signes d'essoufflement (volume en baisse, news mitigées, valorisations tendues).`,
+          tickers: matchingTickers,
+        });
+      }
+    }
+
+    // Secteur du portefeuille en queue des laggards
+    const topLaggard = input.sectorRotation.laggards?.[0];
+    if (topLaggard && topLaggard.change_1m < -3) {
+      const isInPortfolio = Array.from(myPortfolioSectors).some(s =>
+        SECTOR_LABELS[s]?.toLowerCase().includes(topLaggard.sector.toLowerCase())
+        || topLaggard.sector.toLowerCase().includes(SECTOR_LABELS[s]?.toLowerCase() ?? "")
+      );
+
+      if (isInPortfolio) {
+        const matchingTickers = positions
+          .filter(p => {
+            const sec = TICKER_META[p.ticker.toUpperCase()]?.sector;
+            return sec && (
+              SECTOR_LABELS[sec]?.toLowerCase().includes(topLaggard.sector.toLowerCase())
+              || topLaggard.sector.toLowerCase().includes(SECTOR_LABELS[sec]?.toLowerCase() ?? "")
+            );
+          })
+          .map(p => p.ticker);
+        insights.push({
+          category: "sensitivity",
+          tone: "warning",
+          title: `Tu es exposé à un secteur en repli : ${topLaggard.sector} (${topLaggard.change_1m.toFixed(1)}% 1M)`,
+          detail: `${matchingTickers.join(", ")} subit la pression sectorielle. Vérifier : la cause (cyclique vs structurelle), si tes sociétés sont les mieux positionnées du secteur (plutôt que les pires), si la valorisation devient attractive après la chute.`,
+          tickers: matchingTickers,
         });
       }
     }
   }
 
-  // ── 10. CONVICTION DES IDÉES ─────────────────────────────────────────
-  if (ideas.length >= 3) {
-    const lowConviction = ideas.filter(i => i.conviction === "faible").length;
-    const lowRatio = lowConviction / ideas.length;
-    if (lowRatio > 0.5) {
+  // ── EARNINGS À HAUT POTENTIEL DANS L'UNIVERS DES IDÉES ───────────────
+  // Identifier des earnings à venir avec des scores élevés sur des tickers que l'utilisateur suit
+  for (const e of upcomingEarnings) {
+    const isMine = positions.some(p => p.ticker.toUpperCase() === e.ticker.toUpperCase())
+                || ideas.some(i => i.ticker.toUpperCase() === e.ticker.toUpperCase());
+    if (!isMine) continue;
+    const score = e.scores?.composite;
+    if (score != null && score >= 7.5 && e.days_until > 0 && e.days_until <= 14) {
+      const meta = TICKER_META[e.ticker.toUpperCase()];
       insights.push({
-        category: "concentration",
-        tone: "info",
-        title: `${lowConviction}/${ideas.length} idées en suivi avec conviction "faible"`,
-        detail: `Plus de la moitié de tes idées en suivi sont taggées "faible conviction" — soit le système est conservateur sur ces tickers, soit ta base d'idées mérite d'être nettoyée. Les idées à faible conviction noient le signal des idées à forte conviction.`,
+        category: "sensitivity",
+        tone: "good",
+        title: `${e.ticker} (score ${score.toFixed(1)}/10) : earnings dans ${e.days_until}j`,
+        detail: `${meta?.name ?? e.ticker} cumule un score scanner élevé (${score.toFixed(1)}/10) ET des earnings imminents. Conjugaison rare : si beat + relèvement de guidance, le titre peut bondir 10-20%. Risque inverse si miss. Position de scénario à préparer.`,
+        tickers: [e.ticker],
       });
     }
   }
 
-  // ── SCORE DE DIVERSIFICATION MULTIFACTORIEL ──────────────────────────
-  const scoreBreakdown = computeMultifactorScore(
-    positions,
-    exposureBySector,
-    exposureByGeo,
-    exposureByTrend,
-    totalValue,
-  );
-
+  // ── SCORE QUALITATIF DU PORTEFEUILLE (basé sur perf des positions) ───
+  const scoreBreakdown = computeQualityScore(positions, input.sectorRotation);
   const diversificationScore = Math.round(
-    (scoreBreakdown.sector * 0.30 +
+    (scoreBreakdown.sector * 0.40 +
      scoreBreakdown.geo * 0.20 +
-     scoreBreakdown.positionMax * 0.30 +
+     scoreBreakdown.positionMax * 0.20 +
      scoreBreakdown.trends * 0.20)
   );
 
@@ -528,60 +578,83 @@ function explainRateSensitivity(
 }
 
 /**
- * Score multifactoriel : 4 dimensions pondérées.
- * Chaque dimension est notée 0-10 et le score final est une moyenne pondérée.
+ * Score qualitatif du portefeuille — 4 dimensions société/secteur (pas portfolio mgmt).
+ *
+ * Au lieu de regarder la diversification (HHI, géo, etc.), on regarde :
+ * - performance : combien de positions sont en gain
+ * - momentum_sector : combien de tes secteurs sont leaders du marché
+ * - catalysts : earnings imminents avec scores élevés
+ * - relative_strength : sociétés en sur-performance vs leur secteur
  */
-function computeMultifactorScore(
-  positions: Array<{ ticker: string; market_value?: number }>,
-  exposureBySector: Array<{ weight: number }>,
-  exposureByGeo: Array<{ weight: number }>,
-  exposureByTrend: Array<{ weight: number }>,
-  totalValue?: number,
+function computeQualityScore(
+  positions: Array<{ ticker: string; pnl_pct?: number; change_1m?: number }>,
+  sectorRotation?: { leaders?: Array<{ sector: string; change_1m: number }>; laggards?: Array<{ sector: string; change_1m: number }> },
 ): { sector: number; geo: number; positionMax: number; trends: number } {
   if (positions.length === 0) return { sector: 0, geo: 0, positionMax: 0, trends: 0 };
-  if (positions.length === 1) return { sector: 1, geo: 0, positionMax: 0, trends: 1 };
 
-  // 1. Score sectoriel (Herfindahl + bonus nombre)
-  const sectorHhi = exposureBySector.reduce((s, e) => s + Math.pow(e.weight / 100, 2), 0);
-  const sectorBase = (1 - sectorHhi) * 10;
-  const sectorCountBonus = Math.min(exposureBySector.length / 5, 1) * 2;
-  const sectorScore = Math.min(10, sectorBase + sectorCountBonus);
+  // Renommage interne : on garde les 4 clés pour ne pas casser l'interface.
+  // sector → momentum sectoriel (combien de tes secteurs sont leaders)
+  // geo → performance (combien de positions en gain)
+  // positionMax → relative strength (combien sur-performent leur secteur)
+  // trends → cycle (sur-perf moyenne 1M)
 
-  // 2. Score géographique (idéal : 70% US + 30% Europe/Émergents)
-  const geoHhi = exposureByGeo.reduce((s, e) => s + Math.pow(e.weight / 100, 2), 0);
-  const geoBase = (1 - geoHhi) * 10;
-  // Bonus si 2-3 régions couvertes
-  const geoCountBonus = exposureByGeo.length >= 2 ? 2 : 0;
-  const geoScore = Math.min(10, geoBase + geoCountBonus);
+  // 1. PERFORMANCE (positions en gain)
+  const inGain = positions.filter(p => (p.pnl_pct ?? 0) > 0).length;
+  const performanceScore = Math.round((inGain / positions.length) * 10);
 
-  // 3. Score de concentration max (pénalise toute position > 25%)
-  let positionMaxScore = 10;
-  if (totalValue && totalValue > 0) {
-    const maxWeight = Math.max(...positions.map(p => ((p.market_value ?? 0) / totalValue) * 100));
-    if (maxWeight > 50) positionMaxScore = 0;
-    else if (maxWeight > 35) positionMaxScore = 3;
-    else if (maxWeight > 25) positionMaxScore = 5;
-    else if (maxWeight > 15) positionMaxScore = 8;
-    else positionMaxScore = 10;
-  } else if (positions.length === 1) {
-    positionMaxScore = 0;
-  } else {
-    positionMaxScore = Math.min(10, positions.length * 1.5);
+  // 2. MOMENTUM SECTORIEL (combien de tes secteurs sont leaders)
+  let sectorMomentumScore = 5; // neutre par défaut
+  if (sectorRotation?.leaders && sectorRotation.leaders.length > 0) {
+    const leaderSectors = sectorRotation.leaders.map(l => l.sector.toLowerCase());
+    const positionSectors = positions
+      .map(p => TICKER_META[p.ticker.toUpperCase()]?.sector)
+      .filter(Boolean)
+      .map(s => SECTOR_LABELS[s as SectorKey]?.toLowerCase() ?? "");
+    const inLeaders = positionSectors.filter(ps =>
+      leaderSectors.some(ls => ls.includes(ps) || ps.includes(ls))
+    ).length;
+    sectorMomentumScore = Math.min(10, Math.round(5 + (inLeaders / positions.length) * 5));
   }
 
-  // 4. Score mégatendances (bonus si 2-4 trends couvertes)
-  const trendsCount = exposureByTrend.length;
-  let trendsScore = 0;
-  if (trendsCount === 0) trendsScore = 2;       // Manque structurel
-  else if (trendsCount === 1) trendsScore = 5;  // Mono-trend
-  else if (trendsCount === 2) trendsScore = 7;  // OK
-  else if (trendsCount === 3) trendsScore = 9;  // Bonne diversité
-  else trendsScore = 10;                        // Excellent
+  // 3. RELATIVE STRENGTH (positions en sur-performance vs leur secteur)
+  let relativeStrengthScore = 5;
+  if (sectorRotation && positions.length > 0) {
+    let outperforming = 0;
+    let counted = 0;
+    const allSectors = [...(sectorRotation.leaders ?? []), ...(sectorRotation.laggards ?? [])];
+    for (const p of positions) {
+      if (p.change_1m == null) continue;
+      const meta = TICKER_META[p.ticker.toUpperCase()];
+      if (!meta?.sector) continue;
+      const sectorLabel = SECTOR_LABELS[meta.sector]?.toLowerCase() ?? "";
+      const sectorMatch = allSectors.find(s =>
+        s.sector.toLowerCase().includes(sectorLabel) || sectorLabel.includes(s.sector.toLowerCase())
+      );
+      if (sectorMatch) {
+        counted++;
+        if (p.change_1m > sectorMatch.change_1m) outperforming++;
+      }
+    }
+    if (counted > 0) relativeStrengthScore = Math.round((outperforming / counted) * 10);
+  }
+
+  // 4. CYCLE (perf moyenne 1M des positions)
+  const change1mValues = positions.map(p => p.change_1m).filter((v): v is number => v != null);
+  let cycleScore = 5;
+  if (change1mValues.length > 0) {
+    const avg1m = change1mValues.reduce((a, b) => a + b, 0) / change1mValues.length;
+    if (avg1m > 5) cycleScore = 10;
+    else if (avg1m > 2) cycleScore = 8;
+    else if (avg1m > 0) cycleScore = 6;
+    else if (avg1m > -2) cycleScore = 4;
+    else if (avg1m > -5) cycleScore = 2;
+    else cycleScore = 1;
+  }
 
   return {
-    sector: Math.round(sectorScore),
-    geo: Math.round(geoScore),
-    positionMax: Math.round(positionMaxScore),
-    trends: Math.round(trendsScore),
+    sector: sectorMomentumScore,        // momentum sectoriel
+    geo: performanceScore,              // performance des positions
+    positionMax: relativeStrengthScore, // sur-performance vs secteur
+    trends: cycleScore,                 // cycle (perf 1M)
   };
 }

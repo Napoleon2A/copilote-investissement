@@ -118,6 +118,7 @@ export default function HomePage() {
         picks={topPicks}
         earnings={earnings}
         linkedNews={allLinkedNews}
+        sectorRotation={brief?.market_context?.sector_rotation}
       />
 
       {/* Row 1 : Comprendre marché ↔ Actualité des cibles */}

@@ -13,10 +13,11 @@ interface PortfolioInsightsPanelProps {
   picks: any[];
   earnings: any;
   linkedNews: any[];
+  sectorRotation?: any;
 }
 
 export function PortfolioInsightsPanel({
-  snapshot, portfolio, ideas, picks, earnings, linkedNews,
+  snapshot, portfolio, ideas, picks, earnings, linkedNews, sectorRotation,
 }: PortfolioInsightsPanelProps) {
   // Loading
   if (!snapshot || portfolio === undefined || ideas === undefined) {
@@ -53,6 +54,7 @@ export function PortfolioInsightsPanel({
     picks,
     upcomingEarnings,
     linkedNews,
+    sectorRotation,
   });
 
   const {
@@ -110,15 +112,15 @@ export function PortfolioInsightsPanel({
 
         {/* Exposition (col-span-1) */}
         <div className="space-y-3">
-          {/* Score breakdown */}
+          {/* Score qualité — basé sur perf société/secteur */}
           {positions.length > 0 && (
             <div className="rounded-lg border border-edge/50 bg-surface/40 p-3">
-              <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">⚖ Score multifactoriel</p>
+              <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">⚖ Qualité du portefeuille</p>
               <div className="space-y-1.5">
-                <ScoreBar label="Sectoriel"   score={scoreBreakdown.sector}      hint="Diversité des secteurs (HHI)" />
-                <ScoreBar label="Géographique" score={scoreBreakdown.geo}         hint="US / Europe / Émergents" />
-                <ScoreBar label="Position max" score={scoreBreakdown.positionMax} hint="Aucune position > 25%" />
-                <ScoreBar label="Mégatendances" score={scoreBreakdown.trends}    hint="Couverture IA, énergie, etc." />
+                <ScoreBar label="Performance"    score={scoreBreakdown.geo}         hint="% de positions en gain latent" />
+                <ScoreBar label="Momentum cycle" score={scoreBreakdown.trends}      hint="Performance moyenne 1 mois" />
+                <ScoreBar label="Secteurs leaders" score={scoreBreakdown.sector}    hint="% de tes secteurs dans les top performeurs" />
+                <ScoreBar label="Force relative"  score={scoreBreakdown.positionMax} hint="% de positions sur-performant leur secteur" />
               </div>
             </div>
           )}
@@ -143,44 +145,6 @@ export function PortfolioInsightsPanel({
                     </div>
                   );
                 })}
-              </div>
-            </div>
-          )}
-
-          {/* Exposition géographique */}
-          {exposureByGeo.length > 0 && (
-            <div className="rounded-lg border border-edge/50 bg-surface/40 p-3">
-              <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">🌍 Géographie</p>
-              <div className="space-y-1.5">
-                {exposureByGeo.map((g) => (
-                  <div key={g.geo}>
-                    <div className="flex items-center justify-between text-xs mb-0.5">
-                      <span className="font-medium text-primary">{g.label}</span>
-                      <span className="font-mono text-secondary">{g.weight}%</span>
-                    </div>
-                    <div className="h-1.5 bg-surface-alt rounded-full overflow-hidden">
-                      <div className="h-full bg-navy/60 dark:bg-accent/60 rounded-full transition-all"
-                        style={{ width: `${g.weight}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Exposition mégatendances */}
-          {exposureByTrend.length > 0 && (
-            <div className="rounded-lg border border-edge/50 bg-surface/40 p-3">
-              <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">🚀 Mégatendances</p>
-              <div className="flex flex-wrap gap-1.5">
-                {exposureByTrend.map((t) => (
-                  <span key={t.trend}
-                    className="inline-flex items-center gap-1 text-[0.7rem] font-medium px-2 py-1 rounded
-                               bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
-                    {t.label}
-                    <span className="font-mono opacity-70">{t.weight}%</span>
-                  </span>
-                ))}
               </div>
             </div>
           )}
