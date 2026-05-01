@@ -252,43 +252,6 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
     }
   }
 
-  // ── ANALYSE DES IDÉES EN SUIVI (pas juste positions) ─────────────────
-  for (const idea of ideas) {
-    const ticker = idea.ticker?.toUpperCase();
-    if (!ticker) continue;
-    const meta = TICKER_META[ticker];
-    if (!meta) continue;
-
-    // Croisement idée + secteur leader/laggard
-    if (input.sectorRotation) {
-      const sectorLabel = SECTOR_LABELS[meta.sector!]?.toLowerCase() ?? "";
-      const isInLeaders = input.sectorRotation.leaders?.some(l =>
-        l.sector.toLowerCase().includes(sectorLabel) || sectorLabel.includes(l.sector.toLowerCase())
-      );
-      const isInLaggards = input.sectorRotation.laggards?.some(l =>
-        l.sector.toLowerCase().includes(sectorLabel) || sectorLabel.includes(l.sector.toLowerCase())
-      );
-
-      if (isInLeaders && idea.action === "Surveiller") {
-        insights.push({
-          category: "sensitivity",
-          tone: "good",
-          title: `${ticker} (idée en suivi) profite du momentum sectoriel`,
-          detail: `${meta.name} est dans un secteur en tête du marché actuellement. Si la thèse fondamentale tient, c'est typiquement le moment où le marché commence à reconnaître la valeur — les flux institutionnels suivent généralement le momentum sectoriel pendant 4-8 semaines.`,
-          tickers: [ticker],
-        });
-      } else if (isInLaggards && idea.action === "Éviter") {
-        insights.push({
-          category: "sensitivity",
-          tone: "info",
-          title: `${ticker} (idée à éviter) confirmée par la dynamique sectorielle`,
-          detail: `${meta.name} est dans un secteur en queue du marché. Ta lecture "Éviter" est cohérente avec le mouvement sectoriel actuel — les sociétés du secteur subissent une rotation hors des capitaux institutionnels.`,
-          tickers: [ticker],
-        });
-      }
-    }
-  }
-
   // ── ANALYSE FONDAMENTALE ENRICHIE (utilise tickerScores avec reasons) ────
   const tickerScores = input.tickerScores ?? {};
   const myTickerSet = new Set([
@@ -327,72 +290,6 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
     const hasStrongGrowth = growthReasons.some(r => r.toLowerCase().includes("très forte") || r.toLowerCase().includes("forte croissance"));
     const hasBrokenMomentum = momentumReasons.some(r => r.toLowerCase().includes("chute") || r.toLowerCase().includes("sous son plus haut") && r.includes("52W"));
 
-    if (hasStrongGrowth && hasBrokenMomentum) {
-      const growthDetail = growthReasons.find(r => r.toLowerCase().includes("croissance"));
-      const momentumDetail = momentumReasons.find(r => r.toLowerCase().includes("chute") || r.toLowerCase().includes("sous"));
-      insights.push({
-        category: "sensitivity",
-        tone: "info",
-        title: `${ticker} : décorrélation croissance × prix`,
-        detail: `${name} (${role}) : ${growthDetail?.toLowerCase()} mais ${momentumDetail?.toLowerCase()}. Le marché ne valorise pas la croissance — soit elle n'est pas durable (sceptique), soit le prix anticipe une normalisation. Lire les derniers earnings pour trancher.`,
-        tickers: [ticker],
-      });
-    }
-
-    // Cas : upside analystes important
-    const valReasons = sc.valuation?.reasons ?? [];
-    const upsideMatch = valReasons.join(" ").match(/Upside.*?(\+?-?\d+)%/i);
-    if (upsideMatch) {
-      const upside = parseInt(upsideMatch[1], 10);
-      if (upside > 25) {
-        insights.push({
-          category: "sensitivity",
-          tone: "info",
-          title: `${ticker} : analystes voient +${upside}% d'upside`,
-          detail: `${name} (${role}) — le consensus des analystes implique un potentiel de +${upside}% par rapport au cours actuel. Attention : le consensus est en retard sur les changements rapides — vérifier la date des dernières mises à jour analystes et si les fondamentaux les justifient encore.`,
-          tickers: [ticker],
-        });
-      } else if (upside < -10) {
-        insights.push({
-          category: "sensitivity",
-          tone: "warning",
-          title: `${ticker} : analystes anticipent ${upside}% (cours surévalué)`,
-          detail: `${name} (${role}) — selon le consensus, le titre est ${Math.abs(upside)}% au-dessus du juste prix. Soit le marché valorise un scénario que les analystes n'ont pas intégré (positif), soit il y a un excès d'enthousiasme à corriger.`,
-          tickers: [ticker],
-        });
-      }
-    }
-
-    // Cas : volatilité extrême
-    const riskReasons = sc.risk?.reasons ?? [];
-    const volatileMatch = riskReasons.join(" ").match(/amplitude.*?(\d+)\s*%/i);
-    if (volatileMatch) {
-      const amplitude = parseInt(volatileMatch[1], 10);
-      if (amplitude > 200) {
-        insights.push({
-          category: "sensitivity",
-          tone: "warning",
-          title: `${ticker} : titre extrêmement volatile (amplitude 52W ${amplitude}%)`,
-          detail: `${name} (${role}) a oscillé de ${amplitude}% entre son plus bas et son plus haut sur 52 semaines. C'est un profil de small-cap spéculative — les mouvements de ±20% en quelques jours sont normaux. Position sizing critique : limiter à 2-5% du portefeuille pour ne pas dépendre d'un mouvement.`,
-          tickers: [ticker],
-        });
-      }
-    }
-
-    // Cas : momentum 1M très fort (rebond ou poursuite)
-    const m1Match = momentumReasons.join(" ").match(/Forte hausse.*?(\+\d+)/i);
-    if (m1Match) {
-      const m1 = parseInt(m1Match[1].replace("+", ""), 10);
-      if (m1 > 25) {
-        insights.push({
-          category: "sensitivity",
-          tone: "good",
-          title: `${ticker} : rebond +${m1}% sur 1 mois`,
-          detail: `${name} (${role}) a bondi de ${m1}% sur le mois écoulé. Soit changement de narratif (news, beat earnings, upgrade), soit short squeeze, soit accumulation institutionnelle. Lire la dernière news pour identifier la cause — un rebond ${m1}% sans catalyseur identifiable se retourne souvent vite.`,
-          tickers: [ticker],
-        });
-      }
-    }
   }
 
   // ── CROISEMENT MACRO × POSITION SPÉCIFIQUE ────────────────────────────
@@ -515,82 +412,6 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
       positions.map(p => TICKER_META[p.ticker.toUpperCase()]?.sector).filter(Boolean) as SectorKey[]
     );
 
-    // Si un secteur du portefeuille est en tête des leaders
-    const topLeader = input.sectorRotation.leaders?.[0];
-    if (topLeader && topLeader.change_1m > 5) {
-      // Vérifier si le secteur leader est dans le portefeuille
-      const isInPortfolio = Array.from(myPortfolioSectors).some(s =>
-        SECTOR_LABELS[s]?.toLowerCase().includes(topLeader.sector.toLowerCase())
-        || topLeader.sector.toLowerCase().includes(SECTOR_LABELS[s]?.toLowerCase() ?? "")
-      );
-
-      if (isInPortfolio) {
-        const matchingTickers = positions
-          .filter(p => {
-            const sec = TICKER_META[p.ticker.toUpperCase()]?.sector;
-            return sec && (
-              SECTOR_LABELS[sec]?.toLowerCase().includes(topLeader.sector.toLowerCase())
-              || topLeader.sector.toLowerCase().includes(SECTOR_LABELS[sec]?.toLowerCase() ?? "")
-            );
-          })
-          .map(p => p.ticker);
-        insights.push({
-          category: "sensitivity",
-          tone: "good",
-          title: `${topLeader.sector} en tête du marché (+${topLeader.change_1m.toFixed(1)}% sur 1 mois)`,
-          detail: `${matchingTickers.join(", ")} bénéficie du flux institutionnel sur ce secteur. Quand un secteur prend la tête, c'est que les gros gestionnaires (fonds, pensions) se repositionnent — ils anticipent une accélération économique sur ce thème. Ce leadership dure historiquement 4 à 8 semaines avant rotation. Plus le rallye dure, plus il devient fragile : les premiers entrés commencent à prendre leurs profits.`,
-          tickers: matchingTickers,
-        });
-      }
-    }
-
-    // Secteur du portefeuille en queue des laggards
-    const topLaggard = input.sectorRotation.laggards?.[0];
-    if (topLaggard && topLaggard.change_1m < -3) {
-      const isInPortfolio = Array.from(myPortfolioSectors).some(s =>
-        SECTOR_LABELS[s]?.toLowerCase().includes(topLaggard.sector.toLowerCase())
-        || topLaggard.sector.toLowerCase().includes(SECTOR_LABELS[s]?.toLowerCase() ?? "")
-      );
-
-      if (isInPortfolio) {
-        const matchingTickers = positions
-          .filter(p => {
-            const sec = TICKER_META[p.ticker.toUpperCase()]?.sector;
-            return sec && (
-              SECTOR_LABELS[sec]?.toLowerCase().includes(topLaggard.sector.toLowerCase())
-              || topLaggard.sector.toLowerCase().includes(SECTOR_LABELS[sec]?.toLowerCase() ?? "")
-            );
-          })
-          .map(p => p.ticker);
-        insights.push({
-          category: "sensitivity",
-          tone: "warning",
-          title: `${topLaggard.sector} en queue du marché (${topLaggard.change_1m.toFixed(1)}% sur 1 mois)`,
-          detail: `${matchingTickers.join(", ")} subit la sortie des capitaux du secteur. Quand un secteur tombe en queue, c'est que les institutionnels rotent vers d'autres thèmes — anticipation d'un ralentissement spécifique au secteur. Tes sociétés peuvent encore tirer leur épingle si elles surperforment leurs concurrents, sinon elles vont accompagner le mouvement baissier sectoriel.`,
-          tickers: matchingTickers,
-        });
-      }
-    }
-  }
-
-  // ── EARNINGS À HAUT POTENTIEL DANS L'UNIVERS DES IDÉES ───────────────
-  // Identifier des earnings à venir avec des scores élevés sur des tickers que l'utilisateur suit
-  for (const e of upcomingEarnings) {
-    const isMine = positions.some(p => p.ticker.toUpperCase() === e.ticker.toUpperCase())
-                || ideas.some(i => i.ticker.toUpperCase() === e.ticker.toUpperCase());
-    if (!isMine) continue;
-    const score = e.scores?.composite;
-    if (score != null && score >= 7.5 && e.days_until > 0 && e.days_until <= 14) {
-      const meta = TICKER_META[e.ticker.toUpperCase()];
-      const move1m = e.change_1m != null ? ` 1M : ${e.change_1m >= 0 ? "+" : ""}${e.change_1m.toFixed(1)}%.` : "";
-      insights.push({
-        category: "sensitivity",
-        tone: "good",
-        title: `${e.ticker} : score ${score.toFixed(1)}/10 + earnings J-${e.days_until}`,
-        detail: `${meta?.name ?? e.ticker}.${move1m}`,
-        tickers: [e.ticker],
-      });
-    }
   }
 
   // ── SCORE QUALITATIF DU PORTEFEUILLE (basé sur perf des positions) ───
