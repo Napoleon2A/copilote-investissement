@@ -297,46 +297,6 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
     });
   }
 
-  // ── 5. OPPORTUNITÉS MANQUÉES ──────────────────────────────────────────
-  const myPickedTickers = new Set([...myTickers, ...picks.map(p => p.ticker.toUpperCase())]);
-  const sectorsInPortfolio = new Set(exposureBySector.map(e => e.sector));
-
-  for (const pick of picks.slice(0, 3)) {
-    const meta = TICKER_META[pick.ticker.toUpperCase()];
-    if (!meta?.sector) continue;
-    if (!myTickers.has(pick.ticker.toUpperCase())) {
-      const score = pick.scores?.composite;
-      const move = pick.change_1d != null ? ` Aujourd'hui ${pick.change_1d >= 0 ? "+" : ""}${pick.change_1d.toFixed(2)}%.` : "";
-      const move1m = pick.change_1m != null ? ` Sur 1M : ${pick.change_1m >= 0 ? "+" : ""}${pick.change_1m.toFixed(1)}%.` : "";
-      insights.push({
-        category: "missed",
-        tone: "info",
-        title: `${pick.ticker} (${SECTOR_LABELS[meta.sector] ?? meta.sector}) : score ${score?.toFixed(1) ?? "?"}/10`,
-        detail: `${meta.name}, action « ${pick.action_label} ».${move}${move1m}`,
-        tickers: [pick.ticker],
-      });
-    }
-  }
-
-  // ── 6. SECTEURS ABSENTS PERFORMANTS ──────────────────────────────────
-  if (positions.length > 0) {
-    const importantSectors: Array<[SectorKey, string]> = [
-      ["tech", "Tech"],
-      ["finance", "Finance"],
-      ["health", "Santé"],
-      ["energy", "Énergie"],
-    ];
-    const missingImportant = importantSectors.filter(([s]) => !sectorsInPortfolio.has(s));
-    if (missingImportant.length >= 3) {
-      insights.push({
-        category: "concentration",
-        tone: "info",
-        title: "Plusieurs grands secteurs absents du portefeuille",
-        detail: `Pas d'exposition à : ${missingImportant.map(([_, l]) => l).join(", ")}. Une diversification multi-secteurs (4-6 secteurs) est généralement recommandée pour limiter les corrélations négatives.`,
-      });
-    }
-  }
-
   // ── PERFORMANCE VS SECTEUR (sur/sous-performance) ────────────────────
   if (input.sectorRotation && positions.length > 0) {
     const allSectors = [
