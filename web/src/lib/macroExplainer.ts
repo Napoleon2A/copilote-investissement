@@ -1,6 +1,9 @@
 /**
  * Vulgarisation du contexte macro pour non-trader.
  * Convertit les indicateurs techniques (VIX, régime, etc.) en explications claires.
+ *
+ * Les fonctions "Contextual" prennent un MarketSnapshot complet et croisent
+ * plusieurs signaux pour détecter les anomalies (ex: VIX bas + pétrole en flambée).
  */
 
 export interface MacroExplanation {
@@ -8,6 +11,34 @@ export interface MacroExplanation {
   detail: string;         // explication pédagogique
   tone: "positive" | "negative" | "neutral" | "warning";
 }
+
+export interface MarketSnapshot {
+  vix: number | null;
+  vix_change_1m?: number | null;
+  sp500_price?: number | null;
+  sp500_ytd: number | null;
+  sp500_1m: number | null;
+  nasdaq_ytd?: number | null;
+  nasdaq_1m?: number | null;
+  cac40_ytd?: number | null;
+  cac40_1m?: number | null;
+  us10y: number | null;
+  us10y_1m_change?: number | null;
+  dxy: number | null;
+  dxy_1m: number | null;
+  gold_ytd: number | null;
+  wti_ytd: number | null;
+  wti_1m?: number | null;
+}
+
+/* ── Moyennes historiques (référence pour calibrage) ──────────────────── */
+const HIST = {
+  VIX_AVG_30Y: 19.5,           // VIX moyenne 1990-2024
+  SP500_ANNUAL_AVG: 10.5,      // S&P 500 perf annuelle moyenne 1928-2024
+  NASDAQ_ANNUAL_AVG: 12.0,     // NASDAQ moyenne 1971-2024
+  US10Y_AVG_10Y: 2.8,          // Taux 10 ans moyen 2014-2024
+  DXY_NORMAL_RANGE: [92, 105], // Dollar Index zone normale
+};
 
 export function explainVix(vix: number | null | undefined): MacroExplanation | null {
   if (vix == null) return null;
@@ -664,3 +695,286 @@ export const CATEGORY_STYLES: Record<NewsCategory, { bg: string; text: string; b
   deal:         { bg: "bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400", border: "border-emerald-500/30", icon: "🤝" },
   company:      { bg: "bg-surface-alt",   text: "text-secondary",                       border: "border-edge",          icon: "🏢" },
 };
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Fonctions contextuelles — analyses enrichies cross-asset avec moyennes hist.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* ── VIX contextuel ─────────────────────────────────────────────────── */
+export function explainVixContextual(snap: MarketSnapshot): MacroExplanation | null {
+  const vix = snap.vix;
+  if (vix == null) return null;
+
+  const dev = ((vix - HIST.VIX_AVG_30Y) / HIST.VIX_AVG_30Y) * 100;
+  const devSign = dev < 0 ? "sous" : "au-dessus de";
+  const headline = `VIX ${vix.toFixed(1)} (${dev < 0 ? "−" : "+"}${Math.abs(dev).toFixed(0)}% vs moyenne historique 19.5)`;
+
+  // Construction du detail
+  const parts: string[] = [];
+  parts.push(`VIX (« indice de la peur ») à ${vix.toFixed(1)}, ${Math.abs(dev).toFixed(0)}% ${devSign} sa moyenne 30 ans (${HIST.VIX_AVG_30Y}).`);
+
+  // Anomalies cross-asset
+  const anomalies: string[] = [];
+  if (vix < 18 && snap.wti_ytd != null && snap.wti_ytd > 50) {
+    anomalies.push(`pétrole en flambée (+${snap.wti_ytd.toFixed(0)}% YTD) annonce de l'inflation à venir → la sérénité du VIX est suspecte`);
+  }
+  if (vix < 18 && snap.gold_ytd != null && snap.gold_ytd > 15) {
+    anomalies.push(`or à +${snap.gold_ytd.toFixed(0)}% YTD : les institutionnels se couvrent malgré le calme apparent`);
+  }
+  if (vix < 14) {
+    anomalies.push(`niveau historiquement bas — les périodes de complaisance extrême ont précédé les chutes de février 2018, février 2020 et août 2024`);
+  }
+  if (vix > 25 && snap.sp500_ytd != null && snap.sp500_ytd > 0) {
+    anomalies.push(`S&P toujours en hausse (+${snap.sp500_ytd.toFixed(1)}% YTD) malgré la nervosité — résilience ou faux calme`);
+  }
+  if (snap.vix_change_1m != null && snap.vix_change_1m < -25) {
+    anomalies.push(`VIX a chuté de ${Math.abs(snap.vix_change_1m).toFixed(0)}% sur 1 mois → décompression rapide après un stress, retour à la prise de risque`);
+  }
+
+  if (anomalies.length > 0) {
+    parts.push("⚠ " + anomalies.join(". ") + ".");
+  } else if (vix < 18) {
+    parts.push("Pas d'anomalie cross-asset détectée — environnement cohérent pour l'analyse posée.");
+  } else if (vix > 30) {
+    parts.push("Stress élevé — historiquement, les fonds disciplinés profitent de ces fenêtres pour entrer sur la qualité.");
+  }
+
+  // Tone
+  let tone: MacroExplanation["tone"] = "neutral";
+  if (anomalies.length > 0) tone = "warning";
+  else if (vix < 14) tone = "warning";
+  else if (vix < 18) tone = "positive";
+  else if (vix < 25) tone = "neutral";
+  else if (vix < 35) tone = "warning";
+  else tone = "negative";
+
+  return { headline, detail: parts.join(" "), tone };
+}
+
+/* ── Indice contextuel (S&P, NASDAQ, CAC40) ──────────────────────────── */
+export function explainIndexContextual(
+  name: string,
+  shortName: string,
+  ytd: number | null,
+  m1: number | null,
+  histAvg = HIST.SP500_ANNUAL_AVG,
+): MacroExplanation {
+  if (ytd == null) {
+    return { headline: name, detail: "Données indisponibles.", tone: "neutral" };
+  }
+
+  // Année écoulée vs annuelle
+  const today = new Date();
+  const yearProgress = (today.getMonth() * 30 + today.getDate()) / 360; // approx
+  const expectedYtd = histAvg * yearProgress;
+  const advance = ytd - expectedYtd;
+
+  const parts: string[] = [];
+  parts.push(`${name} : ${ytd >= 0 ? "+" : ""}${ytd.toFixed(1)}% YTD${m1 != null ? `, ${m1 >= 0 ? "+" : ""}${m1.toFixed(1)}% sur le mois` : ""}.`);
+
+  if (Math.abs(advance) < 2) {
+    parts.push(`En ligne avec sa trajectoire historique (moy. annuelle ${histAvg}%).`);
+  } else if (advance > 0) {
+    parts.push(`Au-dessus de sa trajectoire moyenne (moy. annuelle ${histAvg}%, attendu ~${expectedYtd.toFixed(1)}% à cette date).`);
+  } else {
+    parts.push(`En retard sur sa trajectoire moyenne (moy. annuelle ${histAvg}%, attendu ~${expectedYtd.toFixed(1)}% à cette date).`);
+  }
+
+  if (m1 != null && Math.abs(m1) > 5) {
+    parts.push(m1 > 0
+      ? `Forte accélération sur le mois (+${m1.toFixed(1)}%) — moment de prudence pour ne pas chasser la performance.`
+      : `Correction marquée sur le mois (${m1.toFixed(1)}%) — peut révéler des opportunités sur la qualité.`);
+  }
+
+  let tone: MacroExplanation["tone"] = "neutral";
+  if (ytd > histAvg * 1.5) tone = "warning";       // Gros bull = risque de retournement
+  else if (ytd > 0 && advance > 0) tone = "positive";
+  else if (ytd < -10) tone = "negative";
+  else if (ytd < 0) tone = "warning";
+
+  return {
+    headline: `${shortName} ${ytd >= 0 ? "+" : ""}${ytd.toFixed(1)}% YTD`,
+    detail: parts.join(" "),
+    tone,
+  };
+}
+
+/* ── Taux 10Y contextuel ─────────────────────────────────────────────── */
+export function explainTreasury10YContextual(snap: MarketSnapshot): MacroExplanation | null {
+  const y = snap.us10y;
+  if (y == null) return null;
+
+  const dev = ((y - HIST.US10Y_AVG_10Y) / HIST.US10Y_AVG_10Y) * 100;
+  const headline = `US 10Y ${y.toFixed(2)}% (${dev > 0 ? "+" : ""}${dev.toFixed(0)}% vs moy. 10 ans 2.8%)`;
+
+  const parts: string[] = [];
+  parts.push(`Rendement à ${y.toFixed(2)}%, soit ${Math.abs(dev).toFixed(0)}% ${dev > 0 ? "au-dessus de" : "sous"} sa moyenne décennale (2.8%).`);
+
+  // Pression sur valorisations
+  if (y > 4.5) {
+    parts.push("Coût du capital élevé : pénalise les valeurs de croissance (tech, biotech, immobilier) car leurs bénéfices futurs sont actualisés plus lourdement. Bénéfique aux banques (marges nettes d'intérêt en hausse).");
+  } else if (y > 3.5) {
+    parts.push("Zone modérément tendue : les multiples des actions de croissance restent sous pression mais gérable.");
+  } else if (y < 2.5) {
+    parts.push("Coût du capital bas : dope les actions de croissance et l'immobilier. Mais si la baisse vient d'une fuite vers la sécurité, signal de peur sous-jacent.");
+  }
+
+  // Mouvement récent
+  if (snap.us10y_1m_change != null && Math.abs(snap.us10y_1m_change) > 0.3) {
+    parts.push(snap.us10y_1m_change > 0
+      ? `Hausse rapide de ${snap.us10y_1m_change.toFixed(2)} pt sur 1 mois → signal de tension, à surveiller.`
+      : `Baisse de ${Math.abs(snap.us10y_1m_change).toFixed(2)} pt sur 1 mois → détente du coût du capital.`);
+  }
+
+  let tone: MacroExplanation["tone"] = "neutral";
+  if (y > 5) tone = "negative";
+  else if (y > 4.5) tone = "warning";
+  else if (y > 3 && y < 4) tone = "positive";
+  else if (y < 2) tone = "warning"; // peur
+
+  return { headline, detail: parts.join(" "), tone };
+}
+
+/* ── Dollar contextuel ──────────────────────────────────────────────── */
+export function explainDollarContextual(snap: MarketSnapshot): MacroExplanation | null {
+  const d = snap.dxy;
+  if (d == null) return null;
+
+  const [low, high] = HIST.DXY_NORMAL_RANGE;
+  const inRange = d >= low && d <= high;
+  const m1 = snap.dxy_1m ?? 0;
+
+  const headline = `Dollar Index ${d.toFixed(1)} ${m1 >= 0 ? "(+" : "("}${m1.toFixed(1)}% 1M)`;
+
+  const parts: string[] = [];
+  parts.push(`DXY à ${d.toFixed(1)}, ${inRange ? "dans sa zone normale (92-105)" : d > high ? "au-dessus de sa zone normale" : "sous sa zone normale"}.`);
+
+  if (m1 > 3) {
+    parts.push("Dollar fort sur 1 mois : les multinationales US perdent en compétitivité (Apple, Microsoft, Coca-Cola : ~50% des ventes hors USA), pénalise les marchés émergents qui empruntent en USD.");
+  } else if (m1 < -3) {
+    parts.push("Dollar en baisse sur 1 mois : bénéficie aux exportateurs US, soutient les marchés émergents et l'or (corrélation négative).");
+    if (snap.gold_ytd != null && snap.gold_ytd > 10) {
+      parts.push(`Cohérent avec l'or à +${snap.gold_ytd.toFixed(0)}% YTD.`);
+    }
+  } else {
+    parts.push("Mouvement modéré sur 1 mois : pas de stress devises particulier.");
+  }
+
+  const tone: MacroExplanation["tone"] = m1 > 4 ? "warning" : m1 < -4 ? "warning" : "neutral";
+  return { headline, detail: parts.join(" "), tone };
+}
+
+/* ── Or contextuel ──────────────────────────────────────────────────── */
+export function explainGoldContextual(snap: MarketSnapshot): MacroExplanation | null {
+  const g_ytd = snap.gold_ytd;
+  if (g_ytd == null) return null;
+
+  const headline = `Or ${g_ytd >= 0 ? "+" : ""}${g_ytd.toFixed(1)}% YTD`;
+  const parts: string[] = [];
+
+  if (g_ytd > 20) {
+    parts.push(`Forte hausse de l'or (+${g_ytd.toFixed(0)}% YTD) — les institutionnels et banques centrales achètent comme valeur refuge.`);
+    if (snap.vix != null && snap.vix < 20) {
+      parts.push(`Curieusement le VIX reste calme (${snap.vix.toFixed(1)}) : décorrélation à surveiller — soit l'or anticipe l'inflation, soit le marché actions sous-estime le risque.`);
+    }
+  } else if (g_ytd > 10) {
+    parts.push(`Hausse modérée (+${g_ytd.toFixed(0)}%) — soit anticipation d'inflation, soit faiblesse du dollar (qui sont liées).`);
+  } else if (g_ytd < -10) {
+    parts.push(`Baisse marquée (${g_ytd.toFixed(0)}% YTD) — appétit pour le risque retrouvé, les investisseurs préfèrent les actifs productifs.`);
+  } else {
+    parts.push(`Variation contenue (${g_ytd.toFixed(0)}%) — pas de signal de stress refuge particulier.`);
+  }
+
+  const tone: MacroExplanation["tone"] = g_ytd > 20 ? "warning" : g_ytd < -10 ? "positive" : "neutral";
+  return { headline, detail: parts.join(" "), tone };
+}
+
+/* ── Pétrole contextuel ─────────────────────────────────────────────── */
+export function explainOilContextual(snap: MarketSnapshot): MacroExplanation | null {
+  const oil_ytd = snap.wti_ytd;
+  if (oil_ytd == null) return null;
+
+  const headline = `Pétrole WTI ${oil_ytd >= 0 ? "+" : ""}${oil_ytd.toFixed(0)}% YTD`;
+  const parts: string[] = [];
+
+  if (oil_ytd > 50) {
+    parts.push(`Flambée du brut (+${oil_ytd.toFixed(0)}% YTD) — pression inflationniste majeure, attendue dans le CPI à venir.`);
+    parts.push("Bénéficiaires : Exxon, Chevron, TotalEnergies, Shell (pétrolières). Pénalisés : compagnies aériennes (Delta, Air France), transport (FedEx, UPS), industrie lourde, consommation discrétionnaire.");
+    if (snap.us10y != null && snap.us10y > 4) {
+      parts.push(`Combiné avec les taux 10 ans à ${snap.us10y.toFixed(1)}%, l'environnement macro reste tendu.`);
+    }
+  } else if (oil_ytd > 20) {
+    parts.push(`Hausse soutenue (+${oil_ytd.toFixed(0)}% YTD) — vigilance sur l'inflation, surtout si les coupes OPEC se prolongent.`);
+  } else if (oil_ytd < -20) {
+    parts.push(`Effondrement du brut (${oil_ytd.toFixed(0)}% YTD) — souvent signal de demande mondiale faible (récession en gestation) ou surplus d'offre.`);
+    parts.push("Bénéficiaires : aérien, transport, consommation. Pénalisés : pétrolières.");
+  } else {
+    parts.push(`Variation modérée (${oil_ytd.toFixed(0)}% YTD) — pas de signal énergie/inflation marquant.`);
+  }
+
+  const tone: MacroExplanation["tone"] = oil_ytd > 40 ? "warning" : oil_ytd < -20 ? "warning" : "neutral";
+  return { headline, detail: parts.join(" "), tone };
+}
+
+/* ── Régime contextuel — utilise tout le snapshot ────────────────────── */
+export function explainRegimeContextual(
+  regime: string,
+  label: string,
+  snap: MarketSnapshot,
+): MacroExplanation {
+  const parts: string[] = [];
+
+  // Citation des chiffres réels au lieu de phrases bateau
+  if (snap.vix != null && snap.sp500_ytd != null) {
+    parts.push(`VIX à ${snap.vix.toFixed(1)} et S&P à ${snap.sp500_ytd >= 0 ? "+" : ""}${snap.sp500_ytd.toFixed(1)}% YTD : cohérent avec un régime "${label}".`);
+  }
+
+  // Détection d'anomalies cross-asset
+  const anomalies: string[] = [];
+  if (regime === "calme" || regime === "risk-on") {
+    if (snap.wti_ytd != null && snap.wti_ytd > 50) {
+      anomalies.push(`pétrole +${snap.wti_ytd.toFixed(0)}% YTD = inflation latente non encore digérée`);
+    }
+    if (snap.gold_ytd != null && snap.gold_ytd > 15) {
+      anomalies.push(`or +${snap.gold_ytd.toFixed(0)}% YTD = couverture institutionnelle malgré la sérénité`);
+    }
+    if (snap.us10y != null && snap.us10y > 4.5) {
+      anomalies.push(`taux 10 ans à ${snap.us10y.toFixed(2)}% = coût du capital tendu, pression sur les multiples`);
+    }
+  }
+  if (regime === "risk-off" || regime === "vigilance") {
+    if (snap.sp500_ytd != null && snap.sp500_ytd > 0) {
+      anomalies.push(`S&P toujours positif (+${snap.sp500_ytd.toFixed(1)}% YTD) malgré la nervosité — résilience à confirmer`);
+    }
+  }
+
+  if (anomalies.length > 0) {
+    parts.push(`⚠ Mais attention : ${anomalies.join(" ; ")}.`);
+  }
+
+  // Conseil concret au lieu de "analyser posément"
+  if (regime === "calme") {
+    parts.push(anomalies.length > 0
+      ? "Conseil : la sérénité affichée masque des tensions sous-jacentes. Privilégier qualité, valorisation raisonnable, éviter les paris audacieux."
+      : "Conseil : fenêtre favorable pour entrer sur des sociétés solides à valorisation correcte. Pas de précipitation."
+    );
+  } else if (regime === "risk-on") {
+    parts.push("Conseil : surveiller les valorisations qui peuvent devenir tendues. Ne pas confondre euphorie et thèse durable.");
+  } else if (regime === "risk-off") {
+    parts.push("Conseil : protéger le capital. Privilégier défensives (staples, utilities) et qualité bilan. Éviter sociétés endettées.");
+  } else if (regime === "vigilance") {
+    parts.push("Conseil : pas de nouvelles positions risquées. Conserver les positions de qualité, alléger les paris spéculatifs.");
+  }
+
+  const tone: MacroExplanation["tone"] =
+    anomalies.length > 1 ? "warning" :
+    regime === "risk-off" ? "negative" :
+    regime === "vigilance" ? "warning" :
+    regime === "calme" || regime === "risk-on" ? "positive" : "neutral";
+
+  return {
+    headline: label,
+    detail: parts.join(" "),
+    tone,
+  };
+}

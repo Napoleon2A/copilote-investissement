@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import {
-  explainVix, explainRegime, explainSectorRotation,
-  explainIndex, explainTreasury10Y, explainDollar, explainOil, explainGold,
-  buildMarketReasoning,
+  explainSectorRotation, buildMarketReasoning,
+  explainVixContextual, explainIndexContextual,
+  explainTreasury10YContextual, explainDollarContextual,
+  explainGoldContextual, explainOilContextual,
+  explainRegimeContextual,
+  type MarketSnapshot,
 } from "@/lib/macroExplainer";
 import { ExplainBlock, IndicatorBlock, formatChange, TONE_DOT_COLORS } from "./shared";
 
@@ -29,18 +32,38 @@ export function MarketContextPanel({ ctx, marketSummary, loading }: MarketContex
   const gold = ms.Or;
   const wti = ms.WTI;
 
+  // Snapshot global pour les fonctions contextuelles
+  const snapshot: MarketSnapshot = {
+    vix: ctx.vix ?? null,
+    vix_change_1m: ms.VIX?.change_1m ?? null,
+    sp500_price: sp500?.price ?? null,
+    sp500_ytd: sp500?.change_ytd ?? null,
+    sp500_1m: sp500?.change_1m ?? null,
+    nasdaq_ytd: nasdaq?.change_ytd ?? null,
+    nasdaq_1m: nasdaq?.change_1m ?? null,
+    cac40_ytd: cac40?.change_ytd ?? null,
+    cac40_1m: cac40?.change_1m ?? null,
+    us10y: us10y?.price ?? null,
+    us10y_1m_change: us10y?.change_1m ?? null,
+    dxy: dxy?.price ?? null,
+    dxy_1m: dxy?.change_1m ?? null,
+    gold_ytd: gold?.change_ytd ?? null,
+    wti_ytd: wti?.change_ytd ?? null,
+    wti_1m: wti?.change_1m ?? null,
+  };
+
   const reasoning = buildMarketReasoning(
-    ctx.vix,
-    sp500?.change_ytd ?? null,
-    sp500?.change_1m ?? null,
-    us10y?.price ?? null,
-    dxy?.change_1m ?? null,
-    wti?.change_ytd ?? null,
-    gold?.change_ytd ?? null,
+    snapshot.vix,
+    snapshot.sp500_ytd,
+    snapshot.sp500_1m,
+    snapshot.us10y,
+    snapshot.dxy_1m,
+    snapshot.wti_ytd,
+    snapshot.gold_ytd,
   );
 
-  const regimeExp = explainRegime(ctx.regime, ctx.regime_label);
-  const vixExp = explainVix(ctx.vix);
+  const regimeExp = explainRegimeContextual(ctx.regime, ctx.regime_label, snapshot);
+  const vixExp = explainVixContextual(snapshot);
   const rotationExp = explainSectorRotation(ctx.sector_rotation?.leaders, ctx.sector_rotation?.laggards);
 
   return (
@@ -95,18 +118,18 @@ export function MarketContextPanel({ ctx, marketSummary, loading }: MarketContex
             <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">📈 Indices boursiers</p>
             <div className="space-y-2">
               <IndicatorBlock
-                name="S&P 500" exp={explainIndex("Le S&P 500", sp500.change_ytd, sp500.change_1m)}
+                name="S&P 500" exp={explainIndexContextual("S&P 500", "S&P 500", sp500.change_ytd, sp500.change_1m, 10.5)}
                 detail={`${sp500.price?.toFixed(0)} pts · ${formatChange(sp500.change_1d)}j · ${formatChange(sp500.change_1m)} 1M · ${formatChange(sp500.change_ytd)} YTD`}
               />
               {nasdaq && (
                 <IndicatorBlock
-                  name="NASDAQ" exp={explainIndex("Le NASDAQ (tech US)", nasdaq.change_ytd, nasdaq.change_1m)}
+                  name="NASDAQ" exp={explainIndexContextual("NASDAQ (tech US)", "NASDAQ", nasdaq.change_ytd, nasdaq.change_1m, 12.0)}
                   detail={`${nasdaq.price?.toFixed(0)} pts · ${formatChange(nasdaq.change_1d)}j · ${formatChange(nasdaq.change_1m)} 1M · ${formatChange(nasdaq.change_ytd)} YTD`}
                 />
               )}
               {cac40 && (
                 <IndicatorBlock
-                  name="CAC 40" exp={explainIndex("Le CAC 40 (Paris)", cac40.change_ytd, cac40.change_1m)}
+                  name="CAC 40" exp={explainIndexContextual("CAC 40 (Paris)", "CAC 40", cac40.change_ytd, cac40.change_1m, 7.5)}
                   detail={`${cac40.price?.toFixed(0)} pts · ${formatChange(cac40.change_1d)}j · ${formatChange(cac40.change_1m)} 1M · ${formatChange(cac40.change_ytd)} YTD`}
                 />
               )}
@@ -114,25 +137,34 @@ export function MarketContextPanel({ ctx, marketSummary, loading }: MarketContex
           </div>
         )}
 
-        {/* Taux 10Y */}
-        {us10y && (
-          <div className="mt-3 pt-3 border-t border-edge/40">
-            <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">💵 Taux d&apos;intérêt</p>
-            <IndicatorBlock
-              name="US 10Y" exp={explainTreasury10Y(us10y.price, us10y.change_ytd)}
-              detail={`Rendement actuel : ${us10y.price?.toFixed(2)}%`}
-            />
-          </div>
-        )}
+        {/* Taux 10Y contextuel */}
+        {us10y && (() => {
+          const exp = explainTreasury10YContextual(snapshot);
+          return exp && (
+            <div className="mt-3 pt-3 border-t border-edge/40">
+              <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">💵 Taux d&apos;intérêt</p>
+              <IndicatorBlock name="US 10Y" exp={exp} detail={`Rendement actuel : ${us10y.price?.toFixed(2)}%`} />
+            </div>
+          );
+        })()}
 
-        {/* Dollar / Or / Pétrole */}
+        {/* Dollar / Or / Pétrole contextuels */}
         {(dxy || gold || wti) && (
           <div className="mt-3 pt-3 border-t border-edge/40">
             <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">🌐 Devises & matières premières</p>
             <div className="space-y-2">
-              {dxy && <IndicatorBlock name="Dollar" exp={explainDollar(dxy.price, dxy.change_1m)} />}
-              {gold && <IndicatorBlock name="Or" exp={explainGold(gold.price, gold.change_ytd)} />}
-              {wti && <IndicatorBlock name="Pétrole" exp={explainOil(wti.price, wti.change_ytd)} />}
+              {dxy && (() => {
+                const exp = explainDollarContextual(snapshot);
+                return exp && <IndicatorBlock name="Dollar" exp={exp} />;
+              })()}
+              {gold && (() => {
+                const exp = explainGoldContextual(snapshot);
+                return exp && <IndicatorBlock name="Or" exp={exp} />;
+              })()}
+              {wti && (() => {
+                const exp = explainOilContextual(snapshot);
+                return exp && <IndicatorBlock name="Pétrole" exp={exp} />;
+              })()}
             </div>
           </div>
         )}

@@ -6,9 +6,12 @@ import { TickerBadge } from "@/components/ui/TickerBadge";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { getTickerMeta, SECTOR_COLORS, SECTOR_LABEL } from "@/lib/tickerMeta";
 import {
-  explainVix, explainRegime, explainSectorRotation,
-  explainIndex, explainTreasury10Y, explainDollar, explainOil, explainGold,
-  buildMarketReasoning, getNewsImpact,
+  explainSectorRotation, buildMarketReasoning, getNewsImpact,
+  explainVixContextual, explainIndexContextual,
+  explainTreasury10YContextual, explainDollarContextual,
+  explainGoldContextual, explainOilContextual,
+  explainRegimeContextual,
+  type MarketSnapshot,
 } from "@/lib/macroExplainer";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -126,10 +129,6 @@ export default function BriefPage() {
  * ════════════════════════════════════════════════════════════════════════ */
 
 function MacroFullPanel({ ctx, marketSummary }: { ctx: any; marketSummary: any }) {
-  const regimeExp = explainRegime(ctx.regime, ctx.regime_label);
-  const vixExp = explainVix(ctx.vix);
-  const rotationExp = explainSectorRotation(ctx.sector_rotation?.leaders, ctx.sector_rotation?.laggards);
-
   const ms = marketSummary ?? {};
   const sp500 = ms.SP500;
   const nasdaq = ms.NASDAQ;
@@ -139,13 +138,34 @@ function MacroFullPanel({ ctx, marketSummary }: { ctx: any; marketSummary: any }
   const gold = ms.Or;
   const wti = ms.WTI;
 
+  const snapshot: MarketSnapshot = {
+    vix: ctx.vix ?? null,
+    vix_change_1m: ms.VIX?.change_1m ?? null,
+    sp500_price: sp500?.price ?? null,
+    sp500_ytd: sp500?.change_ytd ?? null,
+    sp500_1m: sp500?.change_1m ?? null,
+    nasdaq_ytd: nasdaq?.change_ytd ?? null,
+    nasdaq_1m: nasdaq?.change_1m ?? null,
+    cac40_ytd: cac40?.change_ytd ?? null,
+    cac40_1m: cac40?.change_1m ?? null,
+    us10y: us10y?.price ?? null,
+    us10y_1m_change: us10y?.change_1m ?? null,
+    dxy: dxy?.price ?? null,
+    dxy_1m: dxy?.change_1m ?? null,
+    gold_ytd: gold?.change_ytd ?? null,
+    wti_ytd: wti?.change_ytd ?? null,
+    wti_1m: wti?.change_1m ?? null,
+  };
+
+  const regimeExp = explainRegimeContextual(ctx.regime, ctx.regime_label, snapshot);
+  const vixExp = explainVixContextual(snapshot);
+  const rotationExp = explainSectorRotation(ctx.sector_rotation?.leaders, ctx.sector_rotation?.laggards);
+
   const reasoning = buildMarketReasoning(
-    ctx.vix,
-    sp500?.change_ytd ?? null, sp500?.change_1m ?? null,
-    us10y?.price ?? null,
-    dxy?.change_1m ?? null,
-    wti?.change_ytd ?? null,
-    gold?.change_ytd ?? null,
+    snapshot.vix,
+    snapshot.sp500_ytd, snapshot.sp500_1m,
+    snapshot.us10y, snapshot.dxy_1m,
+    snapshot.wti_ytd, snapshot.gold_ytd,
   );
 
   const TONE_DOT: Record<string, string> = {
@@ -193,19 +213,31 @@ function MacroFullPanel({ ctx, marketSummary }: { ctx: any; marketSummary: any }
         <div className="mb-4">
           <p className="text-xs font-bold uppercase tracking-widest text-muted mb-2">📈 Indices boursiers</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {sp500 && <IndicatorMini name="S&P 500" data={sp500} exp={explainIndex("Le S&P 500", sp500.change_ytd, sp500.change_1m)} />}
-            {nasdaq && <IndicatorMini name="NASDAQ" data={nasdaq} exp={explainIndex("Le NASDAQ", nasdaq.change_ytd, nasdaq.change_1m)} />}
-            {cac40 && <IndicatorMini name="CAC 40" data={cac40} exp={explainIndex("Le CAC 40", cac40.change_ytd, cac40.change_1m)} />}
+            {sp500 && <IndicatorMini name="S&P 500" data={sp500} exp={explainIndexContextual("S&P 500", "S&P 500", sp500.change_ytd, sp500.change_1m, 10.5)} />}
+            {nasdaq && <IndicatorMini name="NASDAQ" data={nasdaq} exp={explainIndexContextual("NASDAQ", "NASDAQ", nasdaq.change_ytd, nasdaq.change_1m, 12.0)} />}
+            {cac40 && <IndicatorMini name="CAC 40" data={cac40} exp={explainIndexContextual("CAC 40", "CAC 40", cac40.change_ytd, cac40.change_1m, 7.5)} />}
           </div>
         </div>
       )}
 
       {/* Macro indicators (taux, dollar, or, pétrole) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        {us10y && <MacroMini name="Taux 10Y US" value={`${us10y.price?.toFixed(2)}%`} exp={explainTreasury10Y(us10y.price, us10y.change_ytd)} />}
-        {dxy && <MacroMini name="Dollar (DXY)" value={dxy.price?.toFixed(1)} exp={explainDollar(dxy.price, dxy.change_1m)} />}
-        {gold && <MacroMini name="Or" value={`${gold.price?.toFixed(0)}$`} exp={explainGold(gold.price, gold.change_ytd)} />}
-        {wti && <MacroMini name="Pétrole WTI" value={`${wti.price?.toFixed(1)}$`} exp={explainOil(wti.price, wti.change_ytd)} />}
+        {us10y && (() => {
+          const exp = explainTreasury10YContextual(snapshot);
+          return exp && <MacroMini name="Taux 10Y US" value={`${us10y.price?.toFixed(2)}%`} exp={exp} />;
+        })()}
+        {dxy && (() => {
+          const exp = explainDollarContextual(snapshot);
+          return exp && <MacroMini name="Dollar (DXY)" value={dxy.price?.toFixed(1)} exp={exp} />;
+        })()}
+        {gold && (() => {
+          const exp = explainGoldContextual(snapshot);
+          return exp && <MacroMini name="Or" value={`${gold.price?.toFixed(0)}$`} exp={exp} />;
+        })()}
+        {wti && (() => {
+          const exp = explainOilContextual(snapshot);
+          return exp && <MacroMini name="Pétrole WTI" value={`${wti.price?.toFixed(1)}$`} exp={exp} />;
+        })()}
       </div>
 
       {/* Rotation sectorielle */}
