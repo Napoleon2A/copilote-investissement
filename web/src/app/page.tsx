@@ -34,7 +34,7 @@ export default function HomePage() {
   useEffect(() => {
     fetchJSON<any>(`${API}/brief`).then(setBrief);
     fetchJSON<any>(`${API}/scanner/opportunities?max_results=5`).then(setOpps);
-    fetchJSON<any>(`${API}/earnings/upcoming`).then(setEarnings);
+    // Earnings : 10 jours, tickers additionnels passés dans le 2e useEffect
     fetchJSON<any>(`${API}/alerts`).then(setAlerts);
     fetchJSON<any[]>(`${API}/watchlists`).then(setWatchlists);
     fetchJSON<any>(`${API}/portfolio/positions`).then(setPortfolio);
@@ -50,6 +50,10 @@ export default function HomePage() {
     ideas?.forEach((i: any) => tickers.add(i.ticker?.toUpperCase()));
     opps?.opportunities?.slice(0, 3).forEach((p: any) => tickers.add(p.ticker?.toUpperCase()));
     const list = Array.from(tickers).filter(Boolean).join(",");
+    // Earnings : fenêtre 10 jours + inclusion systématique de tes tickers (mes positions + idées)
+    const myList = Array.from(tickers).filter(Boolean).join(",");
+    fetchJSON<any>(`${API}/earnings/upcoming?max_days=10&extra_tickers=${encodeURIComponent(myList)}`).then(setEarnings);
+
     if (list) {
       fetchJSON<any>(`${API}/news/linked?tickers=${list}&limit=20`).then(setLinkedNewsRSS);
       fetchJSON<any>(`${API}/news/per-ticker?tickers=${list}&max_per_ticker=5`).then(setPerTickerNews);

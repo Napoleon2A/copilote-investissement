@@ -18,9 +18,9 @@ from app.services.scanner import SCAN_UNIVERSE
 logger = logging.getLogger(__name__)
 
 
-def scan_upcoming_earnings(max_days: int = 21) -> list[dict]:
+def scan_upcoming_earnings(max_days: int = 21, extra_tickers: list[str] | None = None) -> list[dict]:
     """
-    Scanne toutes les entreprises de SCAN_UNIVERSE pour trouver
+    Scanne toutes les entreprises de SCAN_UNIVERSE + extra_tickers pour trouver
     celles qui publient dans les max_days prochains jours.
 
     Retourne une liste triée par date de publication (la plus proche en premier).
@@ -28,7 +28,14 @@ def scan_upcoming_earnings(max_days: int = 21) -> list[dict]:
     today = date.today()
     results = []
 
-    all_tickers = [t for tickers in SCAN_UNIVERSE.values() for t in tickers]
+    universe_tickers = [t for tickers in SCAN_UNIVERSE.values() for t in tickers]
+
+    # Fusion avec extra_tickers (positions / idées du user qui peuvent être hors univers)
+    all_tickers_set = set(universe_tickers)
+    for t in (extra_tickers or []):
+        if t and t.strip():
+            all_tickers_set.add(t.strip().upper())
+    all_tickers = sorted(all_tickers_set)
 
     for ticker in all_tickers:
         try:
