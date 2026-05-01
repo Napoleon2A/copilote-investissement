@@ -52,7 +52,7 @@ export default function HomePage() {
     const list = Array.from(tickers).filter(Boolean).join(",");
     // Earnings : fenêtre 10 jours + inclusion systématique de tes tickers (mes positions + idées)
     const myList = Array.from(tickers).filter(Boolean).join(",");
-    fetchJSON<any>(`${API}/earnings/upcoming?max_days=10&extra_tickers=${encodeURIComponent(myList)}`).then(setEarnings);
+    fetchJSON<any>(`${API}/earnings/upcoming?max_days=15&extra_tickers=${encodeURIComponent(myList)}`).then(setEarnings);
 
     if (list) {
       fetchJSON<any>(`${API}/news/linked?tickers=${list}&limit=20`).then(setLinkedNewsRSS);
