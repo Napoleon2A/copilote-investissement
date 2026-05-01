@@ -96,85 +96,18 @@ export function PortfolioInsightsPanel({
         <CounterPill count={goodCount}    label="Favorables"  tone="good" />
       </div>
 
-      {/* Layout : insights à gauche + exposition à droite */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Liste des insights (col-span-2) */}
-        <div className="lg:col-span-2 space-y-2 max-h-[420px] overflow-y-auto pr-2 nice-scroll">
-          {insights.length === 0 ? (
-            <div className="py-6 text-center">
-              <p className="text-emerald-700 dark:text-emerald-400 font-medium">✓ Aucun signal critique</p>
-              <p className="text-xs text-muted mt-1">Le portefeuille est dans une zone sans alerte particulière selon les critères analysés.</p>
-            </div>
-          ) : (
-            insights.map((insight, i) => <InsightCard key={i} insight={insight} />)
-          )}
-        </div>
-
-        {/* Exposition (col-span-1) */}
-        <div className="space-y-3">
-          {/* Score qualité — basé sur perf société/secteur */}
-          {positions.length > 0 && (
-            <div className="rounded-lg border border-edge/50 bg-surface/40 p-3">
-              <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">⚖ Qualité du portefeuille</p>
-              <div className="space-y-1.5">
-                <ScoreBar label="Performance"    score={scoreBreakdown.geo}         hint="% de positions en gain latent" />
-                <ScoreBar label="Momentum cycle" score={scoreBreakdown.trends}      hint="Performance moyenne 1 mois" />
-                <ScoreBar label="Secteurs leaders" score={scoreBreakdown.sector}    hint="% de tes secteurs dans les top performeurs" />
-                <ScoreBar label="Force relative"  score={scoreBreakdown.positionMax} hint="% de positions sur-performant leur secteur" />
-              </div>
-            </div>
-          )}
-
-          {/* Exposition sectorielle */}
-          {exposureBySector.length > 0 && (
-            <div className="rounded-lg border border-edge/50 bg-surface/40 p-3">
-              <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">📊 Secteurs</p>
-              <div className="space-y-1.5">
-                {exposureBySector.map((e) => {
-                  const colors = SECTOR_COLORS[e.sector];
-                  return (
-                    <div key={e.sector}>
-                      <div className="flex items-center justify-between text-xs mb-0.5">
-                        <span className={`font-medium ${colors.text}`}>{e.label}</span>
-                        <span className="font-mono text-secondary">{e.weight}%</span>
-                      </div>
-                      <div className="h-1.5 bg-surface-alt rounded-full overflow-hidden">
-                        <div className={`h-full ${colors.bg.replace("/10", "/60")} rounded-full transition-all`}
-                          style={{ width: `${e.weight}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Sensibilité macro */}
-          {macroExposure.length > 0 && (
-            <div className="rounded-lg border border-edge/50 bg-surface/40 p-3">
-              <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">🌐 Sensibilité macro</p>
-              <ul className="space-y-1.5">
-                {macroExposure.map((m, i) => {
-                  const tone = m.impact === "very_negative" || m.impact === "negative" ? "text-red-600 dark:text-red-400"
-                            : m.impact === "very_positive" || m.impact === "positive" ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-muted";
-                  const dot = m.impact === "very_negative" || m.impact === "negative" ? "bg-red-500"
-                            : m.impact === "very_positive" || m.impact === "positive" ? "bg-emerald-500"
-                            : "bg-muted";
-                  return (
-                    <li key={i} className="text-xs">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
-                        <span className="font-semibold text-primary">{m.factor}</span>
-                      </div>
-                      <p className={`text-[0.7rem] leading-snug pl-3 ${tone}`}>{m.comment}</p>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-        </div>
+      {/* Liste des insights — pleine largeur, plus de sidebar */}
+      <div className="space-y-2">
+        {insights.length === 0 ? (
+          <div className="py-6 text-center">
+            <p className="text-emerald-700 dark:text-emerald-400 font-medium">✓ Aucun signal critique</p>
+            <p className="text-xs text-muted mt-1">Aucune actualité ni mouvement notable détecté sur tes positions et idées en suivi.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {insights.map((insight, i) => <InsightCard key={i} insight={insight} />)}
+          </div>
+        )}
       </div>
     </div>
   );

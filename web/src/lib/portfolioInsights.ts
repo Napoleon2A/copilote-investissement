@@ -264,6 +264,77 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
     }
   }
 
+  // ── ANALYSE DES IDÉES EN SUIVI (pas juste positions) ─────────────────
+  for (const idea of ideas) {
+    const ticker = idea.ticker?.toUpperCase();
+    if (!ticker) continue;
+    const meta = TICKER_META[ticker];
+    if (!meta) continue;
+
+    // Croisement idée + secteur leader/laggard
+    if (input.sectorRotation) {
+      const sectorLabel = SECTOR_LABELS[meta.sector!]?.toLowerCase() ?? "";
+      const isInLeaders = input.sectorRotation.leaders?.some(l =>
+        l.sector.toLowerCase().includes(sectorLabel) || sectorLabel.includes(l.sector.toLowerCase())
+      );
+      const isInLaggards = input.sectorRotation.laggards?.some(l =>
+        l.sector.toLowerCase().includes(sectorLabel) || sectorLabel.includes(l.sector.toLowerCase())
+      );
+
+      if (isInLeaders && idea.action === "Surveiller") {
+        insights.push({
+          category: "sensitivity",
+          tone: "good",
+          title: `${ticker} (idée en suivi) profite du momentum sectoriel`,
+          detail: `${meta.name} est dans un secteur en tête du marché actuellement. Si la thèse fondamentale tient, c'est typiquement le moment où le marché commence à reconnaître la valeur — les flux institutionnels suivent généralement le momentum sectoriel pendant 4-8 semaines.`,
+          tickers: [ticker],
+        });
+      } else if (isInLaggards && idea.action === "Éviter") {
+        insights.push({
+          category: "sensitivity",
+          tone: "info",
+          title: `${ticker} (idée à éviter) confirmée par la dynamique sectorielle`,
+          detail: `${meta.name} est dans un secteur en queue du marché. Ta lecture "Éviter" est cohérente avec le mouvement sectoriel actuel — les sociétés du secteur subissent une rotation hors des capitaux institutionnels.`,
+          tickers: [ticker],
+        });
+      }
+    }
+  }
+
+  // ── CROISEMENT MACRO × POSITION SPÉCIFIQUE ────────────────────────────
+  if (snapshot.us10y != null && snapshot.us10y > 4) {
+    const sensitivePositions = positions.filter(p => {
+      const sector = TICKER_META[p.ticker.toUpperCase()]?.sector;
+      return sector && ["tech", "cloud", "biotech", "growth", "reits"].includes(sector);
+    });
+    if (sensitivePositions.length > 0) {
+      const tickers = sensitivePositions.map(p => p.ticker);
+      insights.push({
+        category: "sensitivity",
+        tone: "warning",
+        title: `Taux 10Y à ${snapshot.us10y.toFixed(2)}% — pression sur ${tickers.join(", ")}`,
+        detail: `Les valuations de croissance se calculent en actualisant les bénéfices futurs au taux du Trésor. Quand le 10Y monte, le multiple "juste" baisse mécaniquement. Tes positions sensibles aux taux subissent cet effet jusqu'à ce que le 10Y redescende ou que la croissance des bénéfices compense.`,
+        tickers,
+      });
+    }
+  }
+
+  if (snapshot.wti_ytd != null && snapshot.wti_ytd > 30) {
+    const energyTickers = positions.filter(p => {
+      const sector = TICKER_META[p.ticker.toUpperCase()]?.sector;
+      return sector === "energy" || sector === "materials";
+    }).map(p => p.ticker);
+    if (energyTickers.length > 0) {
+      insights.push({
+        category: "sensitivity",
+        tone: "good",
+        title: `Pétrole +${snapshot.wti_ytd.toFixed(0)}% YTD — vent dans le dos pour ${energyTickers.join(", ")}`,
+        detail: `Le pétrole en hausse remonte les marges des sociétés énergie/matières premières. Tes positions du secteur en bénéficient directement — tant que les coupes OPEC tiennent et que la demande chinoise ne s'effondre pas, le mouvement peut continuer.`,
+        tickers: energyTickers,
+      });
+    }
+  }
+
   // ── 4. NEWS CRITIQUES SUR SES TICKERS ──────────────────────────────────
   const NEGATIVE_KEYWORDS = ["lawsuit", "fraud", "investigation", "downgrade", "miss", "warning", "antitrust", "ban", "tariff", "decline", "loss", "fine"];
   const criticalNews: Array<{ title: string; ticker: string }> = [];
