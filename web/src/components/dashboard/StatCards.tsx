@@ -4,6 +4,7 @@ import Link from "next/link";
 import { TickerBadge } from "@/components/ui/TickerBadge";
 import { getTickerMeta } from "@/lib/tickerMeta";
 import { ListSkeleton, BADGE_COLORS } from "./shared";
+import { IcEarnings, IcPortfolio, IcWatchlist, IcAlerts } from "./icons";
 
 /* ════════════════════════════════════════════════════════════════════════
  * Compact card wrapper — utilisé par les 4 cards stats à droite
@@ -19,13 +20,15 @@ function CompactCard({ href, children }: { href: string; children: React.ReactNo
   );
 }
 
-function CompactHeader({ icon, label, badge, badgeColor = "default" }: {
-  icon: string; label: string; badge?: React.ReactNode; badgeColor?: keyof typeof BADGE_COLORS;
+function CompactHeader({ Icon, label, badge, badgeColor = "default" }: {
+  Icon: React.ComponentType<{ size?: number; className?: string }>; label: string; badge?: React.ReactNode; badgeColor?: keyof typeof BADGE_COLORS;
 }) {
   return (
     <div className="flex items-center justify-between mb-2.5 flex-shrink-0">
       <div className="flex items-center gap-1.5 min-w-0">
-        <span className="text-base text-accent/60 group-hover:text-accent transition-colors flex-shrink-0">{icon}</span>
+        <span className="text-accent/70 group-hover:text-accent transition-colors flex-shrink-0">
+          <Icon size={14} />
+        </span>
         <h3 className="text-[0.7rem] font-bold uppercase tracking-[0.14em] text-secondary truncate"
           style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
           {label}
@@ -48,7 +51,7 @@ export function RichEarningsCard({ earnings }: { earnings: any }) {
   const list = earnings?.earnings ?? [];
   return (
     <CompactCard href="/earnings">
-      <CompactHeader icon="⊞" label="Earnings" badge={earnings != null ? `${earnings.count} à venir` : "..."} />
+      <CompactHeader Icon={IcEarnings} label="Earnings" badge={earnings != null ? `${earnings.count} à venir` : "..."} />
       {earnings != null && list.length > 0 ? (
         <ul className="space-y-1.5 flex-1">
           {list.slice(0, 5).map((e: any, i: number) => {
@@ -86,7 +89,7 @@ export function RichPortfolioCard({ portfolio }: { portfolio: any }) {
   return (
     <CompactCard href="/portfolio">
       <CompactHeader
-        icon="▣" label="Portefeuille"
+        Icon={IcPortfolio} label="Portefeuille"
         badge={pnl != null ? `${isUp ? "+" : ""}${pnl.toFixed(1)}%` : "..."}
         badgeColor={pnl != null ? (isUp ? "green" : "red") : "default"}
       />
@@ -139,7 +142,7 @@ export function RichPortfolioCard({ portfolio }: { portfolio: any }) {
 export function RichWatchlistCard({ watchlists }: { watchlists: any[] | null | undefined }) {
   return (
     <CompactCard href="/watchlist">
-      <CompactHeader icon="◉" label="Watchlist" badge={watchlists != null ? `${watchlists.length} ${watchlists.length <= 1 ? "liste" : "listes"}` : "..."} />
+      <CompactHeader Icon={IcWatchlist} label="Watchlist" badge={watchlists != null ? `${watchlists.length} ${watchlists.length <= 1 ? "liste" : "listes"}` : "..."} />
       {watchlists != null && watchlists.length > 0 ? (
         <ul className="space-y-1.5 flex-1">
           {watchlists.slice(0, 5).map((w: any) => (
@@ -175,7 +178,7 @@ export function RichAlertsCard({ alerts }: { alerts: any }) {
   const list = alerts?.alerts ?? [];
   return (
     <CompactCard href="/alerts">
-      <CompactHeader icon="⚡" label="Alertes" badge={count != null ? `${count} active${count !== 1 ? "s" : ""}` : "..."}
+      <CompactHeader Icon={IcAlerts} label="Alertes" badge={count != null ? `${count} active${count !== 1 ? "s" : ""}` : "..."}
         badgeColor={count != null && count > 0 ? "orange" : "default"} />
       {alerts != null && count > 0 ? (
         <ul className="space-y-1.5 flex-1">

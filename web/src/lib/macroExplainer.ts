@@ -43,39 +43,12 @@ const HIST = {
 export function explainVix(vix: number | null | undefined): MacroExplanation | null {
   if (vix == null) return null;
 
-  if (vix < 13) {
-    return {
-      headline: `Marchés très calmes (VIX ${vix.toFixed(1)})`,
-      detail: "Le VIX mesure la peur des investisseurs. À ce niveau, ils sont presque trop sereins — historiquement, les périodes de complaisance précèdent souvent des retournements brusques. Bonne fenêtre pour entrer en position, mais ne pas s'endetter.",
-      tone: "warning",
-    };
-  }
-  if (vix < 18) {
-    return {
-      headline: `Marchés calmes (VIX ${vix.toFixed(1)})`,
-      detail: "Le VIX (indice de la peur) est faible : les investisseurs sont sereins, les mouvements de prix sont mesurés. Environnement plutôt favorable pour prendre des décisions raisonnées sans précipitation.",
-      tone: "positive",
-    };
-  }
-  if (vix < 25) {
-    return {
-      headline: `Volatilité modérée (VIX ${vix.toFixed(1)})`,
-      detail: "Le VIX est dans une zone normale. Les investisseurs ne sont ni euphoriques ni paniqués. Pas de signal fort dans un sens ou dans l'autre — privilégier la sélection de qualité plutôt que les paris audacieux.",
-      tone: "neutral",
-    };
-  }
-  if (vix < 35) {
-    return {
-      headline: `Tension sur les marchés (VIX ${vix.toFixed(1)})`,
-      detail: "Le VIX grimpe : les investisseurs sont inquiets. Les prix bougent plus fort dans les deux sens. Période où la patience paie — éviter les achats émotionnels, attendre que la poussière retombe.",
-      tone: "warning",
-    };
-  }
-  return {
-    headline: `Marchés en stress (VIX ${vix.toFixed(1)})`,
-    detail: "VIX au-dessus de 35 = panique généralisée. Les ventes massives créent souvent des opportunités historiques pour les investisseurs disciplinés, mais le risque de continuer à baisser est réel. Privilégier les sociétés solides avec bilan sain.",
-    tone: "negative",
-  };
+  // Versions simples non utilisées — la fonction explainVixContextual avec snapshot
+  // est utilisée à la place dans le code de production.
+  if (vix < 18) return { headline: `VIX ${vix.toFixed(1)}`, detail: "", tone: "positive" };
+  if (vix < 25) return { headline: `VIX ${vix.toFixed(1)}`, detail: "", tone: "neutral" };
+  if (vix < 35) return { headline: `VIX ${vix.toFixed(1)}`, detail: "", tone: "warning" };
+  return { headline: `VIX ${vix.toFixed(1)}`, detail: "", tone: "negative" };
 }
 
 export function explainRegime(regime: string, label: string): MacroExplanation {
@@ -298,11 +271,11 @@ export function buildMarketReasoning(
 
   let conclusion = "";
   if (positive.length > negative.length + 1) {
-    conclusion = "Bilan globalement positif. Bonne fenêtre pour analyser et entrer sur des sociétés de qualité.";
+    conclusion = `${positive.length} signaux favorables vs ${negative.length} défavorables.`;
   } else if (negative.length > positive.length + 1) {
-    conclusion = "Plus de signaux défavorables que favorables. Privilégier la prudence et les valeurs défensives.";
+    conclusion = `${negative.length} signaux défavorables vs ${positive.length} favorables.`;
   } else {
-    conclusion = "Signaux mitigés. Sélectivité plutôt que paris directionnels — qualité, valorisation raisonnable, conviction forte.";
+    conclusion = `Signaux mitigés (${positive.length} positifs, ${negative.length} négatifs).`;
   }
   return { positive, negative, conclusion };
 }
@@ -782,8 +755,8 @@ export function explainIndexContextual(
 
   if (m1 != null && Math.abs(m1) > 5) {
     parts.push(m1 > 0
-      ? `Forte accélération sur le mois (+${m1.toFixed(1)}%) — moment de prudence pour ne pas chasser la performance.`
-      : `Correction marquée sur le mois (${m1.toFixed(1)}%) — peut révéler des opportunités sur la qualité.`);
+      ? `Forte accélération sur le mois : +${m1.toFixed(1)}%.`
+      : `Correction marquée sur le mois : ${m1.toFixed(1)}%.`);
   }
 
   let tone: MacroExplanation["tone"] = "neutral";
@@ -952,19 +925,7 @@ export function explainRegimeContextual(
     parts.push(`⚠ Mais attention : ${anomalies.join(" ; ")}.`);
   }
 
-  // Conseil concret au lieu de "analyser posément"
-  if (regime === "calme") {
-    parts.push(anomalies.length > 0
-      ? "Conseil : la sérénité affichée masque des tensions sous-jacentes. Privilégier qualité, valorisation raisonnable, éviter les paris audacieux."
-      : "Conseil : fenêtre favorable pour entrer sur des sociétés solides à valorisation correcte. Pas de précipitation."
-    );
-  } else if (regime === "risk-on") {
-    parts.push("Conseil : surveiller les valorisations qui peuvent devenir tendues. Ne pas confondre euphorie et thèse durable.");
-  } else if (regime === "risk-off") {
-    parts.push("Conseil : protéger le capital. Privilégier défensives (staples, utilities) et qualité bilan. Éviter sociétés endettées.");
-  } else if (regime === "vigilance") {
-    parts.push("Conseil : pas de nouvelles positions risquées. Conserver les positions de qualité, alléger les paris spéculatifs.");
-  }
+  // (anciens conseils bateau supprimés — on garde seulement les faits chiffrés et anomalies)
 
   const tone: MacroExplanation["tone"] =
     anomalies.length > 1 ? "warning" :

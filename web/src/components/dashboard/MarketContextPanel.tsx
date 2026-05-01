@@ -10,6 +10,7 @@ import {
   type MarketSnapshot,
 } from "@/lib/macroExplainer";
 import { ExplainBlock, IndicatorBlock, formatChange, TONE_DOT_COLORS } from "./shared";
+import { IcMarket, IcDiagnosis, IcIndices, IcRates, IcDollar, IcRotation } from "./icons";
 
 interface MarketContextPanelProps {
   ctx: any;
@@ -70,7 +71,7 @@ export function MarketContextPanel({ ctx, marketSummary, loading }: MarketContex
     <div className="card-premium card-aura relative p-5 h-full flex flex-col">
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <span className="text-base">🌍</span>
+          <IcMarket size={18} className="text-accent" />
           <h4 className="text-xs font-bold uppercase tracking-[0.14em] text-secondary"
             style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
             Comprendre le marché aujourd&apos;hui
@@ -84,7 +85,7 @@ export function MarketContextPanel({ ctx, marketSummary, loading }: MarketContex
       <div className="flex-1 min-h-0 overflow-y-auto pr-2 nice-scroll">
         {/* Synthèse "pourquoi" */}
         <div className="rounded-xl border border-edge/50 bg-surface/60 backdrop-blur-sm p-3 mb-4">
-          <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">📊 Pourquoi ce diagnostic ?</p>
+          <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2 flex items-center gap-1.5"><IcDiagnosis size={12} /> Pourquoi ce diagnostic ?</p>
           <div className="space-y-1">
             {reasoning.positive.map((s, i) => (
               <div key={`p${i}`} className="flex items-start gap-2 text-xs text-secondary">
@@ -115,7 +116,7 @@ export function MarketContextPanel({ ctx, marketSummary, loading }: MarketContex
         {/* Indices */}
         {sp500 && (
           <div className="mt-3 pt-3 border-t border-edge/40">
-            <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">📈 Indices boursiers</p>
+            <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2 flex items-center gap-1.5"><IcIndices size={12} /> Indices boursiers</p>
             <div className="space-y-2">
               <IndicatorBlock
                 name="S&P 500" exp={explainIndexContextual("S&P 500", "S&P 500", sp500.change_ytd, sp500.change_1m, 10.5)}
@@ -142,7 +143,7 @@ export function MarketContextPanel({ ctx, marketSummary, loading }: MarketContex
           const exp = explainTreasury10YContextual(snapshot);
           return exp && (
             <div className="mt-3 pt-3 border-t border-edge/40">
-              <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">💵 Taux d&apos;intérêt</p>
+              <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2 flex items-center gap-1.5"><IcRates size={12} /> Taux d&apos;intérêt</p>
               <IndicatorBlock name="US 10Y" exp={exp} detail={`Rendement actuel : ${us10y.price?.toFixed(2)}%`} />
             </div>
           );
@@ -151,7 +152,7 @@ export function MarketContextPanel({ ctx, marketSummary, loading }: MarketContex
         {/* Dollar / Or / Pétrole contextuels */}
         {(dxy || gold || wti) && (
           <div className="mt-3 pt-3 border-t border-edge/40">
-            <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">🌐 Devises & matières premières</p>
+            <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2 flex items-center gap-1.5"><IcDollar size={12} /> Devises & matières premières</p>
             <div className="space-y-2">
               {dxy && (() => {
                 const exp = explainDollarContextual(snapshot);
@@ -172,7 +173,7 @@ export function MarketContextPanel({ ctx, marketSummary, loading }: MarketContex
         {/* Rotation sectorielle */}
         {rotationExp && (
           <div className="mt-3 pt-3 border-t border-edge/40">
-            <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-1.5">↻ Rotation sectorielle</p>
+            <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-1.5 flex items-center gap-1.5"><IcRotation size={12} /> Rotation sectorielle</p>
             <p className="text-xs text-secondary leading-relaxed">{rotationExp}</p>
             {ctx.sector_rotation?.leaders?.length > 0 && (
               <div className="grid grid-cols-2 gap-3 mt-3">

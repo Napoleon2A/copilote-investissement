@@ -2,6 +2,7 @@
 
 import { getNewsImpact } from "@/lib/macroExplainer";
 import { RSS_CATEGORY_LABELS } from "./shared";
+import { IcMacroNews, IcMacro, IcGeopolitical, IcRegulatory, IcSector, IcCompany } from "./icons";
 
 interface MacroNewsPanelProps {
   data: any;
@@ -18,7 +19,7 @@ export function MacroNewsPanel({ data }: MacroNewsPanelProps) {
     <div className="card-premium relative p-5 h-full flex flex-col">
       <div className="flex items-center justify-between mb-3 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <span className="text-base">📰</span>
+          <IcMacroNews size={18} className="text-accent" />
           <h4 className="text-xs font-bold uppercase tracking-[0.14em] text-secondary"
             style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
             Actualité macro & géopolitique
@@ -49,6 +50,18 @@ export function MacroNewsPanel({ data }: MacroNewsPanelProps) {
   );
 }
 
+const CategoryIcon = ({ category }: { category: string }) => {
+  const map: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+    macro: IcMacro,
+    geopolitical: IcGeopolitical,
+    regulatory: IcRegulatory,
+    sector: IcSector,
+    company: IcCompany,
+  };
+  const Ic = map[category] ?? IcCompany;
+  return <Ic size={14} className="text-accent" />;
+};
+
 function MacroNewsRow({ article }: { article: any }) {
   const style = RSS_CATEGORY_LABELS[article.category] ?? RSS_CATEGORY_LABELS.company;
   const date = article.published ? new Date(article.published) : null;
@@ -61,7 +74,7 @@ function MacroNewsRow({ article }: { article: any }) {
     <li className="border-l-2 pl-3 py-1.5 hover:bg-bg/40 transition-colors rounded-r" style={{ borderColor: "rgb(var(--accent))" }}>
       <a href={article.link} target="_blank" rel="noopener noreferrer" className="group/news block">
         <div className="flex items-start gap-2">
-          <span className="text-base flex-shrink-0">{style.icon}</span>
+          <span className="flex-shrink-0 mt-0.5"><CategoryIcon category={article.category} /></span>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
               <span className={`text-[0.55rem] font-bold uppercase tracking-wider px-1 py-px rounded border ${style.bg} ${style.text} ${style.border}`}>
@@ -84,11 +97,11 @@ function MacroNewsRow({ article }: { article: any }) {
             )}
             <div className="mt-1.5 pl-2 border-l-2 border-amber-500/40 bg-amber-500/5 rounded-r py-1 px-2">
               <p className="text-[0.7rem] text-secondary leading-relaxed">
-                💡 {impact.text}
+                {impact.text}
               </p>
               {impact.affects && (
                 <p className="text-[0.625rem] text-muted mt-1 font-medium">
-                  📊 {impact.affects}
+                  Impact : {impact.affects}
                 </p>
               )}
             </div>

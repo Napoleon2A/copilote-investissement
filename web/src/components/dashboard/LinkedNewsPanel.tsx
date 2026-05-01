@@ -4,6 +4,7 @@ import { useState } from "react";
 import { TickerBadge } from "@/components/ui/TickerBadge";
 import { getTickerMeta } from "@/lib/tickerMeta";
 import { RSS_CATEGORY_LABELS, SOURCE_BADGES, LinkedFilter } from "./shared";
+import { IcLinkedNews } from "./icons";
 
 interface LinkedNewsPanelProps {
   data: any;
@@ -65,7 +66,7 @@ export function LinkedNewsPanel({
     <div className="card-premium card-aura relative p-5 h-full flex flex-col">
       <div className="flex items-center justify-between mb-2 flex-shrink-0 gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-base">🎯</span>
+          <IcLinkedNews size={18} className="text-accent" />
           <h4 className="text-xs font-bold uppercase tracking-[0.14em] text-secondary"
             style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
             Actualité des cibles

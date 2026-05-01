@@ -5,6 +5,7 @@ import { buildPortfolioInsights, type Insight, type InsightTone } from "@/lib/po
 import { SECTOR_COLORS } from "@/lib/tickerMeta";
 import type { MarketSnapshot } from "@/lib/macroExplainer";
 import { useState } from "react";
+import { IcInsights, IcDanger, IcWarning, IcInfo, IcGood } from "./icons";
 
 interface PortfolioInsightsPanelProps {
   snapshot: MarketSnapshot | null;
@@ -78,7 +79,7 @@ export function PortfolioInsightsPanel({
       {/* Header */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <span className="text-lg">🎯</span>
+          <IcInsights size={20} className="text-accent" />
           <div>
             <h2 className="section-title">Analyse personnalisée de votre portefeuille</h2>
             <p className="section-title-hint mt-0.5">
@@ -120,18 +121,19 @@ export function PortfolioInsightsPanel({
 /* ── Composants internes ─────────────────────────────────────────────── */
 
 function InsightCard({ insight }: { insight: Insight }) {
-  const styles: Record<InsightTone, { bg: string; border: string; text: string; emoji: string }> = {
-    danger:  { bg: "bg-red-500/5",    border: "border-l-red-500",    text: "text-red-700 dark:text-red-400",       emoji: "🚨" },
-    warning: { bg: "bg-amber-500/5",  border: "border-l-amber-500",  text: "text-amber-700 dark:text-amber-400",   emoji: "⚠" },
-    info:    { bg: "bg-blue-500/5",   border: "border-l-blue-500",   text: "text-blue-700 dark:text-blue-400",     emoji: "💡" },
-    good:    { bg: "bg-emerald-500/5", border: "border-l-emerald-500", text: "text-emerald-700 dark:text-emerald-400", emoji: "✓" },
+  const styles: Record<InsightTone, { bg: string; border: string; text: string; Ic: React.ComponentType<{ size?: number; className?: string }> }> = {
+    danger:  { bg: "bg-red-500/5",    border: "border-l-red-500",    text: "text-red-700 dark:text-red-400",       Ic: IcDanger },
+    warning: { bg: "bg-amber-500/5",  border: "border-l-amber-500",  text: "text-amber-700 dark:text-amber-400",   Ic: IcWarning },
+    info:    { bg: "bg-blue-500/5",   border: "border-l-blue-500",   text: "text-blue-700 dark:text-blue-400",     Ic: IcInfo },
+    good:    { bg: "bg-emerald-500/5", border: "border-l-emerald-500", text: "text-emerald-700 dark:text-emerald-400", Ic: IcGood },
   };
   const s = styles[insight.tone];
+  const Ic = s.Ic;
 
   return (
     <div className={`rounded-lg border-l-4 border border-edge/30 ${s.bg} ${s.border} p-3`}>
       <div className="flex items-start gap-2">
-        <span className="text-base flex-shrink-0">{s.emoji}</span>
+        <span className={`flex-shrink-0 mt-0.5 ${s.text}`}><Ic size={16} /></span>
         <div className="flex-1 min-w-0">
           <h4 className={`text-sm font-semibold ${s.text} mb-1`}
             style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
