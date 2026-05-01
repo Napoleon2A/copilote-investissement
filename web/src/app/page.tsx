@@ -9,7 +9,9 @@ import { LinkedNewsPanel } from "@/components/dashboard/LinkedNewsPanel";
 import {
   RichEarningsCard, RichPortfolioCard, RichWatchlistCard, RichAlertsCard,
 } from "@/components/dashboard/StatCards";
+import { PortfolioInsightsPanel } from "@/components/dashboard/PortfolioInsightsPanel";
 import { fetchJSON, API } from "@/components/dashboard/shared";
+import type { MarketSnapshot } from "@/lib/macroExplainer";
 
 export default function HomePage() {
   const today = new Date().toLocaleDateString("fr-FR", {
@@ -58,6 +60,37 @@ export default function HomePage() {
 
   const topPicks = opps?.opportunities?.slice(0, 3) ?? [];
 
+  // Construit le snapshot macro pour les analyses contextuelles
+  const snapshot: MarketSnapshot | null = useMemo(() => {
+    if (!brief?.market_context || !brief?.market_summary) return null;
+    const ms = brief.market_summary;
+    return {
+      vix: brief.market_context.vix ?? null,
+      vix_change_1m: ms.VIX?.change_1m ?? null,
+      sp500_price: ms.SP500?.price ?? null,
+      sp500_ytd: ms.SP500?.change_ytd ?? null,
+      sp500_1m: ms.SP500?.change_1m ?? null,
+      nasdaq_ytd: ms.NASDAQ?.change_ytd ?? null,
+      nasdaq_1m: ms.NASDAQ?.change_1m ?? null,
+      cac40_ytd: ms.CAC40?.change_ytd ?? null,
+      cac40_1m: ms.CAC40?.change_1m ?? null,
+      us10y: ms.US10Y?.price ?? null,
+      us10y_1m_change: ms.US10Y?.change_1m ?? null,
+      dxy: ms.DXY?.price ?? null,
+      dxy_1m: ms.DXY?.change_1m ?? null,
+      gold_ytd: ms.Or?.change_ytd ?? null,
+      wti_ytd: ms.WTI?.change_ytd ?? null,
+      wti_1m: ms.WTI?.change_1m ?? null,
+    };
+  }, [brief]);
+
+  // Liste des news linked (perTickerNews + macroLinked) pour l'analyse
+  const allLinkedNews = useMemo(() => {
+    const m = linkedNewsRSS?.articles ?? [];
+    const t = perTickerNews?.articles ?? [];
+    return [...t, ...m];
+  }, [linkedNewsRSS, perTickerNews]);
+
   const portfolioTickers = useMemo(
     () => new Set<string>(portfolio?.positions?.map((p: any) => p.ticker?.toUpperCase()) ?? []),
     [portfolio]
@@ -76,6 +109,16 @@ export default function HomePage() {
       <MoonHeader today={today} />
 
       <PicksHero picks={topPicks} loading={opps === undefined} scanning={opps?.scanning} />
+
+      {/* Analyse personnalisée du portefeuille — pleine largeur */}
+      <PortfolioInsightsPanel
+        snapshot={snapshot}
+        portfolio={portfolio}
+        ideas={ideas}
+        picks={topPicks}
+        earnings={earnings}
+        linkedNews={allLinkedNews}
+      />
 
       {/* Row 1 : Comprendre marché ↔ Actualité des cibles */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:h-[480px]">
