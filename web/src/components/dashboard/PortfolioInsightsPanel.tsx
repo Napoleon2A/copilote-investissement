@@ -69,6 +69,10 @@ export function PortfolioInsightsPanel({
   const infoCount    = insights.filter(i => i.tone === "info").length;
   const goodCount    = insights.filter(i => i.tone === "good").length;
 
+  const [filterTone, setFilterTone] = useState<InsightTone | null>(null);
+  const filteredInsights = filterTone ? insights.filter(i => i.tone === filterTone) : insights;
+  const toggleFilter = (tone: InsightTone) => setFilterTone(filterTone === tone ? null : tone);
+
   return (
     <div className="card-premium card-aura relative p-5 h-full flex flex-col">
       {/* Header */}
@@ -90,24 +94,28 @@ export function PortfolioInsightsPanel({
         </div>
       </div>
 
-      {/* Compteurs */}
-      <div className="grid grid-cols-4 gap-2 mb-4 flex-shrink-0">
-        <CounterPill count={dangerCount}  label="Risques"     tone="danger" />
-        <CounterPill count={warningCount} label="Vigilances"  tone="warning" />
-        <CounterPill count={infoCount}    label="Informations" tone="info" />
-        <CounterPill count={goodCount}    label="Favorables"  tone="good" />
+      {/* Compteurs cliquables (filtrent les insights par tonalité) */}
+      <div className="grid grid-cols-4 gap-1.5 mb-3 flex-shrink-0">
+        <CounterPill count={dangerCount}  label="Risques"      tone="danger"  active={filterTone === "danger"}  onClick={() => toggleFilter("danger")} />
+        <CounterPill count={warningCount} label="Vigilances"   tone="warning" active={filterTone === "warning"} onClick={() => toggleFilter("warning")} />
+        <CounterPill count={infoCount}    label="Informations" tone="info"    active={filterTone === "info"}    onClick={() => toggleFilter("info")} />
+        <CounterPill count={goodCount}    label="Favorables"   tone="good"    active={filterTone === "good"}    onClick={() => toggleFilter("good")} />
       </div>
 
       {/* Liste des insights — scrollable verticalement */}
       <div className="flex-1 min-h-0 overflow-y-auto pr-2 nice-scroll">
-        {insights.length === 0 ? (
+        {filteredInsights.length === 0 ? (
           <div className="py-6 text-center">
-            <p className="text-emerald-700 dark:text-emerald-400 font-medium">✓ Aucun signal critique</p>
-            <p className="text-xs text-muted mt-1">Aucune actualité ni mouvement notable détecté sur tes positions et idées en suivi.</p>
+            <p className="text-emerald-700 dark:text-emerald-400 font-medium">
+              {filterTone ? `Aucun insight de type "${filterTone}"` : "✓ Aucun signal critique"}
+            </p>
+            <p className="text-xs text-muted mt-1">
+              {filterTone ? "Clic à nouveau sur le compteur pour voir tous les insights." : "Aucune actualité ni mouvement notable détecté sur tes positions et idées en suivi."}
+            </p>
           </div>
         ) : (
           <div className="space-y-2">
-            {insights.map((insight, i) => <InsightCard key={i} insight={insight} />)}
+            {filteredInsights.map((insight, i) => <InsightCard key={i} insight={insight} />)}
           </div>
         )}
       </div>
@@ -223,19 +231,35 @@ function RiskBadge({ level }: { level: "low" | "medium" | "high" }) {
   );
 }
 
-function CounterPill({ count, label, tone }: { count: number; label: string; tone: InsightTone }) {
+function CounterPill({ count, label, tone, active, onClick }: { count: number; label: string; tone: InsightTone; active?: boolean; onClick?: () => void }) {
   const styles: Record<InsightTone, string> = {
     danger:  "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30",
     warning: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30",
     info:    "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30",
     good:    "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
   };
-  const isActive = count > 0;
+  const ring: Record<InsightTone, string> = {
+    danger:  "ring-red-500/60",
+    warning: "ring-amber-500/60",
+    info:    "ring-blue-500/60",
+    good:    "ring-emerald-500/60",
+  };
+  const hasSignal = count > 0;
+  const baseClass = hasSignal ? styles[tone] : "bg-surface-alt text-muted border-edge";
+  const activeClass = active ? `ring-2 ring-offset-1 ring-offset-bg ${ring[tone]}` : "";
+  const interactive = hasSignal && onClick ? "cursor-pointer hover:scale-[1.03] active:scale-95 transition-transform" : "";
+
   return (
-    <div className={`rounded-lg border p-2 text-center ${isActive ? styles[tone] : "bg-surface-alt text-muted border-edge"}`}>
-      <p className="text-2xl font-bold leading-none"
+    <button
+      type="button"
+      onClick={hasSignal ? onClick : undefined}
+      disabled={!hasSignal}
+      className={`rounded-md border px-2 py-1.5 text-center w-full ${baseClass} ${activeClass} ${interactive}`}
+      title={hasSignal ? (active ? `Cliquer pour retirer le filtre` : `Filtrer sur ${label.toLowerCase()}`) : `Aucun ${label.toLowerCase()}`}
+    >
+      <p className="text-base font-bold leading-none"
         style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{count}</p>
-      <p className="text-[0.625rem] uppercase tracking-widest mt-1">{label}</p>
-    </div>
+      <p className="text-[0.55rem] uppercase tracking-widest mt-0.5">{label}</p>
+    </button>
   );
 }
