@@ -96,10 +96,10 @@ export function PortfolioInsightsPanel({
 
       {/* Compteurs cliquables (filtrent les insights par tonalité) */}
       <div className="grid grid-cols-4 gap-1.5 mb-3 flex-shrink-0">
-        <CounterPill count={dangerCount}  label="Risques"      tone="danger"  active={filterTone === "danger"}  onClick={() => toggleFilter("danger")} />
-        <CounterPill count={warningCount} label="Vigilances"   tone="warning" active={filterTone === "warning"} onClick={() => toggleFilter("warning")} />
-        <CounterPill count={infoCount}    label="Informations" tone="info"    active={filterTone === "info"}    onClick={() => toggleFilter("info")} />
-        <CounterPill count={goodCount}    label="Favorables"   tone="good"    active={filterTone === "good"}    onClick={() => toggleFilter("good")} />
+        <CounterPill count={insights.length} label="Générale"     tone="info"    active={filterTone === null}      onClick={() => setFilterTone(null)} alwaysClickable />
+        <CounterPill count={warningCount}    label="Vigilances"   tone="warning" active={filterTone === "warning"} onClick={() => toggleFilter("warning")} />
+        <CounterPill count={infoCount}       label="Informations" tone="info"    active={filterTone === "info"}    onClick={() => toggleFilter("info")} />
+        <CounterPill count={goodCount}       label="Favorables"   tone="good"    active={filterTone === "good"}    onClick={() => toggleFilter("good")} />
       </div>
 
       {/* Liste des insights — scrollable verticalement */}
@@ -231,7 +231,7 @@ function RiskBadge({ level }: { level: "low" | "medium" | "high" }) {
   );
 }
 
-function CounterPill({ count, label, tone, active, onClick }: { count: number; label: string; tone: InsightTone; active?: boolean; onClick?: () => void }) {
+function CounterPill({ count, label, tone, active, onClick, alwaysClickable }: { count: number; label: string; tone: InsightTone; active?: boolean; onClick?: () => void; alwaysClickable?: boolean }) {
   const styles: Record<InsightTone, string> = {
     danger:  "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30",
     warning: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30",
@@ -245,17 +245,18 @@ function CounterPill({ count, label, tone, active, onClick }: { count: number; l
     good:    "ring-emerald-500/60",
   };
   const hasSignal = count > 0;
-  const baseClass = hasSignal ? styles[tone] : "bg-surface-alt text-muted border-edge";
+  const isClickable = alwaysClickable || hasSignal;
+  const baseClass = hasSignal || alwaysClickable ? styles[tone] : "bg-surface-alt text-muted border-edge";
   const activeClass = active ? `ring-2 ring-offset-1 ring-offset-bg ${ring[tone]}` : "";
-  const interactive = hasSignal && onClick ? "cursor-pointer hover:scale-[1.03] active:scale-95 transition-transform" : "";
+  const interactive = isClickable && onClick ? "cursor-pointer hover:scale-[1.03] active:scale-95 transition-transform" : "";
 
   return (
     <button
       type="button"
-      onClick={hasSignal ? onClick : undefined}
-      disabled={!hasSignal}
+      onClick={isClickable ? onClick : undefined}
+      disabled={!isClickable}
       className={`rounded-md border px-2 py-1.5 text-center w-full ${baseClass} ${activeClass} ${interactive}`}
-      title={hasSignal ? (active ? `Cliquer pour retirer le filtre` : `Filtrer sur ${label.toLowerCase()}`) : `Aucun ${label.toLowerCase()}`}
+      title={isClickable ? (active ? `Filtre actif` : `Filtrer sur ${label.toLowerCase()}`) : `Aucun ${label.toLowerCase()}`}
     >
       <p className="text-base font-bold leading-none"
         style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{count}</p>
