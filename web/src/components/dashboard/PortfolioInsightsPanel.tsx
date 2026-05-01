@@ -86,12 +86,6 @@ export function PortfolioInsightsPanel({
             </p>
           </div>
         </div>
-
-        {/* Score de diversification + risk badge */}
-        <div className="flex items-center gap-3">
-          <DiversificationScore score={diversificationScore} breakdown={scoreBreakdown} />
-          <RiskBadge level={riskLevel} />
-        </div>
       </div>
 
       {/* Compteurs cliquables (filtrent les insights par tonalité) */}
