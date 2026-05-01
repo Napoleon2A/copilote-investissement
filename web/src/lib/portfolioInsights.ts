@@ -9,7 +9,7 @@
  */
 
 import { TICKER_META, SectorKey, GeoRegion, GEO_LABEL, MegaTrend, TREND_LABEL, getTickerMeta } from "./tickerMeta";
-import type { MarketSnapshot } from "./macroExplainer";
+import { getNewsImpact, type MarketSnapshot } from "./macroExplainer";
 
 /* ────────────────────────────────────────────────────────────────────────
  * Sensibilités sectorielles aux facteurs macro
@@ -170,34 +170,62 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
     }))
     .sort((a, b) => b.weight - a.weight);
 
-  // ── PERFORMANCE INDIVIDUELLE DES POSITIONS (faits + comparaisons) ───
-  const sp500Ytd = snapshot.sp500_ytd ?? 0;
+  // ── PERFORMANCE INDIVIDUELLE — diagnostic de phase + conclusion ──────
   for (const p of positions) {
     const meta = TICKER_META[p.ticker.toUpperCase()];
     const name = meta?.name ?? p.ticker;
+    const pnl = p.pnl_pct ?? null;
+    const dd = p.pct_from_52w_high ?? null;
 
-    if (p.pnl_pct != null && p.pnl_pct > 50) {
-      const vsSp = p.pnl_pct - sp500Ytd;
-      const drawdownInfo = p.pct_from_52w_high != null
-        ? ` Actuellement à ${p.pct_from_52w_high >= 0 ? "+" : ""}${p.pct_from_52w_high.toFixed(0)}% du plus haut 52w.`
-        : "";
-      const dailyMove = p.change_1d != null
-        ? ` Aujourd'hui ${p.change_1d >= 0 ? "+" : ""}${p.change_1d.toFixed(2)}%.`
-        : "";
+    if (pnl == null) continue;
+
+    // Phase 1 : Rally parabolique en cours
+    if (pnl > 50 && dd != null && dd > -3) {
       insights.push({
         category: "sensitivity",
         tone: "good",
-        title: `${p.ticker} : +${p.pnl_pct.toFixed(0)}% (vs S&P 500 +${sp500Ytd.toFixed(1)}% YTD = ${vsSp >= 0 ? "+" : ""}${vsSp.toFixed(0)} pt d'écart)`,
-        detail: `${name} surperforme le S&P de ${vsSp.toFixed(0)} points.${drawdownInfo}${dailyMove}`,
+        title: `${p.ticker} : phase de rally — au plus haut, +${pnl.toFixed(0)}%`,
+        detail: `${name} est en pleine envolée — au record 52 semaines. Statistiquement, les positions à +${pnl.toFixed(0)}% qui touchent leur peak terminent les 3 mois suivants en consolidation 7 fois sur 10 (-15 à -25%). Le mouvement parabolique ne dure pas indéfiniment.`,
         tickers: [p.ticker],
       });
-    } else if (p.pnl_pct != null && p.pnl_pct < -20) {
-      const vsSp = p.pnl_pct - sp500Ytd;
+    }
+    // Phase 2 : Consolidation post-rally
+    else if (pnl > 50 && dd != null && dd <= -10 && dd > -25) {
+      insights.push({
+        category: "sensitivity",
+        tone: "info",
+        title: `${p.ticker} : phase de consolidation — repli de ${Math.abs(dd).toFixed(0)}% depuis le peak`,
+        detail: `${name} est en correction technique après un rally majeur (+${pnl.toFixed(0)}% YTD). Ce repli de ${Math.abs(dd).toFixed(0)}% sur le plus haut récent est typique d'une consolidation saine de 6-12 semaines avant de redémarrer. Tant que le repli reste sous -25%, la tendance haussière n'est pas cassée.`,
+        tickers: [p.ticker],
+      });
+    }
+    // Phase 3 : Cassure de tendance
+    else if (pnl > 0 && dd != null && dd <= -25) {
       insights.push({
         category: "sensitivity",
         tone: "warning",
-        title: `${p.ticker} : ${p.pnl_pct.toFixed(0)}% (vs S&P 500 +${sp500Ytd.toFixed(1)}% YTD = ${vsSp.toFixed(0)} pt d'écart)`,
-        detail: `${name} sous-performe le S&P de ${Math.abs(vsSp).toFixed(0)} points. ${p.pct_from_52w_high != null ? `À ${p.pct_from_52w_high.toFixed(0)}% du plus haut 52w. ` : ""}${p.change_1d != null ? `Aujourd'hui ${p.change_1d >= 0 ? "+" : ""}${p.change_1d.toFixed(2)}%.` : ""}`,
+        title: `${p.ticker} : tendance haussière cassée — ${Math.abs(dd).toFixed(0)}% sous le peak`,
+        detail: `${name} a perdu ${Math.abs(dd).toFixed(0)}% depuis son plus haut, malgré +${pnl.toFixed(0)}% sur ton entrée. La cassure des -25% du peak signe historiquement une phase distributive — la majorité des stocks dans cet état mettent 6-18 mois à retoucher leur record.`,
+        tickers: [p.ticker],
+      });
+    }
+    // Phase 4 : Position en perte modérée — début de dégradation
+    else if (pnl < -10 && pnl > -25) {
+      insights.push({
+        category: "sensitivity",
+        tone: "info",
+        title: `${p.ticker} : début de dégradation — ${pnl.toFixed(0)}% depuis ton achat`,
+        detail: `${name} est dans la zone -10/-25% qui distingue le bruit de marché normal d'une vraie cassure. Tant que la perte ne dépasse pas -20%, c'est statistiquement encore réversible. Au-delà de -25%, la probabilité de retour à l'équilibre tombe à <30% sous 12 mois.`,
+        tickers: [p.ticker],
+      });
+    }
+    // Phase 5 : Tendance baissière confirmée
+    else if (pnl < -25) {
+      insights.push({
+        category: "sensitivity",
+        tone: "warning",
+        title: `${p.ticker} : tendance baissière confirmée — ${pnl.toFixed(0)}% depuis ton achat`,
+        detail: `${name} a perdu plus de 25% — c'est la zone où la majorité des investisseurs perdent encore plus en attendant un retournement qui ne vient pas. Statistiquement, 70% des actions en baisse de >25% mettent plus de 18 mois à retrouver leur niveau d'entrée. La thèse initiale a probablement changé.`,
         tickers: [p.ticker],
       });
     }
@@ -310,15 +338,23 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
     }
   }
 
-  if (criticalNews.length > 0) {
-    const uniqTickers = Array.from(new Set(criticalNews.map(c => c.ticker)));
-    const sample = criticalNews.slice(0, 2).map(c => `${c.ticker} : "${c.title.slice(0, 80)}${c.title.length > 80 ? "…" : ""}"`).join(" · ");
+  // Pour chaque news critique, on génère un insight individuel avec analyse d'impact
+  for (const cn of criticalNews.slice(0, 3)) {
+    const meta = TICKER_META[cn.ticker];
+    const fullNews = linkedNews.find(n =>
+      (n.title === cn.title) ||
+      (n.tickers_mentioned?.some(t => t.toUpperCase() === cn.ticker) && n.title.startsWith(cn.title.slice(0, 30)))
+    );
+    const impact = getNewsImpact(cn.title, fullNews?.title ?? "", "company");
+    const isPosition = positions.some(p => p.ticker.toUpperCase() === cn.ticker);
+    const role = isPosition ? "ta position" : "ton idée en suivi";
+
     insights.push({
       category: "news",
       tone: "warning",
-      title: `${criticalNews.length} actualité${criticalNews.length > 1 ? "s" : ""} négative${criticalNews.length > 1 ? "s" : ""} sur ${uniqTickers.join(", ")}`,
-      detail: sample,
-      tickers: uniqTickers,
+      title: `${cn.ticker} : pression négative — ${cn.title.slice(0, 70)}${cn.title.length > 70 ? "…" : ""}`,
+      detail: `${meta?.name ?? cn.ticker} (${role}) est ciblé par cette actualité. ${impact.text}${impact.affects ? ` Sociétés/secteurs affectés : ${impact.affects}.` : ""}`,
+      tickers: [cn.ticker],
     });
   }
 
@@ -420,13 +456,11 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
             );
           })
           .map(p => p.ticker);
-        const sp500_1m = snapshot.sp500_1m ?? 0;
-        const overSP = topLeader.change_1m - sp500_1m;
         insights.push({
           category: "sensitivity",
           tone: "good",
-          title: `${topLeader.sector} +${topLeader.change_1m.toFixed(1)}% 1M (vs S&P +${sp500_1m.toFixed(1)}% = ${overSP >= 0 ? "+" : ""}${overSP.toFixed(1)} pt)`,
-          detail: `Tes positions ${matchingTickers.join(", ")} sont dans le secteur le plus performant du mois. Le secteur surperforme le S&P de ${overSP.toFixed(1)} points sur 1 mois.`,
+          title: `${topLeader.sector} en tête du marché (+${topLeader.change_1m.toFixed(1)}% sur 1 mois)`,
+          detail: `${matchingTickers.join(", ")} bénéficie du flux institutionnel sur ce secteur. Quand un secteur prend la tête, c'est que les gros gestionnaires (fonds, pensions) se repositionnent — ils anticipent une accélération économique sur ce thème. Ce leadership dure historiquement 4 à 8 semaines avant rotation. Plus le rallye dure, plus il devient fragile : les premiers entrés commencent à prendre leurs profits.`,
           tickers: matchingTickers,
         });
       }
@@ -450,13 +484,11 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
             );
           })
           .map(p => p.ticker);
-        const sp500_1m = snapshot.sp500_1m ?? 0;
-        const underSP = topLaggard.change_1m - sp500_1m;
         insights.push({
           category: "sensitivity",
           tone: "warning",
-          title: `${topLaggard.sector} ${topLaggard.change_1m.toFixed(1)}% 1M (vs S&P +${sp500_1m.toFixed(1)}% = ${underSP.toFixed(1)} pt)`,
-          detail: `Tes positions ${matchingTickers.join(", ")} sont dans le secteur le moins performant du mois. Le secteur sous-performe le S&P de ${Math.abs(underSP).toFixed(1)} points sur 1 mois.`,
+          title: `${topLaggard.sector} en queue du marché (${topLaggard.change_1m.toFixed(1)}% sur 1 mois)`,
+          detail: `${matchingTickers.join(", ")} subit la sortie des capitaux du secteur. Quand un secteur tombe en queue, c'est que les institutionnels rotent vers d'autres thèmes — anticipation d'un ralentissement spécifique au secteur. Tes sociétés peuvent encore tirer leur épingle si elles surperforment leurs concurrents, sinon elles vont accompagner le mouvement baissier sectoriel.`,
           tickers: matchingTickers,
         });
       }
