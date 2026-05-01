@@ -70,9 +70,9 @@ export function PortfolioInsightsPanel({
   const goodCount    = insights.filter(i => i.tone === "good").length;
 
   return (
-    <div className="card-premium card-aura relative p-5">
+    <div className="card-premium card-aura relative p-5 h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3 flex-shrink-0">
         <div className="flex items-center gap-2">
           <span className="text-lg">🎯</span>
           <div>
@@ -91,22 +91,22 @@ export function PortfolioInsightsPanel({
       </div>
 
       {/* Compteurs */}
-      <div className="grid grid-cols-4 gap-2 mb-4">
+      <div className="grid grid-cols-4 gap-2 mb-4 flex-shrink-0">
         <CounterPill count={dangerCount}  label="Risques"     tone="danger" />
         <CounterPill count={warningCount} label="Vigilances"  tone="warning" />
         <CounterPill count={infoCount}    label="Informations" tone="info" />
         <CounterPill count={goodCount}    label="Favorables"  tone="good" />
       </div>
 
-      {/* Liste des insights — pleine largeur, plus de sidebar */}
-      <div className="space-y-2">
+      {/* Liste des insights — scrollable verticalement */}
+      <div className="flex-1 min-h-0 overflow-y-auto pr-2 nice-scroll">
         {insights.length === 0 ? (
           <div className="py-6 text-center">
             <p className="text-emerald-700 dark:text-emerald-400 font-medium">✓ Aucun signal critique</p>
             <p className="text-xs text-muted mt-1">Aucune actualité ni mouvement notable détecté sur tes positions et idées en suivi.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className="space-y-2">
             {insights.map((insight, i) => <InsightCard key={i} insight={insight} />)}
           </div>
         )}

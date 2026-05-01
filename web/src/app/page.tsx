@@ -127,28 +127,21 @@ export default function HomePage() {
 
       <PicksHero picks={topPicks} loading={opps === undefined} scanning={opps?.scanning} />
 
-      {/* Analyse personnalisée du portefeuille — pleine largeur */}
-      <PortfolioInsightsPanel
-        snapshot={snapshot}
-        portfolio={portfolio}
-        ideas={ideas}
-        picks={topPicks}
-        earnings={earnings}
-        linkedNews={allLinkedNews}
-        sectorRotation={brief?.market_context?.sector_rotation}
-        tickerScores={tickerScores}
-      />
-
-      {/* Row 1 : Comprendre marché ↔ Actualité des cibles */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:h-[480px]">
-        <div className="lg:col-span-3 min-h-0">
-          <MarketContextPanel
-            ctx={brief?.market_context}
-            marketSummary={brief?.market_summary}
-            loading={brief === undefined}
+      {/* Row 1 : Analyse personnalisée (50%) ↔ Actualité des cibles (50%) — scroll vertical sur les deux */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:h-[520px]">
+        <div className="min-h-0">
+          <PortfolioInsightsPanel
+            snapshot={snapshot}
+            portfolio={portfolio}
+            ideas={ideas}
+            picks={topPicks}
+            earnings={earnings}
+            linkedNews={allLinkedNews}
+            sectorRotation={brief?.market_context?.sector_rotation}
+            tickerScores={tickerScores}
           />
         </div>
-        <div className="lg:col-span-2 min-h-0">
+        <div className="min-h-0">
           <LinkedNewsPanel
             data={linkedNewsRSS}
             perTickerData={perTickerNews}
@@ -159,19 +152,26 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Row 2 : Actualité macro ↔ Grille 2x2 stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:h-[460px]">
-        <div className="lg:col-span-3 min-h-0">
+      {/* Row 2 : Comprendre marché ↔ Actualité macro */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:h-[460px]">
+        <div className="min-h-0">
+          <MarketContextPanel
+            ctx={brief?.market_context}
+            marketSummary={brief?.market_summary}
+            loading={brief === undefined}
+          />
+        </div>
+        <div className="min-h-0">
           <MacroNewsPanel data={macroNewsRSS} />
         </div>
-        <div className="lg:col-span-2 min-h-0">
-          <div className="grid grid-cols-2 gap-3 h-full" style={{ gridAutoRows: "1fr" }}>
-            <RichEarningsCard earnings={earnings} />
-            <RichPortfolioCard portfolio={portfolio} />
-            <RichWatchlistCard watchlists={watchlists} />
-            <RichAlertsCard alerts={alerts} />
-          </div>
-        </div>
+      </div>
+
+      {/* Row 3 : Stats grille 4 cards en pleine largeur */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" style={{ gridAutoRows: "1fr" }}>
+        <RichEarningsCard earnings={earnings} />
+        <RichPortfolioCard portfolio={portfolio} />
+        <RichWatchlistCard watchlists={watchlists} />
+        <RichAlertsCard alerts={alerts} />
       </div>
     </div>
   );
