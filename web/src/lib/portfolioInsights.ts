@@ -320,17 +320,31 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
   }
 
   if (snapshot.wti_ytd != null && snapshot.wti_ytd > 30) {
-    const energyTickers = positions.filter(p => {
-      const sector = TICKER_META[p.ticker.toUpperCase()]?.sector;
-      return sector === "energy" || sector === "materials";
-    }).map(p => p.ticker);
-    if (energyTickers.length > 0) {
+    // Pétrolières classiques : XOM, CVX, COP, TTE.PA, SHEL.L (sociétés dont le revenu suit le prix du pétrole)
+    const oilStocks = ["XOM", "CVX", "COP", "TTE.PA", "SHEL.L", "BP", "EQNR"];
+    const oilTickers = positions.filter(p => oilStocks.includes(p.ticker.toUpperCase())).map(p => p.ticker);
+    if (oilTickers.length > 0) {
       insights.push({
         category: "sensitivity",
         tone: "good",
-        title: `Pétrole +${snapshot.wti_ytd.toFixed(0)}% YTD — vent dans le dos pour ${energyTickers.join(", ")}`,
-        detail: `Le pétrole en hausse remonte les marges des sociétés énergie/matières premières. Tes positions du secteur en bénéficient directement — tant que les coupes OPEC tiennent et que la demande chinoise ne s'effondre pas, le mouvement peut continuer.`,
-        tickers: energyTickers,
+        title: `Pétrole +${snapshot.wti_ytd.toFixed(0)}% YTD — vent dans le dos pour ${oilTickers.join(", ")}`,
+        detail: `Le prix du brut tire directement les marges des pétrolières intégrées. Tant que les coupes OPEC tiennent et que la demande chinoise ne s'effondre pas, le mouvement peut continuer.`,
+        tickers: oilTickers,
+      });
+    }
+
+    // Renouvelables / stockage (impact indirect et différé)
+    const renewableTickers = positions.filter(p => {
+      const meta = TICKER_META[p.ticker.toUpperCase()];
+      return meta?.trends?.includes("green_energy");
+    }).map(p => p.ticker);
+    if (renewableTickers.length > 0) {
+      insights.push({
+        category: "sensitivity",
+        tone: "info",
+        title: `Pétrole +${snapshot.wti_ytd.toFixed(0)}% YTD — effet indirect sur ${renewableTickers.join(", ")}`,
+        detail: `Contrairement aux pétrolières, ${renewableTickers.join(", ")} (stockage / solaire / éolien) n'a pas de lien mécanique avec le prix du baril. À long terme, un pétrole cher accélère la transition énergétique. À court terme, aucun effet direct sur les revenus — leur trajectoire dépend des subventions, des taux d'intérêt et de leurs propres carnets de commandes.`,
+        tickers: renewableTickers,
       });
     }
   }
