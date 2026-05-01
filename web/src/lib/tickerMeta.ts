@@ -3,10 +3,15 @@
  * Logos servis via Clearbit (gratuit, fallback sur initiales colorées).
  */
 
+export type GeoRegion = "us" | "europe" | "uk" | "emerging" | "japan" | "canada";
+export type MegaTrend = "ai" | "green_energy" | "biotech" | "luxury" | "defense" | "ecommerce" | "cloud" | "cyber" | "ev" | "uranium" | "space" | "obesity";
+
 export interface TickerMeta {
   name: string;
   domain?: string;
   sector?: SectorKey;
+  geo?: GeoRegion;
+  trends?: MegaTrend[];   // Mégatendances exposées (max 2)
 }
 
 export type SectorKey =
@@ -185,10 +190,104 @@ export const TICKER_META: Record<string, TickerMeta> = {
   VALE:  { name: "Vale",         domain: "vale.com",         sector: "materials" },
 };
 
+/* ── Région géographique : dérivée du suffixe + tickers spéciaux ──────── */
+
+function inferGeo(ticker: string): GeoRegion {
+  const t = ticker.toUpperCase();
+  // Tickers chinois/émergents cotés ADR
+  const EMERGING = new Set(["BABA", "PDD", "MELI", "NU", "SE", "VALE", "JD", "TCOM", "BIDU", "NIO"]);
+  if (EMERGING.has(t)) return "emerging";
+
+  if (t.endsWith(".L")) return "uk";
+  if (t.endsWith(".PA") || t.endsWith(".AS") || t.endsWith(".MC") ||
+      t.endsWith(".DE") || t.endsWith(".MI") || t.endsWith(".CO") ||
+      t.endsWith(".BR") || t.endsWith(".SW")) return "europe";
+  if (t.endsWith(".HK")) return "emerging";
+  if (t.endsWith(".T")) return "japan";
+  if (t.endsWith(".TO")) return "canada";
+
+  // SAP est allemand mais coté US (sans suffixe)
+  if (t === "SAP" || t === "ASML") return "europe";
+
+  return "us"; // default
+}
+
+/* ── Mégatendances : exposition principale par ticker ─────────────────── */
+
+const TRENDS_MAP: Record<string, MegaTrend[]> = {
+  // AI
+  NVDA: ["ai"], AMD: ["ai"], MSFT: ["ai", "cloud"], GOOGL: ["ai", "cloud"], GOOG: ["ai", "cloud"],
+  META: ["ai"], PLTR: ["ai"], CRM: ["ai", "cloud"], NOW: ["ai", "cloud"],
+  AVGO: ["ai"], TSM: ["ai"], ASML: ["ai"], MU: ["ai"], MRVL: ["ai"], INTC: ["ai"],
+
+  // Cloud
+  SNOW: ["cloud", "ai"], DDOG: ["cloud"], NET: ["cloud", "cyber"], MDB: ["cloud"], TEAM: ["cloud"],
+  ORCL: ["cloud", "ai"], ADBE: ["cloud", "ai"],
+  AMZN: ["cloud", "ecommerce"],
+
+  // Cyber
+  CRWD: ["cyber", "ai"], ZS: ["cyber"], FTNT: ["cyber"], PANW: ["cyber"], S: ["cyber"],
+
+  // Green Energy / EV
+  FSLR: ["green_energy"], ENPH: ["green_energy"], ARRY: ["green_energy"], EOSE: ["green_energy"],
+  NEE: ["green_energy"], TSLA: ["ev", "ai"],
+
+  // Biotech / obesity
+  LLY: ["obesity", "biotech"], NVO: ["obesity", "biotech"], "NOVO-B.CO": ["obesity", "biotech"],
+  MRNA: ["biotech"], REGN: ["biotech"], VRTX: ["biotech"], AMGN: ["biotech"], GILD: ["biotech"],
+
+  // Luxe
+  "MC.PA": ["luxury"], "OR.PA": ["luxury"], "KER.PA": ["luxury"],
+
+  // Défense
+  LMT: ["defense"], RTX: ["defense"], NOC: ["defense"], LHX: ["defense"], BA: ["defense"],
+  "AIR.PA": ["defense"],
+
+  // E-commerce
+  BABA: ["ecommerce"], PDD: ["ecommerce"], MELI: ["ecommerce"], SE: ["ecommerce"],
+
+  // Space
+  RKLB: ["space"], JOBY: ["space"],
+
+  // Materials (or, cuivre via pétrole)
+  NEM: [], FCX: [], AA: [],
+
+  // Reste : pas de trend dominante explicite
+};
+
 export function getTickerMeta(ticker: string): TickerMeta {
   const t = ticker.toUpperCase();
-  return TICKER_META[t] ?? { name: ticker };
+  const base = TICKER_META[t] ?? { name: ticker };
+  return {
+    ...base,
+    geo: base.geo ?? inferGeo(t),
+    trends: base.trends ?? TRENDS_MAP[t] ?? [],
+  };
 }
+
+export const GEO_LABEL: Record<GeoRegion, string> = {
+  us: "🇺🇸 US",
+  europe: "🇪🇺 Europe",
+  uk: "🇬🇧 UK",
+  emerging: "🌏 Émergents",
+  japan: "🇯🇵 Japon",
+  canada: "🇨🇦 Canada",
+};
+
+export const TREND_LABEL: Record<MegaTrend, string> = {
+  ai: "Intelligence artificielle",
+  green_energy: "Énergie verte",
+  biotech: "Biotech",
+  luxury: "Luxe",
+  defense: "Défense",
+  ecommerce: "E-commerce",
+  cloud: "Cloud / SaaS",
+  cyber: "Cybersécurité",
+  ev: "Véhicules électriques",
+  uranium: "Uranium / nucléaire",
+  space: "Aérospatial",
+  obesity: "Obésité (GLP-1)",
+};
 
 export function getLogoUrl(ticker: string): string | null {
   const meta = getTickerMeta(ticker);

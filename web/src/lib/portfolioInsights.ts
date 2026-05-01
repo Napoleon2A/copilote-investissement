@@ -8,7 +8,7 @@
  * "Qu'est-ce que ÇA veut dire pour MON portefeuille ?".
  */
 
-import { TICKER_META, SectorKey } from "./tickerMeta";
+import { TICKER_META, SectorKey, GeoRegion, GEO_LABEL, MegaTrend, TREND_LABEL, getTickerMeta } from "./tickerMeta";
 import type { MarketSnapshot } from "./macroExplainer";
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -68,9 +68,18 @@ export interface Insight {
 export interface PortfolioInsightsResult {
   insights: Insight[];
   exposureBySector: Array<{ sector: SectorKey; label: string; weight: number; tickers: string[] }>;
+  exposureByGeo: Array<{ geo: GeoRegion; label: string; weight: number; tickers: string[] }>;
+  exposureByTrend: Array<{ trend: MegaTrend; label: string; weight: number; tickers: string[] }>;
   macroExposure: Array<{ factor: string; impact: Impact; comment: string }>;
-  diversificationScore: number;  // 0-10
+  diversificationScore: number;  // 0-10 multifactoriel
   riskLevel: "low" | "medium" | "high";
+  /** Détail du score : sectoriel, géo, position max, trends */
+  scoreBreakdown: {
+    sector: number;     // 0-10
+    geo: number;        // 0-10
+    positionMax: number; // 0-10
+    trends: number;     // 0-10
+  };
 }
 
 interface PortfolioInsightsInput {
@@ -110,6 +119,47 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
     .map(([sector, data]) => ({
       sector,
       label: SECTOR_LABELS[sector] ?? sector,
+      weight: Math.round(data.weight),
+      tickers: data.tickers,
+    }))
+    .sort((a, b) => b.weight - a.weight);
+
+  // ── EXPOSITION GÉOGRAPHIQUE ──────────────────────────────────────────
+  const geoMap = new Map<GeoRegion, { weight: number; tickers: string[] }>();
+  for (const p of positions) {
+    const meta = getTickerMeta(p.ticker);
+    const geo = meta.geo ?? "us";
+    const weight = (p.market_value && totalValue) ? (p.market_value / totalValue) * 100 : 100 / positions.length;
+    const existing = geoMap.get(geo) ?? { weight: 0, tickers: [] };
+    existing.weight += weight;
+    if (!existing.tickers.includes(p.ticker)) existing.tickers.push(p.ticker);
+    geoMap.set(geo, existing);
+  }
+  const exposureByGeo = Array.from(geoMap.entries())
+    .map(([geo, data]) => ({
+      geo,
+      label: GEO_LABEL[geo],
+      weight: Math.round(data.weight),
+      tickers: data.tickers,
+    }))
+    .sort((a, b) => b.weight - a.weight);
+
+  // ── EXPOSITION MÉGATRENDS ────────────────────────────────────────────
+  const trendMap = new Map<MegaTrend, { weight: number; tickers: string[] }>();
+  for (const p of positions) {
+    const meta = getTickerMeta(p.ticker);
+    const weight = (p.market_value && totalValue) ? (p.market_value / totalValue) * 100 : 100 / positions.length;
+    for (const trend of meta.trends ?? []) {
+      const existing = trendMap.get(trend) ?? { weight: 0, tickers: [] };
+      existing.weight += weight;
+      if (!existing.tickers.includes(p.ticker)) existing.tickers.push(p.ticker);
+      trendMap.set(trend, existing);
+    }
+  }
+  const exposureByTrend = Array.from(trendMap.entries())
+    .map(([trend, data]) => ({
+      trend,
+      label: TREND_LABEL[trend],
       weight: Math.round(data.weight),
       tickers: data.tickers,
     }))
@@ -298,8 +348,99 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
     }
   }
 
-  // ── 7. SCORE DE DIVERSIFICATION ──────────────────────────────────────
-  const diversificationScore = computeDiversificationScore(positions.length, exposureBySector);
+  // ── 7. POSITION MAX (règle des 25% max) ──────────────────────────────
+  if (positions.length > 1 && totalValue && totalValue > 0) {
+    const sorted = [...positions].sort((a, b) => (b.market_value ?? 0) - (a.market_value ?? 0));
+    const top = sorted[0];
+    const topWeight = ((top.market_value ?? 0) / totalValue) * 100;
+    if (topWeight > 25) {
+      insights.push({
+        category: "concentration",
+        tone: topWeight > 40 ? "danger" : "warning",
+        title: `Position dominante : ${top.ticker} = ${topWeight.toFixed(0)}% du portefeuille`,
+        detail: `Règle classique : aucune position ne devrait dépasser 20-25% du portefeuille pour limiter le risque idiosyncratique. Actuellement ${top.ticker} pèse ${topWeight.toFixed(0)}% — un choc spécifique sur cette société impacterait directement ${topWeight.toFixed(0)}% du capital.`,
+        tickers: [top.ticker],
+      });
+    }
+  }
+
+  // ── 8. DIVERSIFICATION GÉOGRAPHIQUE ──────────────────────────────────
+  if (positions.length > 0) {
+    const usWeight = exposureByGeo.find(g => g.geo === "us")?.weight ?? 0;
+    const europeWeight = exposureByGeo.find(g => g.geo === "europe")?.weight ?? 0;
+    const otherWeight = 100 - usWeight - europeWeight;
+
+    if (usWeight === 100) {
+      insights.push({
+        category: "concentration",
+        tone: "warning",
+        title: "100% USA : aucune diversification géographique",
+        detail: "Tout le portefeuille est exposé au dollar US, à la Fed et au cycle américain. Une diversification 60-70% US / 20-30% Europe / 0-10% émergents est généralement recommandée pour amortir les chocs régionaux et limiter le risque devise.",
+      });
+    } else if (usWeight > 90 && positions.length >= 3) {
+      insights.push({
+        category: "concentration",
+        tone: "info",
+        title: `${usWeight}% USA : forte concentration géographique`,
+        detail: "Considérer un peu d'exposition Europe (LVMH, Sanofi, ASML) ou émergents (TSMC, Alibaba) pour amortir le risque dollar et bénéficier de cycles différents.",
+      });
+    }
+  }
+
+  // ── 9. COUVERTURE MÉGATRENDS ─────────────────────────────────────────
+  if (positions.length > 0) {
+    const trendsCovered = exposureByTrend.length;
+    if (trendsCovered === 0) {
+      insights.push({
+        category: "concentration",
+        tone: "info",
+        title: "Aucune exposition aux mégatendances structurelles",
+        detail: "Les mégatendances (IA, énergie verte, démographie/obésité, défense) tirent les marchés à 5-10 ans. Sans exposition, le portefeuille manque les vagues structurelles. Considérer NVDA/MSFT (IA), LLY/NVO (obésité), FSLR/ENPH (énergie verte), LMT/RTX (défense).",
+      });
+    } else if (trendsCovered >= 3) {
+      const topTrend = exposureByTrend[0];
+      if (topTrend.weight < 90) {
+        insights.push({
+          category: "concentration",
+          tone: "good",
+          title: `${trendsCovered} mégatendances couvertes`,
+          detail: `Bonne diversification thématique : ${exposureByTrend.slice(0, 3).map(t => `${t.label} (${t.weight}%)`).join(", ")}. Le portefeuille est exposé à plusieurs vagues structurelles.`,
+          tickers: exposureByTrend.flatMap(t => t.tickers).slice(0, 5),
+        });
+      }
+    }
+  }
+
+  // ── 10. CONVICTION DES IDÉES ─────────────────────────────────────────
+  if (ideas.length >= 3) {
+    const lowConviction = ideas.filter(i => i.conviction === "faible").length;
+    const lowRatio = lowConviction / ideas.length;
+    if (lowRatio > 0.5) {
+      insights.push({
+        category: "concentration",
+        tone: "info",
+        title: `${lowConviction}/${ideas.length} idées en suivi avec conviction "faible"`,
+        detail: `Plus de la moitié de tes idées en suivi sont taggées "faible conviction" — soit le système est conservateur sur ces tickers, soit ta base d'idées mérite d'être nettoyée. Les idées à faible conviction noient le signal des idées à forte conviction.`,
+      });
+    }
+  }
+
+  // ── SCORE DE DIVERSIFICATION MULTIFACTORIEL ──────────────────────────
+  const scoreBreakdown = computeMultifactorScore(
+    positions,
+    exposureBySector,
+    exposureByGeo,
+    exposureByTrend,
+    totalValue,
+  );
+
+  const diversificationScore = Math.round(
+    (scoreBreakdown.sector * 0.30 +
+     scoreBreakdown.geo * 0.20 +
+     scoreBreakdown.positionMax * 0.30 +
+     scoreBreakdown.trends * 0.20)
+  );
+
   const riskLevel: "low" | "medium" | "high" =
     diversificationScore >= 7 ? "low"
     : diversificationScore >= 4 ? "medium"
@@ -312,9 +453,12 @@ export function buildPortfolioInsights(input: PortfolioInsightsInput): Portfolio
   return {
     insights,
     exposureBySector,
+    exposureByGeo,
+    exposureByTrend,
     macroExposure,
     diversificationScore,
     riskLevel,
+    scoreBreakdown,
   };
 }
 
@@ -383,20 +527,61 @@ function explainRateSensitivity(
   return `${total}% de ton portefeuille (${sensitive.map(s => `${s.label} ${s.weight}%`).join(", ")}) est en secteurs très sensibles aux taux longs. Les valuations de croissance sont actualisées à ${rate.toFixed(2)}% — chaque hausse de 0.5pt du taux comprime mécaniquement les multiples de 10-15%.`;
 }
 
-function computeDiversificationScore(
-  nbPositions: number,
-  exposure: Array<{ weight: number }>,
-): number {
-  if (nbPositions === 0) return 0;
-  if (nbPositions === 1) return 1;
+/**
+ * Score multifactoriel : 4 dimensions pondérées.
+ * Chaque dimension est notée 0-10 et le score final est une moyenne pondérée.
+ */
+function computeMultifactorScore(
+  positions: Array<{ ticker: string; market_value?: number }>,
+  exposureBySector: Array<{ weight: number }>,
+  exposureByGeo: Array<{ weight: number }>,
+  exposureByTrend: Array<{ weight: number }>,
+  totalValue?: number,
+): { sector: number; geo: number; positionMax: number; trends: number } {
+  if (positions.length === 0) return { sector: 0, geo: 0, positionMax: 0, trends: 0 };
+  if (positions.length === 1) return { sector: 1, geo: 0, positionMax: 0, trends: 1 };
 
-  // Score basé sur Herfindahl-Hirschman Index
-  const hhi = exposure.reduce((sum, e) => sum + Math.pow(e.weight / 100, 2), 0);
-  // hhi = 1 = 1 seule position ; hhi = 0 = parfaitement diversifié
-  const baseScore = (1 - hhi) * 10;
+  // 1. Score sectoriel (Herfindahl + bonus nombre)
+  const sectorHhi = exposureBySector.reduce((s, e) => s + Math.pow(e.weight / 100, 2), 0);
+  const sectorBase = (1 - sectorHhi) * 10;
+  const sectorCountBonus = Math.min(exposureBySector.length / 5, 1) * 2;
+  const sectorScore = Math.min(10, sectorBase + sectorCountBonus);
 
-  // Bonus selon le nombre de positions
-  const countBonus = Math.min(nbPositions / 10, 1) * 2;
+  // 2. Score géographique (idéal : 70% US + 30% Europe/Émergents)
+  const geoHhi = exposureByGeo.reduce((s, e) => s + Math.pow(e.weight / 100, 2), 0);
+  const geoBase = (1 - geoHhi) * 10;
+  // Bonus si 2-3 régions couvertes
+  const geoCountBonus = exposureByGeo.length >= 2 ? 2 : 0;
+  const geoScore = Math.min(10, geoBase + geoCountBonus);
 
-  return Math.round(Math.min(10, baseScore + countBonus));
+  // 3. Score de concentration max (pénalise toute position > 25%)
+  let positionMaxScore = 10;
+  if (totalValue && totalValue > 0) {
+    const maxWeight = Math.max(...positions.map(p => ((p.market_value ?? 0) / totalValue) * 100));
+    if (maxWeight > 50) positionMaxScore = 0;
+    else if (maxWeight > 35) positionMaxScore = 3;
+    else if (maxWeight > 25) positionMaxScore = 5;
+    else if (maxWeight > 15) positionMaxScore = 8;
+    else positionMaxScore = 10;
+  } else if (positions.length === 1) {
+    positionMaxScore = 0;
+  } else {
+    positionMaxScore = Math.min(10, positions.length * 1.5);
+  }
+
+  // 4. Score mégatendances (bonus si 2-4 trends couvertes)
+  const trendsCount = exposureByTrend.length;
+  let trendsScore = 0;
+  if (trendsCount === 0) trendsScore = 2;       // Manque structurel
+  else if (trendsCount === 1) trendsScore = 5;  // Mono-trend
+  else if (trendsCount === 2) trendsScore = 7;  // OK
+  else if (trendsCount === 3) trendsScore = 9;  // Bonne diversité
+  else trendsScore = 10;                        // Excellent
+
+  return {
+    sector: Math.round(sectorScore),
+    geo: Math.round(geoScore),
+    positionMax: Math.round(positionMaxScore),
+    trends: Math.round(trendsScore),
+  };
 }

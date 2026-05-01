@@ -4,6 +4,7 @@ import { TickerBadge } from "@/components/ui/TickerBadge";
 import { buildPortfolioInsights, type Insight, type InsightTone } from "@/lib/portfolioInsights";
 import { SECTOR_COLORS } from "@/lib/tickerMeta";
 import type { MarketSnapshot } from "@/lib/macroExplainer";
+import { useState } from "react";
 
 interface PortfolioInsightsPanelProps {
   snapshot: MarketSnapshot | null;
@@ -54,7 +55,10 @@ export function PortfolioInsightsPanel({
     linkedNews,
   });
 
-  const { insights, exposureBySector, macroExposure, diversificationScore, riskLevel } = result;
+  const {
+    insights, exposureBySector, exposureByGeo, exposureByTrend,
+    macroExposure, diversificationScore, riskLevel, scoreBreakdown,
+  } = result;
 
   const dangerCount  = insights.filter(i => i.tone === "danger").length;
   const warningCount = insights.filter(i => i.tone === "warning").length;
@@ -77,7 +81,7 @@ export function PortfolioInsightsPanel({
 
         {/* Score de diversification + risk badge */}
         <div className="flex items-center gap-3">
-          <DiversificationScore score={diversificationScore} />
+          <DiversificationScore score={diversificationScore} breakdown={scoreBreakdown} />
           <RiskBadge level={riskLevel} />
         </div>
       </div>
@@ -106,10 +110,23 @@ export function PortfolioInsightsPanel({
 
         {/* Exposition (col-span-1) */}
         <div className="space-y-3">
+          {/* Score breakdown */}
+          {positions.length > 0 && (
+            <div className="rounded-lg border border-edge/50 bg-surface/40 p-3">
+              <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">⚖ Score multifactoriel</p>
+              <div className="space-y-1.5">
+                <ScoreBar label="Sectoriel"   score={scoreBreakdown.sector}      hint="Diversité des secteurs (HHI)" />
+                <ScoreBar label="Géographique" score={scoreBreakdown.geo}         hint="US / Europe / Émergents" />
+                <ScoreBar label="Position max" score={scoreBreakdown.positionMax} hint="Aucune position > 25%" />
+                <ScoreBar label="Mégatendances" score={scoreBreakdown.trends}    hint="Couverture IA, énergie, etc." />
+              </div>
+            </div>
+          )}
+
           {/* Exposition sectorielle */}
           {exposureBySector.length > 0 && (
             <div className="rounded-lg border border-edge/50 bg-surface/40 p-3">
-              <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">📊 Exposition sectorielle</p>
+              <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">📊 Secteurs</p>
               <div className="space-y-1.5">
                 {exposureBySector.map((e) => {
                   const colors = SECTOR_COLORS[e.sector];
@@ -123,12 +140,47 @@ export function PortfolioInsightsPanel({
                         <div className={`h-full ${colors.bg.replace("/10", "/60")} rounded-full transition-all`}
                           style={{ width: `${e.weight}%` }} />
                       </div>
-                      {e.tickers.length > 0 && (
-                        <p className="text-[0.625rem] text-muted mt-0.5">{e.tickers.join(", ")}</p>
-                      )}
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* Exposition géographique */}
+          {exposureByGeo.length > 0 && (
+            <div className="rounded-lg border border-edge/50 bg-surface/40 p-3">
+              <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">🌍 Géographie</p>
+              <div className="space-y-1.5">
+                {exposureByGeo.map((g) => (
+                  <div key={g.geo}>
+                    <div className="flex items-center justify-between text-xs mb-0.5">
+                      <span className="font-medium text-primary">{g.label}</span>
+                      <span className="font-mono text-secondary">{g.weight}%</span>
+                    </div>
+                    <div className="h-1.5 bg-surface-alt rounded-full overflow-hidden">
+                      <div className="h-full bg-navy/60 dark:bg-accent/60 rounded-full transition-all"
+                        style={{ width: `${g.weight}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Exposition mégatendances */}
+          {exposureByTrend.length > 0 && (
+            <div className="rounded-lg border border-edge/50 bg-surface/40 p-3">
+              <p className="text-[0.7rem] font-bold uppercase tracking-widest text-muted mb-2">🚀 Mégatendances</p>
+              <div className="flex flex-wrap gap-1.5">
+                {exposureByTrend.map((t) => (
+                  <span key={t.trend}
+                    className="inline-flex items-center gap-1 text-[0.7rem] font-medium px-2 py-1 rounded
+                               bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                    {t.label}
+                    <span className="font-mono opacity-70">{t.weight}%</span>
+                  </span>
+                ))}
               </div>
             </div>
           )}
@@ -198,7 +250,28 @@ function InsightCard({ insight }: { insight: Insight }) {
   );
 }
 
-function DiversificationScore({ score }: { score: number }) {
+function ScoreBar({ label, score, hint }: { label: string; score: number; hint: string }) {
+  const color = score >= 7 ? "bg-emerald-500"
+              : score >= 4 ? "bg-amber-500"
+              :              "bg-red-500";
+  const colorText = score >= 7 ? "text-emerald-700 dark:text-emerald-400"
+                  : score >= 4 ? "text-amber-700 dark:text-amber-400"
+                  :              "text-red-700 dark:text-red-400";
+  return (
+    <div title={hint}>
+      <div className="flex items-center justify-between text-xs mb-0.5">
+        <span className="text-secondary">{label}</span>
+        <span className={`font-mono font-bold ${colorText}`}>{score}/10</span>
+      </div>
+      <div className="h-1.5 bg-surface-alt rounded-full overflow-hidden">
+        <div className={`h-full ${color} rounded-full transition-all`}
+          style={{ width: `${score * 10}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function DiversificationScore({ score, breakdown }: { score: number; breakdown?: { sector: number; geo: number; positionMax: number; trends: number } }) {
   const color = score >= 7 ? "text-emerald-600 dark:text-emerald-400 stroke-emerald-500"
               : score >= 4 ? "text-amber-600 dark:text-amber-400 stroke-amber-500"
               :              "text-red-600 dark:text-red-400 stroke-red-500";
@@ -206,8 +279,12 @@ function DiversificationScore({ score }: { score: number }) {
   const circ = 2 * Math.PI * radius;
   const offset = circ - ((score / 10) * circ);
 
+  const tooltipText = breakdown
+    ? `Sectoriel: ${breakdown.sector}/10 · Géo: ${breakdown.geo}/10 · Position max: ${breakdown.positionMax}/10 · Mégatrends: ${breakdown.trends}/10`
+    : "";
+
   return (
-    <div className="relative flex items-center gap-2">
+    <div className="relative flex items-center gap-2" title={tooltipText}>
       <svg width={48} height={48} viewBox="0 0 48 48" className="-rotate-90">
         <circle cx={24} cy={24} r={radius} className="fill-none stroke-edge" strokeWidth={3} />
         <circle cx={24} cy={24} r={radius}
@@ -227,7 +304,7 @@ function DiversificationScore({ score }: { score: number }) {
       </div>
       <div className="text-left">
         <p className="text-[0.625rem] font-bold uppercase tracking-widest text-muted">Diversification</p>
-        <p className="text-[0.7rem] text-secondary">{score}/10</p>
+        <p className="text-[0.7rem] text-secondary">{score}/10 multifactoriel</p>
       </div>
     </div>
   );
