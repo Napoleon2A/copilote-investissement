@@ -18,10 +18,11 @@ import logging
 
 from app.database import init_db
 from app.config import get_settings
-from app.routers import companies, watchlist, portfolio, ideas, brief, scanner, chat, earnings, alerts, risk, analyst, news
+from app.routers import companies, watchlist, portfolio, ideas, brief, scanner, chat, earnings, alerts, risk, analyst, news, finnhub_data
 from app.services.scanner import trigger_background_scan
 from app.services.rss_aggregator import trigger_background_refresh as trigger_news_refresh
 from app.services.finnhub_calendar import trigger_background_refresh as trigger_finnhub_refresh, is_configured as finnhub_configured
+from app.services.finnhub_economic import trigger_background_refresh as trigger_finnhub_eco_refresh
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,9 +45,10 @@ async def lifespan(app: FastAPI):
     logger.info("RSS aggregator: premier fetch lancé en background.")
     if finnhub_configured():
         trigger_finnhub_refresh(max_days=30)
-        logger.info("Finnhub calendar: premier fetch lancé en background.")
+        trigger_finnhub_eco_refresh()
+        logger.info("Finnhub calendars (earnings + economic): premiers fetches lancés.")
     else:
-        logger.info("Finnhub calendar: clé non configurée, fallback sur SCAN_UNIVERSE.")
+        logger.info("Finnhub: clé non configurée, fallback sur sources locales.")
     yield
     logger.info("Arrêt de l'API.")
 
@@ -121,6 +123,7 @@ app.include_router(alerts.router)
 app.include_router(risk.router)
 app.include_router(analyst.router)
 app.include_router(news.router)
+app.include_router(finnhub_data.router)
 
 
 @app.get("/", tags=["health"])

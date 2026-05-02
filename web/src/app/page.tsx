@@ -10,6 +10,8 @@ import {
   RichEarningsCard, RichPortfolioCard, RichWatchlistCard, RichAlertsCard,
 } from "@/components/dashboard/StatCards";
 import { EarningsCalendarPanel } from "@/components/dashboard/EarningsCalendarPanel";
+import { EconomicCalendarPanel } from "@/components/dashboard/EconomicCalendarPanel";
+import { InsiderTradingPanel } from "@/components/dashboard/InsiderTradingPanel";
 import { fetchJSON, API } from "@/components/dashboard/shared";
 import type { MarketSnapshot } from "@/lib/macroExplainer";
 
@@ -165,7 +167,16 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Row 3 : Stats grille 4 cards en pleine largeur */}
+      {/* Row 3 : Calendrier économique (50%) + Insider trading (50%) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <EconomicCalendarPanel />
+        <InsiderTradingPanel
+          portfolioTickers={portfolioTickers}
+          ideasTickers={ideasTickers}
+        />
+      </div>
+
+      {/* Row 4 : Stats grille 4 cards en pleine largeur */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" style={{ gridAutoRows: "1fr" }}>
         <RichEarningsCard earnings={earnings} />
         <RichPortfolioCard portfolio={portfolio} />
