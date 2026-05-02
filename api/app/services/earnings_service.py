@@ -7,6 +7,7 @@ une analyse pré-earnings : volatilité estimée, qualité du titre,
 risque/récompense, et recommandation (buy/avoid/neutre).
 """
 from datetime import date, datetime
+from typing import Optional
 import logging
 
 from app.services.data_service import (
@@ -18,39 +19,101 @@ from app.services.scanner import SCAN_UNIVERSE
 logger = logging.getLogger(__name__)
 
 
-def scan_upcoming_earnings(max_days: int = 21, extra_tickers: list[str] | None = None) -> list[dict]:
+def scan_upcoming_earnings(max_days: int = 21, extra_tickers: list[str] | None = None, use_finnhub: bool = True) -> list[dict]:
     """
-    Scanne toutes les entreprises de SCAN_UNIVERSE + extra_tickers pour trouver
-    celles qui publient dans les max_days prochains jours.
+    Scanne les publications de résultats à venir.
+
+    Si use_finnhub=True et clé configurée → utilise Finnhub (calendrier complet, ~tout le marché).
+    Sinon fallback sur SCAN_UNIVERSE + extra_tickers.
 
     Retourne une liste triée par date de publication (la plus proche en premier).
+    Pour les tickers du SCAN_UNIVERSE, l'analyse pré-earnings (scores) est enrichie.
+    Pour les tickers Finnhub hors univers, on retourne les infos de base.
     """
     today = date.today()
     results = []
 
     universe_tickers = [t for tickers in SCAN_UNIVERSE.values() for t in tickers]
+    universe_set = set(universe_tickers)
 
     # Fusion avec extra_tickers (positions / idées du user qui peuvent être hors univers)
-    all_tickers_set = set(universe_tickers)
-    for t in (extra_tickers or []):
-        if t and t.strip():
-            all_tickers_set.add(t.strip().upper())
-    all_tickers = sorted(all_tickers_set)
+    extras_set = {t.strip().upper() for t in (extra_tickers or []) if t and t.strip()}
+    enriched_set = universe_set | extras_set  # Tickers qu'on enrichit avec scores
+
+    # Source : Finnhub (calendrier complet) si dispo, sinon univers seul
+    candidate_tickers: set[str] = set()
+    finnhub_dates: dict[str, str] = {}  # ticker → date ISO depuis Finnhub
+
+    if use_finnhub:
+        try:
+            from app.services import finnhub_calendar
+            if finnhub_calendar.is_configured():
+                fh_data = finnhub_calendar.get_cached_calendar(max_days=max_days)
+                for entry in fh_data:
+                    sym = entry.get("symbol")
+                    if sym:
+                        candidate_tickers.add(sym.upper())
+                        date_str = entry.get("date")
+                        if date_str:
+                            finnhub_dates[sym.upper()] = date_str
+        except Exception as e:
+            logger.warning(f"Finnhub disabled or errored : {e}")
+
+    # Toujours inclure univers + extras (pour avoir les scores et fallback si Finnhub vide)
+    candidate_tickers |= enriched_set
+    all_tickers = sorted(candidate_tickers)
 
     for ticker in all_tickers:
         try:
-            cal = get_earnings_calendar(ticker)
-            earnings_str = cal.get("earnings_date")
-            if not earnings_str or str(earnings_str) == "None":
+            should_enrich = ticker in enriched_set
+
+            # Détermination de la date :
+            # - Tickers enrichis : on utilise yfinance (plus précis)
+            # - Tickers Finnhub-only : on utilise finnhub_dates
+            earnings_dt: Optional[date] = None
+            if should_enrich:
+                try:
+                    cal = get_earnings_calendar(ticker)
+                    earnings_str = cal.get("earnings_date")
+                    if earnings_str and str(earnings_str) != "None":
+                        earnings_dt = date.fromisoformat(str(earnings_str)[:10])
+                except Exception:
+                    pass
+            if earnings_dt is None and ticker in finnhub_dates:
+                try:
+                    earnings_dt = date.fromisoformat(finnhub_dates[ticker])
+                except Exception:
+                    pass
+            if earnings_dt is None:
                 continue
 
-            earnings_dt = date.fromisoformat(str(earnings_str)[:10])
             days_until = (earnings_dt - today).days
-
             if days_until < 0 or days_until > max_days:
                 continue
 
-            # Récupérer données pour l'analyse pré-earnings
+            if not should_enrich:
+                # Entrée minimale pour les tickers Finnhub-only (pas d'enrichissement yfinance)
+                results.append({
+                    "ticker": ticker,
+                    "name": ticker,
+                    "sector": None,
+                    "earnings_date": earnings_dt.isoformat(),
+                    "days_until": days_until,
+                    "current_price": None,
+                    "change_1d": None,
+                    "change_1m": None,
+                    "pct_from_52w_high": None,
+                    "volatility_estimate": None,
+                    "scores": {"composite": None},
+                    "composite_label": None,
+                    "recommendation": None,
+                    "recommendation_label": None,
+                    "recommendation_reason": None,
+                    "source": "finnhub",
+                })
+                continue
+
+            # Enrichissement complet pour les tickers de l'univers + extras
             changes = get_price_changes(ticker)
             fundamentals = get_fundamentals(ticker)
             scores = compute_all_scores(fundamentals, changes)

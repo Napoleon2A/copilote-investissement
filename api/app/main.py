@@ -8,6 +8,9 @@ Documentation auto disponible sur :
   http://localhost:8000/docs   (Swagger UI)
   http://localhost:8000/redoc  (ReDoc)
 """
+from dotenv import load_dotenv
+load_dotenv()  # Charge api/.env (FINNHUB_API_KEY, etc.) avant les imports
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +21,7 @@ from app.config import get_settings
 from app.routers import companies, watchlist, portfolio, ideas, brief, scanner, chat, earnings, alerts, risk, analyst, news
 from app.services.scanner import trigger_background_scan
 from app.services.rss_aggregator import trigger_background_refresh as trigger_news_refresh
+from app.services.finnhub_calendar import trigger_background_refresh as trigger_finnhub_refresh, is_configured as finnhub_configured
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,6 +42,11 @@ async def lifespan(app: FastAPI):
     logger.info("Scanner: premier scan lancé en background.")
     trigger_news_refresh()
     logger.info("RSS aggregator: premier fetch lancé en background.")
+    if finnhub_configured():
+        trigger_finnhub_refresh(max_days=30)
+        logger.info("Finnhub calendar: premier fetch lancé en background.")
+    else:
+        logger.info("Finnhub calendar: clé non configurée, fallback sur SCAN_UNIVERSE.")
     yield
     logger.info("Arrêt de l'API.")
 
