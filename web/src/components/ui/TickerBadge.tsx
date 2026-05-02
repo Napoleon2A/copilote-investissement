@@ -1,7 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { getTickerMeta, getLogoUrl, SECTOR_COLORS, SECTOR_LABEL } from "@/lib/tickerMeta";
+
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+// Cache module-level pour les logos Finnhub (évite les fetches répétés)
+const finnhubLogoCache = new Map<string, string | null>();
+const finnhubLogoPending = new Map<string, Promise<string | null>>();
+
+async function fetchFinnhubLogo(ticker: string): Promise<string | null> {
+  const t = ticker.toUpperCase();
+  if (finnhubLogoCache.has(t)) return finnhubLogoCache.get(t)!;
+  if (finnhubLogoPending.has(t)) return finnhubLogoPending.get(t)!;
+
+  const promise = fetch(`${API}/finnhub/profile/${t}`)
+    .then((r) => r.ok ? r.json() : null)
+    .then((d) => {
+      const logo = d?.profile?.logo ?? null;
+      finnhubLogoCache.set(t, logo);
+      return logo;
+    })
+    .catch(() => null)
+    .finally(() => finnhubLogoPending.delete(t));
+
+  finnhubLogoPending.set(t, promise);
+  return promise;
+}
 
 interface TickerBadgeProps {
   ticker: string;
@@ -52,29 +77,53 @@ export function TickerBadge({
 
 function Logo({ url, ticker, className }: { url: string | null; ticker: string; className: string }) {
   const [error, setError] = useState(false);
+  const [finnhubLogo, setFinnhubLogo] = useState<string | null>(null);
   const meta = getTickerMeta(ticker);
 
-  if (!url || error) {
-    // Fallback premium : initiales sur fond gradient sectoriel
-    const sectorColors = meta.sector ? SECTOR_COLORS[meta.sector] : null;
-    const bg = sectorColors?.bg ?? "bg-gradient-to-br from-navy/15 to-navy/5 dark:from-accent/20 dark:to-accent/5";
-    const txt = sectorColors?.text ?? "text-navy dark:text-accent";
+  // Fallback : si Clearbit échoue, on tente Finnhub (cache module-level)
+  useEffect(() => {
+    if (!error || finnhubLogo !== null) return;
+    fetchFinnhubLogo(ticker).then((logo) => {
+      if (logo) setFinnhubLogo(logo);
+    });
+  }, [error, ticker, finnhubLogo]);
+
+  // Logo Clearbit OK
+  if (url && !error) {
     return (
-      <div className={`${className} logo-tile rounded-lg flex items-center justify-center font-semibold font-mono ${bg} ${txt} flex-shrink-0`}>
-        {ticker.charAt(0)}
-      </div>
+      /* eslint-disable-next-line @next/next/no-img-element */
+      <img
+        src={url}
+        alt={ticker}
+        loading="lazy"
+        decoding="async"
+        className={`${className} logo-tile rounded-lg object-contain p-1 flex-shrink-0`}
+        onError={() => setError(true)}
+      />
     );
   }
 
+  // Fallback Finnhub
+  if (finnhubLogo) {
+    return (
+      /* eslint-disable-next-line @next/next/no-img-element */
+      <img
+        src={finnhubLogo}
+        alt={ticker}
+        loading="lazy"
+        decoding="async"
+        className={`${className} logo-tile rounded-lg object-contain p-1 flex-shrink-0`}
+      />
+    );
+  }
+
+  // Fallback final : initiales sur fond gradient sectoriel
+  const sectorColors = meta.sector ? SECTOR_COLORS[meta.sector] : null;
+  const bg = sectorColors?.bg ?? "bg-gradient-to-br from-navy/15 to-navy/5 dark:from-accent/20 dark:to-accent/5";
+  const txt = sectorColors?.text ?? "text-navy dark:text-accent";
   return (
-    /* eslint-disable-next-line @next/next/no-img-element */
-    <img
-      src={url}
-      alt={ticker}
-      loading="lazy"
-      decoding="async"
-      className={`${className} logo-tile rounded-lg object-contain p-1 flex-shrink-0`}
-      onError={() => setError(true)}
-    />
+    <div className={`${className} logo-tile rounded-lg flex items-center justify-center font-semibold font-mono ${bg} ${txt} flex-shrink-0`}>
+      {ticker.charAt(0)}
+    </div>
   );
 }

@@ -12,6 +12,7 @@ import {
 import { EarningsCalendarPanel } from "@/components/dashboard/EarningsCalendarPanel";
 import { EconomicCalendarPanel } from "@/components/dashboard/EconomicCalendarPanel";
 import { InsiderTradingPanel } from "@/components/dashboard/InsiderTradingPanel";
+import { AnalystRecosPanel } from "@/components/dashboard/AnalystRecosPanel";
 import { fetchJSON, API } from "@/components/dashboard/shared";
 import type { MarketSnapshot } from "@/lib/macroExplainer";
 
@@ -175,6 +176,12 @@ export default function HomePage() {
           ideasTickers={ideasTickers}
         />
       </div>
+
+      {/* Row 3 bis : Vue analystes (pleine largeur) */}
+      <AnalystRecosPanel
+        portfolioTickers={portfolioTickers}
+        ideasTickers={ideasTickers}
+      />
 
       {/* Row 4 : Stats grille 4 cards en pleine largeur */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" style={{ gridAutoRows: "1fr" }}>
