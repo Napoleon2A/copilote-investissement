@@ -170,6 +170,72 @@ SCAN_UNIVERSE: dict[str, list[str]] = {
     "Matières premières": [
         "FCX", "NEM", "AA", "VALE",
     ],
+
+    # ─── AI Value Chain — thèse spécifique IA & infrastructure ───────────────
+    # Compute stack autour des GPU (connectivité, serveurs, networking)
+    "AI Compute Stack": [
+        "ALAB",   # Astera Labs — connectivité haut débit pour AI servers
+        "ARM",    # ARM Holdings — IP CPU pour edge/inference
+        "SMCI",   # Super Micro — AI server OEM, fournisseur direct des hyperscalers
+        "DELL",   # Dell — pivot AI servers, deals XAI/Tesla
+        "ANET",   # Arista Networks — networking 400/800G data centers
+    ],
+    # Datacenters & hosting AI-spécifiques (power, cooling, capacité GPU)
+    "AI Datacenter": [
+        "VRT",    # Vertiv — power & cooling, leader infra DC
+        "IREN",   # Iris Energy — pivot mining→AI cloud
+        "CRWV",   # CoreWeave — GPU cloud spécialisé
+        "NBIS",   # Nebius — successeur Yandex côté GPU EU
+        "APLD",   # Applied Digital — DC builds pour HPC/AI
+        "IRM",    # Iron Mountain — pivot DC/cloud
+    ],
+    # Énergie pour AI : nucléaire, transition, grid
+    "AI Énergie": [
+        "VST",    # Vistra — gas + nuclear, deal Microsoft Three Mile Island
+        "CEG",    # Constellation Energy — leader nuclear US
+        "TLN",    # Talen Energy — nuclear, deal AWS Susquehanna
+        "OKLO",   # Oklo — SMR (Small Modular Reactor)
+        "SMR",    # NuScale Power — SMR
+        "BWXT",   # BWX Technologies — nuclear components
+        "GEV",    # GE Vernova — turbines gaz/éolien/nucléaire
+        "ETN",    # Eaton — power management électrique
+        "PWR",    # Quanta Services — réseau & infra énergie
+        "MYRG",   # MYR Group — construction électrique grid
+    ],
+    # Uranium — combustible nucléaire pour la résurgence DC nuclear
+    "Uranium": [
+        "CCJ",    # Cameco — leader minier uranium
+        "DNN",    # Denison Mines — junior canadien
+        "UEC",    # Uranium Energy Corp — junior US
+        "LEU",    # Centrus Energy — enrichissement
+    ],
+    # Battery / grid storage — flex pour intermittence
+    "AI Storage Grid": [
+        "EOSE",   # Eos Energy — zinc battery, contre-Tesla
+        "FLNC",   # Fluence Energy — leader storage utility scale
+        "STEM",   # Stem — software AI optimisation grid
+    ],
+    # Optique / photonique pour interconnect data centers AI
+    "AI Optical": [
+        "CIEN",   # Ciena — optical transport
+        "LITE",   # Lumentum — composants optiques
+        "COHR",   # Coherent — photonique
+        "AAOI",   # Applied Optoelectronics — transceivers
+        "IPGP",   # IPG Photonics — lasers fibre
+    ],
+    # Robotique / automation industrielle (productivité IA-augmentée)
+    "Robotique": [
+        "SYM",    # Symbotic — robotique entrepôts
+        "ROK",    # Rockwell Automation
+        "KTOS",   # Kratos — drones/defense AI
+    ],
+    # Europe Small/Mid AI value chain — opportunités sous-couvertes
+    "Europe AI Small/Mid": [
+        "ALSTI.PA",  # Stif — dépoussiérage/sécurité industrielle DC
+        "SOI.PA",    # Soitec — substrats SOI pour semi
+        "BESI.AS",   # BE Semiconductor — équipement assemblage
+        "ASM.AS",    # ASM International — équipement semi
+    ],
 }
 
 def get_competitors(ticker: str, max_count: int = 5) -> list[str]:
