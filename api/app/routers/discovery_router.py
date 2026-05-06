@@ -2,12 +2,22 @@
 Routes : découverte d'opportunités via composition d'ETF thématiques.
   GET /discovery/etf-candidates → univers thématique IA agrégé
   GET /discovery/etf/{ticker}   → top holdings d'un ETF spécifique
+  GET /discovery/cross-signals  → tickers ETF thématiques ∩ tenus par super-investisseurs SEC 13-F
 """
 from fastapi import APIRouter, Query
 
-from app.services import etf_holdings
+from app.services import etf_holdings, sec_edgar
 
 router = APIRouter(prefix="/discovery", tags=["discovery"])
+
+# Top 30 S&P 500 — par convention détenus par tout fonds liquide. Exclus par
+# défaut pour focaliser sur les small/mid caps thématiques (vraies découvertes).
+MEGA_CAPS = {
+    "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "NVDA", "META", "BRK-B",
+    "TSLA", "AVGO", "JPM", "V", "MA", "JNJ", "WMT", "PG", "UNH", "XOM",
+    "ORCL", "COST", "HD", "BAC", "MRK", "ABBV", "KO", "NFLX", "CRM",
+    "PEP", "TMO", "AMD",
+}
 
 
 @router.get("/etf-candidates")
@@ -42,4 +52,70 @@ async def etf_top_holdings(etf_ticker: str):
         "name": etf_holdings.THEMED_ETFS.get(etf_ticker.upper(), ""),
         "count": len(holdings),
         "holdings": holdings,
+    }
+
+
+@router.get("/cross-signals")
+async def cross_signals(
+    min_etf_count: int = Query(default=1, ge=1, description="Nb minimum d'ETF où le ticker apparaît"),
+    min_whales: int = Query(default=1, ge=1, description="Nb minimum de super-investisseurs détenant le ticker"),
+    exclude_mega: bool = Query(default=True, description="Exclure les 30 mégacaps S&P (Apple, Microsoft, etc.)"),
+    limit: int = Query(default=30, ge=1, le=100),
+):
+    """
+    Croisement ETF thématique × Super-investisseurs SEC 13-F.
+
+    Pour chaque candidat de /etf-candidates, on regarde combien de fonds suivis
+    (Berkshire, Pershing, Bridgewater, Citadel, Renaissance, etc.) le détiennent
+    via leur dernier 13-F. Un ticker présent à la fois dans plusieurs ETF
+    thématiques ET tenu par des smart-money fonds est un double signal fort.
+
+    Note : seuls les listings US (NASDAQ/NYSE) sont couverts par les 13-F SEC.
+    Les tickers étrangers (CCO.TO, KAP, 005930.KS) sont retournés mais avec
+    whales_count=0 — les filtrer avec min_whales >= 1 si besoin.
+
+    Tri : (etf_count + whales_count*0.5) décroissant — l'ETF count est le signal
+    thématique, les whales sont un bonus de validation smart-money.
+    """
+    candidates = etf_holdings.get_unique_candidates()
+    candidates = [c for c in candidates if c["etf_count"] >= min_etf_count]
+    if exclude_mega:
+        candidates = [c for c in candidates if c["symbol"] not in MEGA_CAPS]
+
+    enriched = []
+    for c in candidates:
+        symbol = c["symbol"]
+        # Skip rapide pour les tickers étrangers (point dans le ticker = listing
+        # non-US, hors couverture 13-F)
+        if "." in symbol or "-" in symbol[3:]:
+            whales_data = {"count": 0, "holders": []}
+        else:
+            whales_data = sec_edgar.get_whales_for_ticker(symbol, fallback_name=c["name"])
+
+        whales_count = whales_data["count"]
+        if whales_count < min_whales:
+            continue
+
+        # Top 5 holders pour ne pas alourdir la réponse
+        top_holders = [
+            {"fund_name": h["fund_name"], "value_usd": h["value_usd"], "position_pct": h["position_pct"]}
+            for h in whales_data["holders"][:5]
+        ]
+        enriched.append({
+            "symbol": symbol,
+            "name": c["name"],
+            "etf_count": c["etf_count"],
+            "etfs": c["etfs"],
+            "avg_etf_weight": c["avg_weight"],
+            "whales_count": whales_count,
+            "top_holders": top_holders,
+            "combined_score": c["etf_count"] + whales_count * 0.5,
+        })
+
+    enriched.sort(key=lambda x: -x["combined_score"])
+    return {
+        "total": len(enriched),
+        "min_etf_count": min_etf_count,
+        "min_whales": min_whales,
+        "candidates": enriched[:limit],
     }
