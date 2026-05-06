@@ -33,9 +33,31 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
+def _check_optional_deps() -> None:
+    """
+    Warn explicitement si les libs Python facultatives sont absentes. Évite
+    les pannes silencieuses du genre "feedparser pas installé → 0 article RSS"
+    qu'on a traîné un moment sans s'en apercevoir.
+    """
+    missing: list[str] = []
+    try:
+        import feedparser  # noqa: F401
+    except ImportError:
+        missing.append("feedparser (RSS aggregator → /news/macro et /news/linked seront vides)")
+    try:
+        import bs4  # noqa: F401
+    except ImportError:
+        missing.append("beautifulsoup4 (ETF holdings stockanalysis → fallback yfinance ~10 holdings)")
+    if missing:
+        logger.warning("⚠ Dépendances optionnelles manquantes (pip install -r requirements.txt) :")
+        for m in missing:
+            logger.warning(f"   - {m}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialisation au démarrage : création des tables si nécessaire."""
+    _check_optional_deps()
     logger.info("Démarrage — initialisation de la base de données...")
     await init_db()
     logger.info("Base de données prête.")

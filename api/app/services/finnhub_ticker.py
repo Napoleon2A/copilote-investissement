@@ -34,9 +34,12 @@ TTL_TARGET      = 24 * 3600         # 24h
 TTL_PROFILE     = 7 * 24 * 3600     # 7 jours
 TTL_NEWS        = 30 * 60           # 30 min
 
+from . import _disk_cache
+
 # Cache générique : { (kind, ticker) : { "data": ..., "ts": datetime } }
-_cache: dict = {}
+_cache: dict = _disk_cache.load("finnhub_ticker")
 _lock = threading.Lock()
+_disk_cache.start_periodic_flush("finnhub_ticker", lambda: _cache, interval_seconds=180)
 
 # Endpoints (ou (endpoint, ticker)) ayant renvoyé 403 — désactivés pour la session
 # afin d'éviter de spammer les logs avec des erreurs liées au plan Finnhub.

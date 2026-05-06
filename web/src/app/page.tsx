@@ -16,7 +16,7 @@ import { WhalePanel } from "@/components/dashboard/WhalePanel";
 import { InsideManagementPanel } from "@/components/dashboard/InsideManagementPanel";
 import { fetchJSON, API } from "@/components/dashboard/shared";
 import type { MarketSnapshot } from "@/lib/macroExplainer";
-import { buildUnifiedList, getSmartMoneyRadar, SmartMoneyRadarResponse } from "@/lib/api";
+import { buildUnifiedList, getSmartMoneyRadar, getDiscoverySignals, SmartMoneyRadarResponse, TickerSignals } from "@/lib/api";
 
 export default function HomePage() {
   const today = new Date().toLocaleDateString("fr-FR", {
@@ -36,6 +36,7 @@ export default function HomePage() {
   const [tickerScores, setTickerScores] = useState<Record<string, any>>({});
   const [analystRecos, setAnalystRecos] = useState<Record<string, any> | undefined>(undefined);
   const [radar, setRadar] = useState<SmartMoneyRadarResponse | undefined>(undefined);
+  const [picksSignals, setPicksSignals] = useState<Record<string, TickerSignals>>({});
 
   // Fetch initial — 8 endpoints en parallèle
   useEffect(() => {
@@ -114,6 +115,13 @@ export default function HomePage() {
   );
   const topPicks = opps?.opportunities?.slice(0, 3) ?? [];  // conservé pour le filtre news
 
+  // Charge les signaux multi-angles pour les picks (pour l'affichage signal_strength)
+  useEffect(() => {
+    if (unifiedPicks.length === 0) return;
+    const tickers = unifiedPicks.map((p) => p.ticker);
+    getDiscoverySignals(tickers).then(setPicksSignals).catch(() => {});
+  }, [unifiedPicks]);
+
   // Construit le snapshot macro pour les analyses contextuelles
   const snapshot: MarketSnapshot | null = useMemo(() => {
     if (!brief?.market_context || !brief?.market_summary) return null;
@@ -180,6 +188,7 @@ export default function HomePage() {
             loading={opps === undefined}
             scanning={opps?.scanning}
             radarLoading={radar === undefined}
+            signals={picksSignals}
           />
         </div>
         <div className="min-h-0">

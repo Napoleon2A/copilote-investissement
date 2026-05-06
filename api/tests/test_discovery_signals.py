@@ -162,3 +162,117 @@ def test_smart_money_foreign_listing_short_circuits():
     sig = dr._build_smart_money_signal("005930.KS")
     assert sig["present"] is False
     assert sig["concentrated_holders"] == 0
+
+
+# ─── _build_analyst_signal ──────────────────────────────────────────────────
+
+def _reco(period: str, sb: int = 0, b: int = 0, h: int = 0, s: int = 0, ss: int = 0) -> dict:
+    return {"period": period, "strongBuy": sb, "buy": b, "hold": h, "sell": s, "strongSell": ss}
+
+
+def test_analyst_consensus_strong_buy():
+    """≥75% buy → consensus = strong_buy + is_strong_buy=True."""
+    recos = [_reco("2026-04-01", sb=10, b=5, h=2, s=0, ss=0)]  # 88% buy
+    with patch.object(dr.finnhub_ticker, "get_recommendations", return_value=recos), \
+         patch.object(dr.finnhub_ticker, "get_price_target", return_value={}), \
+         patch.object(dr.finnhub_ticker, "get_profile", return_value={}):
+        sig = dr._build_analyst_signal("XXX")
+    assert sig["consensus"] == "strong_buy"
+    assert sig["is_strong_buy"] is True
+    assert sig["n_analysts"] == 17
+
+
+def test_analyst_consensus_sell():
+    """<40% buy → consensus = sell."""
+    recos = [_reco("2026-04-01", sb=0, b=2, h=5, s=8, ss=2)]  # 12% buy
+    with patch.object(dr.finnhub_ticker, "get_recommendations", return_value=recos), \
+         patch.object(dr.finnhub_ticker, "get_price_target", return_value={}), \
+         patch.object(dr.finnhub_ticker, "get_profile", return_value={}):
+        sig = dr._build_analyst_signal("XXX")
+    assert sig["consensus"] == "sell"
+    assert sig["is_strong_buy"] is False
+
+
+def test_analyst_trend_6m_pp():
+    """Le trend doit comparer le buy_pct récent vs il y a 6 mois."""
+    recos = [
+        _reco("2026-04-01", sb=12, b=4, h=4),       # 80% buy (récent)
+        _reco("2026-03-01", sb=10, b=4, h=6),
+        _reco("2026-02-01", sb=8, b=4, h=8),
+        _reco("2026-01-01", sb=6, b=4, h=10),
+        _reco("2025-12-01", sb=4, b=4, h=12),
+        _reco("2025-11-01", sb=2, b=2, h=16),       # 20% buy (6 mois)
+    ]
+    with patch.object(dr.finnhub_ticker, "get_recommendations", return_value=recos), \
+         patch.object(dr.finnhub_ticker, "get_price_target", return_value={}), \
+         patch.object(dr.finnhub_ticker, "get_profile", return_value={}):
+        sig = dr._build_analyst_signal("XXX")
+    assert sig["trend_6m_pp"] is not None
+    assert sig["trend_6m_pp"] >= 50  # +60pp environ
+
+
+def test_analyst_no_data():
+    with patch.object(dr.finnhub_ticker, "get_recommendations", return_value=[]):
+        sig = dr._build_analyst_signal("XXX")
+    assert sig["present"] is False
+
+
+# ─── _compute_signal_strength ───────────────────────────────────────────────
+
+def test_signal_strength_strong_combo():
+    """Smart-money initiated + insider buy + analyst strong buy = signal fort."""
+    signals = {
+        "etf": {"etf_count": 3},
+        "smart_money": {"initiated": 2, "concentrated_holders": 4},
+        "insider": {"is_significant": True, "net_value_usd": 500_000},
+        "analyst": {"is_strong_buy": True, "trend_6m_pp": 15},
+    }
+    s = dr._compute_signal_strength(signals)
+    assert s["label"] == "fort"
+    # ETF 3*0.5=1.5 + sm_init 2*3=6 + holders 2*0.7=1.4 + insider 2.5 + analyst 1.5 + trend 1.0 = 13.9
+    assert s["score"] >= 7
+
+
+def test_signal_strength_warns_on_insider_sell():
+    """Insider sell significant pénalise le score."""
+    signals = {
+        "etf": {"etf_count": 1},
+        "smart_money": {"initiated": 0, "concentrated_holders": 0},
+        "insider": {"is_significant": True, "net_value_usd": -1_000_000},
+        "analyst": {"is_strong_buy": False, "trend_6m_pp": None},
+    }
+    s = dr._compute_signal_strength(signals)
+    assert s["score"] == 0.5 - 1.5  # ETF 0.5 - insider sell 1.5 = -1
+    assert s["label"] == "absent"
+
+
+def test_signal_strength_components_breakdown():
+    """Le breakdown components doit refléter la décomposition."""
+    signals = {
+        "etf": {"etf_count": 2},
+        "smart_money": {"initiated": 1, "concentrated_holders": 1},
+        "insider": {"is_significant": False},
+        "analyst": {"is_strong_buy": False, "trend_6m_pp": None},
+    }
+    s = dr._compute_signal_strength(signals)
+    assert s["components"] == {"etf": 1.0, "smart_money_initiated": 3.0}
+
+
+# ─── is_mega_cap ────────────────────────────────────────────────────────────
+
+def test_is_mega_cap_static():
+    assert dr.is_mega_cap("AAPL") is True
+    assert dr.is_mega_cap("MSFT") is True
+
+
+def test_is_mega_cap_dynamic_via_finnhub():
+    """Ticker hors liste mais market cap ≥ 200B$ doit retourner True."""
+    with patch.object(dr.finnhub_ticker, "get_profile",
+                      return_value={"marketCapitalization": 250_000}):  # 250B$ en M$
+        assert dr.is_mega_cap("LLY") is True
+
+
+def test_is_mega_cap_below_threshold():
+    with patch.object(dr.finnhub_ticker, "get_profile",
+                      return_value={"marketCapitalization": 50_000}):  # 50B$
+        assert dr.is_mega_cap("VRT") is False

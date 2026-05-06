@@ -34,6 +34,10 @@ interface OpportunitiesResponse {
 // Alias local pour compatibilité avec l'ancien code de la page
 type ItemSource = UnifiedSource;
 
+type SourceFilter = "all" | "scanner" | "radar" | "both";
+type SignalFilter = "all" | "fort" | "moyen" | "faible_plus";  // faible_plus = faible OU mieux
+type SortOption = "signal" | "scanner_score" | "original";
+
 // Un scan complet doit toucher 67 tickers via yfinance (rate-limité). Empiriquement
 // > 30s. Si le scan finit en moins de ce seuil, signaler à l'utilisateur que
 // les résultats sont probablement servis de cache et ne reflètent pas un
@@ -49,6 +53,9 @@ export default function OpportunitiesPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [scanElapsed, setScanElapsed] = useState(0);
   const [lastScanWarning, setLastScanWarning] = useState<string | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+  const [signalFilter, setSignalFilter] = useState<SignalFilter>("all");
+  const [sortBy, setSortBy] = useState<SortOption>("signal");
   const pollAbort = useRef<{ stop: boolean }>({ stop: false });
 
   const load = async () => {
@@ -130,21 +137,46 @@ export default function OpportunitiesPage() {
 
   const list: ScanOpportunity[] = opps?.opportunities ?? [];
 
-  // Liste unifiée scanner + radar (logique partagée avec la home, cf. lib/api.ts).
-  // Tri secondaire : quand les signaux multi-angles sont chargés, on re-trie
-  // pour faire remonter les opportunités à fort signal global, à conviction
-  // multi-source égale.
+  // Liste unifiée scanner + radar + filtres + tri.
   const unifiedList: UnifiedItem[] = useMemo(() => {
     const base = buildUnifiedList(list, radar?.radar);
-    if (Object.keys(signals).length === 0) return base;
-    return [...base].sort((a, b) => {
-      const sa = signals[a.ticker]?.signal_strength?.score ?? 0;
-      const sb = signals[b.ticker]?.signal_strength?.score ?? 0;
-      if (sa !== sb) return sb - sa;  // signal fort d'abord
-      // Ex aequo : on garde l'ordre original (scanner d'abord)
-      return base.indexOf(a) - base.indexOf(b);
-    });
-  }, [list, radar, signals]);
+    let filtered = base;
+
+    // Filtre par source
+    if (sourceFilter !== "all") {
+      filtered = filtered.filter((x) => x.source === sourceFilter);
+    }
+
+    // Filtre par force du signal (nécessite que les signaux soient chargés)
+    if (signalFilter !== "all" && Object.keys(signals).length > 0) {
+      filtered = filtered.filter((x) => {
+        const lbl = signals[x.ticker]?.signal_strength?.label ?? "absent";
+        if (signalFilter === "fort") return lbl === "fort";
+        if (signalFilter === "moyen") return lbl === "fort" || lbl === "moyen";
+        if (signalFilter === "faible_plus") return lbl === "fort" || lbl === "moyen" || lbl === "faible";
+        return true;
+      });
+    }
+
+    // Tri
+    if (sortBy === "signal" && Object.keys(signals).length > 0) {
+      filtered = [...filtered].sort((a, b) => {
+        const sa = signals[a.ticker]?.signal_strength?.score ?? 0;
+        const sb = signals[b.ticker]?.signal_strength?.score ?? 0;
+        if (sa !== sb) return sb - sa;
+        return base.indexOf(a) - base.indexOf(b);
+      });
+    } else if (sortBy === "scanner_score") {
+      filtered = [...filtered].sort((a, b) => {
+        const sa = a.scanner?.scores?.composite ?? -1;
+        const sb = b.scanner?.scores?.composite ?? -1;
+        return sb - sa;
+      });
+    }
+    // sortBy === "original" : pas de re-tri
+
+    return filtered;
+  }, [list, radar, signals, sourceFilter, signalFilter, sortBy]);
 
   // Enrichissement signaux pour la liste unifiée.
   useEffect(() => {
@@ -198,6 +230,47 @@ export default function OpportunitiesPage() {
       {lastScanWarning && (
         <div className="card-premium p-3 border-l-4 border-amber-500 bg-amber-500/5">
           <p className="text-xs text-amber-700 dark:text-amber-400">{lastScanWarning}</p>
+        </div>
+      )}
+
+      {/* Filtres et tri */}
+      {!opps?.scanning && unifiedList.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap text-xs">
+          <FilterSelect
+            label="Source"
+            value={sourceFilter}
+            onChange={(v) => setSourceFilter(v as SourceFilter)}
+            options={[
+              { value: "all", label: "Toutes les sources" },
+              { value: "scanner", label: "Scanner momentum" },
+              { value: "radar", label: "Radar smart-money" },
+              { value: "both", label: "Scanner + Smart-money" },
+            ]}
+          />
+          <FilterSelect
+            label="Signal"
+            value={signalFilter}
+            onChange={(v) => setSignalFilter(v as SignalFilter)}
+            options={[
+              { value: "all", label: "Tous" },
+              { value: "fort", label: "Fort uniquement (≥7)" },
+              { value: "moyen", label: "Moyen et + (≥3)" },
+              { value: "faible_plus", label: "Faible et + (>0)" },
+            ]}
+          />
+          <FilterSelect
+            label="Tri"
+            value={sortBy}
+            onChange={(v) => setSortBy(v as SortOption)}
+            options={[
+              { value: "signal", label: "Par force du signal" },
+              { value: "scanner_score", label: "Par score scanner" },
+              { value: "original", label: "Ordre d'origine" },
+            ]}
+          />
+          <span className="text-muted ml-auto">
+            {unifiedList.length} affichée{unifiedList.length > 1 ? "s" : ""}
+          </span>
         </div>
       )}
 
@@ -359,6 +432,30 @@ function buildRadarHighlights(r: SmartMoneyRadarItem): string[] {
     const date = h.report_date ? ` · ${h.report_date}` : "";
     return `${h.fund_name} ${verb} à ${h.position_pct?.toFixed(1)}% du book${delta}${date}`;
   });
+}
+
+interface FilterSelectProps {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}
+
+function FilterSelect({ label, value, onChange, options }: FilterSelectProps) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <label className="text-[0.7rem] font-bold uppercase tracking-widest text-muted">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="text-xs bg-surface border border-edge rounded-md px-2 py-1 text-primary focus:outline-none focus:border-navy dark:focus:border-accent hover:bg-bg/50 cursor-pointer transition-colors"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
 function SignalStrengthBadge({ signals }: { signals?: TickerSignals }) {

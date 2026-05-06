@@ -94,9 +94,12 @@ THEMED_ETFS: dict[str, str] = {
     "SKYY": "First Trust Cloud Computing",
 }
 
+from . import _disk_cache
+
 _TTL = timedelta(hours=24)
-_cache: dict[str, tuple[list[dict], datetime]] = {}
+_cache: dict[str, tuple[list[dict], datetime]] = _disk_cache.load("etf_holdings")
 _lock = threading.Lock()
+_disk_cache.start_periodic_flush("etf_holdings", lambda: _cache, interval_seconds=300)
 
 
 def _fetch_globalx_csv(etf_ticker: str) -> list[dict]:

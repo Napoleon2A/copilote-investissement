@@ -128,8 +128,11 @@ def is_concentrated_fund(cik: str, threshold: int = DEFAULT_CONCENTRATION_THRESH
         return False
     return count <= threshold
 
-_cache: dict = {}
+from . import _disk_cache
+
+_cache: dict = _disk_cache.load("sec_edgar")
 _lock = threading.Lock()
+_disk_cache.start_periodic_flush("sec_edgar", lambda: _cache, interval_seconds=120)
 
 # SEC EDGAR rate limit officiel : 10 req/s. On tient une marge — 5 calls
 # concurrents max + 0.12s minimum entre 2 calls = ~8 req/s de pic. Évite les

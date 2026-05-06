@@ -5,16 +5,17 @@ import { TickerBadge } from "@/components/ui/TickerBadge";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { getTickerMeta, SECTOR_COLORS, SECTOR_LABEL } from "@/lib/tickerMeta";
 import { ScoreGauge, SectionTitle } from "./shared";
-import type { UnifiedItem } from "@/lib/api";
+import type { UnifiedItem, TickerSignals } from "@/lib/api";
 
 interface PicksHeroProps {
   items: UnifiedItem[];
   loading: boolean;
   scanning?: boolean;
   radarLoading?: boolean;
+  signals?: Record<string, TickerSignals>;
 }
 
-export function PicksHero({ items, loading, scanning, radarLoading }: PicksHeroProps) {
+export function PicksHero({ items, loading, scanning, radarLoading, signals }: PicksHeroProps) {
   if (loading || scanning) {
     return (
       <div className="card-premium relative p-5 h-full flex flex-col">
@@ -41,13 +42,26 @@ export function PicksHero({ items, loading, scanning, radarLoading }: PicksHeroP
         }
       />
       <ul className="space-y-2 flex-1 min-h-0 overflow-y-auto pr-2 nice-scroll">
-        {items.map((item, i) => <CompactPick key={item.ticker} item={item} rank={i + 1} />)}
+        {items.map((item, i) => (
+          <CompactPick
+            key={item.ticker}
+            item={item}
+            rank={i + 1}
+            signal={signals?.[item.ticker]?.signal_strength}
+          />
+        ))}
       </ul>
     </div>
   );
 }
 
-function CompactPick({ item, rank }: { item: UnifiedItem; rank: number }) {
+function CompactPick({
+  item, rank, signal,
+}: {
+  item: UnifiedItem;
+  rank: number;
+  signal?: { score: number; label: string };
+}) {
   const opp = item.scanner;
   const radar = item.radar;
   const ticker = item.ticker;
@@ -91,6 +105,20 @@ function CompactPick({ item, rank }: { item: UnifiedItem; rank: number }) {
                     className="text-[0.55rem] font-semibold uppercase tracking-wider px-1 py-px rounded bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/30"
                   >
                     {item.source === "radar" ? "Smart-money" : "Smart-money +"}
+                  </span>
+                )}
+                {signal && signal.score > 0 && (
+                  <span
+                    title={`Force du faisceau de signaux : ${signal.score.toFixed(1)} (${signal.label})`}
+                    className={`text-[0.55rem] font-semibold uppercase tracking-wider px-1 py-px rounded border ${
+                      signal.label === "fort"
+                        ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/40"
+                        : signal.label === "moyen"
+                        ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                        : "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30"
+                    }`}
+                  >
+                    {signal.label === "fort" ? "★" : signal.label === "moyen" ? "◆" : "•"} {signal.score.toFixed(1)}
                   </span>
                 )}
               </div>
