@@ -10,14 +10,20 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models import Company
 from app.services import data_service
+from app.services.ticker_resolver import normalize_ticker
 
 
 async def get_or_create_company(session: AsyncSession, ticker: str) -> Company:
     """
     Retourne la Company existante ou en crée une nouvelle via yfinance.
-    Le ticker est toujours normalisé en majuscules.
+    Le ticker est normalisé via ticker_resolver (alias nom -> ticker valide,
+    ex: "ALPHABET" -> "GOOGL"). Lève ValueError si l'entrée correspond à une
+    société non cotée (ex: "OPENAI").
     """
-    ticker = ticker.upper()
+    resolved = normalize_ticker(ticker)
+    if resolved is None:
+        raise ValueError(f"Ticker '{ticker}' non cote ou inconnu")
+    ticker = resolved
     result = await session.exec(select(Company).where(Company.ticker == ticker))
     company = result.first()
 

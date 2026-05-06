@@ -38,6 +38,10 @@ TTL_NEWS        = 30 * 60           # 30 min
 _cache: dict = {}
 _lock = threading.Lock()
 
+# Endpoints (ou (endpoint, ticker)) ayant renvoyé 403 — désactivés pour la session
+# afin d'éviter de spammer les logs avec des erreurs liées au plan Finnhub.
+_disabled: set = set()
+
 
 def _get_api_key() -> Optional[str]:
     return os.getenv("FINNHUB_API_KEY")
@@ -63,9 +67,28 @@ def _fetch(endpoint: str, params: dict) -> Optional[dict]:
     key = _get_api_key()
     if not key:
         return None
-    params = {**params, "token": key}
+    ticker = (params.get("symbol") or "").upper()
+    # Court-circuit : endpoint déjà désactivé (plan-locked) globalement ou pour ce ticker
+    if endpoint in _disabled or (endpoint, ticker) in _disabled:
+        return None
+    full_params = {**params, "token": key}
     try:
-        resp = httpx.get(f"{FINNHUB_BASE_URL}{endpoint}", params=params, timeout=15)
+        resp = httpx.get(f"{FINNHUB_BASE_URL}{endpoint}", params=full_params, timeout=15)
+        if resp.status_code == 403:
+            if not ticker:
+                _disabled.add(endpoint)
+                logger.info(f"Finnhub: {endpoint} indisponible sur ce plan — silencé pour la session")
+            else:
+                _disabled.add((endpoint, ticker))
+                # Si 2+ tickers ont déjà échoué sur cet endpoint, on en déduit que
+                # l'endpoint entier est plan-locked et on le désactive globalement.
+                fails = sum(1 for d in _disabled if isinstance(d, tuple) and d[0] == endpoint)
+                if fails >= 2:
+                    _disabled.add(endpoint)
+                    logger.info(f"Finnhub: {endpoint} indisponible sur ce plan ({fails} tickers en 403) — désactivé globalement")
+                else:
+                    logger.info(f"Finnhub: {endpoint} indisponible pour {ticker} — silencé")
+            return None
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
