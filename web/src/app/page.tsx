@@ -5,6 +5,7 @@ import { MoonHeader } from "@/components/dashboard/MoonHeader";
 import { PicksHero } from "@/components/dashboard/PicksHero";
 import { MarketContextPanel } from "@/components/dashboard/MarketContextPanel";
 import { MacroNewsPanel } from "@/components/dashboard/MacroNewsPanel";
+import { OperationsCTPanel } from "@/components/dashboard/OperationsCTPanel";
 import { LinkedNewsPanel } from "@/components/dashboard/LinkedNewsPanel";
 import {
   RichAnalystCard, RichPortfolioCard, RichWatchlistCard, RichAlertsCard,
@@ -16,7 +17,7 @@ import { WhalePanel } from "@/components/dashboard/WhalePanel";
 import { InsideManagementPanel } from "@/components/dashboard/InsideManagementPanel";
 import { fetchJSON, API } from "@/components/dashboard/shared";
 import type { MarketSnapshot } from "@/lib/macroExplainer";
-import { buildUnifiedList, getSmartMoneyRadar, getDiscoverySignals, SmartMoneyRadarResponse, TickerSignals } from "@/lib/api";
+import { buildUnifiedList, getSmartMoneyRadar, getDiscoverySignals, getActiveEarningsTrades, SmartMoneyRadarResponse, TickerSignals, EarningsTrade } from "@/lib/api";
 
 export default function HomePage() {
   const today = new Date().toLocaleDateString("fr-FR", {
@@ -37,6 +38,7 @@ export default function HomePage() {
   const [analystRecos, setAnalystRecos] = useState<Record<string, any> | undefined>(undefined);
   const [radar, setRadar] = useState<SmartMoneyRadarResponse | undefined>(undefined);
   const [picksSignals, setPicksSignals] = useState<Record<string, TickerSignals>>({});
+  const [earningsTrades, setEarningsTrades] = useState<EarningsTrade[] | undefined>(undefined);
 
   // Fetch initial — 8 endpoints en parallèle
   useEffect(() => {
@@ -47,6 +49,8 @@ export default function HomePage() {
     getSmartMoneyRadar({ limit: 30 }).then(setRadar).catch(() => setRadar({
       total: 0, limit: 0, min_funds: 0, max_fund_positions: 0, duration_seconds: 0, radar: [],
     }));
+    // Earnings trades actifs (Operations CT) — pour le panel à droite
+    getActiveEarningsTrades().then((r) => setEarningsTrades(r.trades)).catch(() => setEarningsTrades([]));
     // Earnings : 10 jours, tickers additionnels passés dans le 2e useEffect
     fetchJSON<any>(`${API}/alerts`).then(setAlerts);
     fetchJSON<any[]>(`${API}/watchlists`).then(setWatchlists);
@@ -180,7 +184,7 @@ export default function HomePage() {
         loading={brief === undefined}
       />
 
-      {/* Picks de la semaine — descendu juste sous le bandeau (côté gauche) ↔ Actualité macro (côté droit) */}
+      {/* Picks de la semaine ↔ Opérations court terme (anciennement actu macro) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:h-[460px]">
         <div className="min-h-0">
           <PicksHero
@@ -192,8 +196,13 @@ export default function HomePage() {
           />
         </div>
         <div className="min-h-0">
-          <MacroNewsPanel data={macroNewsRSS} />
+          <OperationsCTPanel trades={earningsTrades} />
         </div>
+      </div>
+
+      {/* Actu macro & géopo descendue plus bas (gardée mais déprioritisée) */}
+      <div className="lg:h-[420px]">
+        <MacroNewsPanel data={macroNewsRSS} />
       </div>
 
       {/* Row 1 : Actualité des cibles (50%) ↔ Calendrier earnings (50%) */}

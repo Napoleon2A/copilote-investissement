@@ -7,8 +7,9 @@ import clsx from "clsx";
 const NAV_ITEMS = [
   { href: "/",             label: "Brief",        icon: "◈" },
   { href: "/opportunities", label: "Opportunités", icon: "◎" },
+  { href: "/operations-ct", label: "Opérations CT", icon: "⚡" },
   { href: "/earnings",    label: "Earnings",     icon: "⊞" },
-  { href: "/alerts",      label: "Alertes",      icon: "⚡" },
+  { href: "/alerts",      label: "Alertes",      icon: "◬" },
   { href: "/watchlist",    label: "Watchlist",    icon: "◉" },
   { href: "/portfolio",    label: "Portefeuille", icon: "▣" },
   { href: "/idea",         label: "Recherche",    icon: "◇" },

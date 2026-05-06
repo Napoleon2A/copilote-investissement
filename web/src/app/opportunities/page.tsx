@@ -325,13 +325,9 @@ function OpportunityCard({ item, rank, signals }: OpportunityCardProps) {
   const meta = getTickerMeta(ticker);
   const sector = meta.sector;
   const sectorStyle = sector ? SECTOR_COLORS[sector] : null;
-  const change = opp?.change_1d;
-  const isUp = (change ?? 0) >= 0;
+  const change1d = opp?.change_1d;
+  const changeYtd = opp?.change_ytd;
   const score = opp?.scores?.composite;
-  const scoreColor = score == null ? ""
-                  : score >= 7.5 ? "text-emerald-600 dark:text-emerald-400 stroke-emerald-500"
-                  : score >= 6.5 ? "text-amber-600 dark:text-amber-400 stroke-amber-500"
-                  :                "text-muted stroke-muted";
 
   // Highlights : si scanner présent, ses highlights ; sinon dérivés du radar
   const highlights: string[] = opp?.highlights?.length
@@ -340,51 +336,62 @@ function OpportunityCard({ item, rank, signals }: OpportunityCardProps) {
     ? buildRadarHighlights(radar)
     : [];
 
-  const actionLabel = opp?.action_label
-    ?? (radar ? "Smart-money initiated" : "");
+  // Activité courte — l'utilisateur veut voir ce que fait la boîte
+  const activity = meta.activity;
 
   return (
     <Link href={`/company/${ticker}`} className="block group">
-      <div className="card-premium card-aura relative p-5 h-full flex flex-col">
-        {/* Header : rank + badges source */}
-        <div className="flex items-center justify-between mb-3">
+      <div className="card-premium card-aura relative p-4 h-full flex flex-col gap-2.5">
+        {/* Header : rank + badges source/secteur/signal */}
+        <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[0.7rem] font-bold uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-400">
               #{rank}
             </span>
             {sectorStyle && sector && (
-              <span className={`text-[0.625rem] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${sectorStyle.bg} ${sectorStyle.text} ${sectorStyle.border}`}>
+              <span className={`text-[0.6rem] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${sectorStyle.bg} ${sectorStyle.text} ${sectorStyle.border}`}>
                 {SECTOR_LABEL[sector]}
               </span>
             )}
             {opp?.new_opportunity && (
-              <span className="text-[0.625rem] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+              <span className="text-[0.6rem] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30">
                 Nouveau
               </span>
             )}
             <SourceBadge source={item.source} />
             <SignalStrengthBadge signals={signals} />
           </div>
-          {score != null && <ScoreGauge value={score} colorClass={scoreColor} size={48} />}
+          {/* Score scanner réduit à un petit chip texte plutôt qu'une jauge qui prend 48×48 */}
+          {score != null && (
+            <span
+              title={`Score scanner composite : ${score.toFixed(1)} / 10`}
+              className="text-[0.625rem] font-mono font-bold text-muted whitespace-nowrap"
+            >
+              SC {score.toFixed(1)}
+            </span>
+          )}
         </div>
 
-        {/* Logo + nom */}
-        <div className="flex items-center gap-3 mb-3">
+        {/* Logo + nom + activité */}
+        <div className="flex items-center gap-3">
           <TickerBadge ticker={ticker} size="lg" showName={false} />
-          <div className="min-w-0">
-            <h3 className="text-lg font-bold text-primary leading-tight truncate"
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-bold text-primary leading-tight truncate"
               style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
               {meta.name || radar?.name || ticker}
             </h3>
-            <p className="text-xs text-muted font-mono">{ticker}{actionLabel ? ` · ${actionLabel}` : ""}</p>
+            <p className="text-xs text-muted font-mono truncate">{ticker}{opp?.action_label ? ` · ${opp.action_label}` : ""}</p>
+            {activity && (
+              <p className="text-[0.7rem] text-secondary leading-snug mt-0.5 line-clamp-2">{activity}</p>
+            )}
           </div>
         </div>
 
-        {/* Highlights */}
+        {/* Highlights — raisonnement scanner ou radar */}
         {highlights.length > 0 && (
-          <ul className="space-y-1 mb-3 flex-1">
+          <ul className="space-y-0.5 flex-1">
             {highlights.map((h, i) => (
-              <li key={i} className="text-xs text-secondary leading-snug flex items-start gap-1.5">
+              <li key={i} className="text-[0.7rem] text-secondary leading-snug flex items-start gap-1.5">
                 <span className="text-emerald-600 dark:text-emerald-400 flex-shrink-0">▸</span>
                 <span className="line-clamp-2">{h}</span>
               </li>
@@ -392,34 +399,37 @@ function OpportunityCard({ item, rank, signals }: OpportunityCardProps) {
           </ul>
         )}
 
-        {/* Signaux complémentaires (informatifs, non bloquants) */}
-        <SignalBadges signals={signals} />
+        {/* TOUS les angles de validation — pas de limite, c'est ce qu'on veut voir */}
+        <SignalBadges signals={signals} verbose />
 
-        {/* Bottom : change + sparkline + upside (uniquement si scanner) */}
-        {opp ? (
-          <div className="flex items-center justify-between gap-2 pt-3 border-t border-edge/40">
+        {/* Bottom : perf 1d + YTD + sparkline (remplace le score gauge) */}
+        <div className="flex items-center gap-3 pt-2 border-t border-edge/40">
+          {change1d != null && (
             <div>
-              <p className="text-[0.625rem] uppercase tracking-widest text-muted">1 jour</p>
-              <p className={`text-sm font-bold font-mono ${isUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                {isUp ? "+" : ""}{change?.toFixed(2)}%
+              <p className="text-[0.6rem] uppercase tracking-widest text-muted">1j</p>
+              <p className={`text-xs font-bold font-mono ${change1d >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                {change1d >= 0 ? "+" : ""}{change1d.toFixed(2)}%
               </p>
             </div>
-            <Sparkline ticker={ticker} width={70} height={22} />
-            {opp.upside_vs_target != null && (
-              <div className="text-right">
-                <p className="text-[0.625rem] uppercase tracking-widest text-muted">Upside</p>
-                <p className={`text-sm font-bold font-mono ${opp.upside_vs_target >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                  {opp.upside_vs_target > 0 ? "+" : ""}{opp.upside_vs_target.toFixed(0)}%
-                </p>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center justify-between gap-2 pt-3 border-t border-edge/40">
-            <span className="text-[0.625rem] uppercase tracking-widest text-muted">Sparkline 1Y</span>
-            <Sparkline ticker={ticker} width={120} height={22} />
-          </div>
-        )}
+          )}
+          {changeYtd != null && (
+            <div>
+              <p className="text-[0.6rem] uppercase tracking-widest text-muted">YTD</p>
+              <p className={`text-xs font-bold font-mono ${changeYtd >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                {changeYtd >= 0 ? "+" : ""}{changeYtd.toFixed(1)}%
+              </p>
+            </div>
+          )}
+          <Sparkline ticker={ticker} width={80} height={22} />
+          {opp?.upside_vs_target != null && (
+            <div className="ml-auto text-right">
+              <p className="text-[0.6rem] uppercase tracking-widest text-muted">Upside</p>
+              <p className={`text-xs font-bold font-mono ${opp.upside_vs_target >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                {opp.upside_vs_target > 0 ? "+" : ""}{opp.upside_vs_target.toFixed(0)}%
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </Link>
   );
@@ -501,7 +511,7 @@ interface BadgeSpec {
   tone: Tone;
 }
 
-function SignalBadges({ signals }: { signals?: TickerSignals }) {
+function SignalBadges({ signals, verbose = false }: { signals?: TickerSignals; verbose?: boolean }) {
   if (!signals) return null;
 
   const badges: BadgeSpec[] = [];
@@ -521,7 +531,22 @@ function SignalBadges({ signals }: { signals?: TickerSignals }) {
       (sm.freshness_days != null ? ` (${sm.freshness_days}j)` : "")
     : "";
 
-  if (sm.initiated > 0) {
+  if (verbose && sm.highlights.length > 0) {
+    // Mode verbose : 1 badge par fonds (au lieu d'un compteur agrégé). L'utilisateur
+    // veut voir QUELS fonds sont positionnés, pas juste combien.
+    for (const h of sm.highlights.slice(0, 5)) {
+      const verb = h.status === "initiated" ? "ouvre" : h.status === "increased" ? "↑" : "tient";
+      const tone: Tone = h.status === "initiated" ? "bull" : h.status === "increased" ? "info" : "info";
+      const delta = h.delta_pct != null ? ` (Δ ${h.delta_pct >= 0 ? "+" : ""}${h.delta_pct.toFixed(0)}%)` : "";
+      // Label = première partie du nom du fonds (Pershing Square → "Pershing")
+      const shortName = h.fund_name.split(/[ (]/)[0];
+      badges.push({
+        label: `${shortName} ${h.position_pct?.toFixed(1)}%`,
+        tooltip: `${h.fund_name} ${verb} ${h.position_pct?.toFixed(1)}% du book${delta}${h.report_date ? ` · ${h.report_date}` : ""}${freshness}`,
+        tone,
+      });
+    }
+  } else if (sm.initiated > 0) {
     const initFunds = sm.highlights
       .filter((h) => h.status === "initiated")
       .map((h) => h.fund_name)

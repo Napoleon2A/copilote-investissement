@@ -11,7 +11,9 @@ export interface TickerMeta {
   domain?: string;
   sector?: SectorKey;
   geo?: GeoRegion;
-  trends?: MegaTrend[];   // Mégatendances exposées (max 2)
+  trends?: MegaTrend[];
+  /** Description courte de l'activité (1 ligne, ~60 chars). Affichée dans les cards. */
+  activity?: string;
 }
 
 export type SectorKey =
@@ -188,6 +190,91 @@ export const TICKER_META: Record<string, TickerMeta> = {
   NEM:   { name: "Newmont",      domain: "newmont.com",      sector: "materials" },
   AA:    { name: "Alcoa",        domain: "alcoa.com",        sector: "materials" },
   VALE:  { name: "Vale",         domain: "vale.com",         sector: "materials" },
+
+  // ── AI Value Chain — small/mid caps thèse infrastructure ────────────────
+  VRT:   { name: "Vertiv",         domain: "vertiv.com",       sector: "industrial",
+           activity: "Power & cooling pour data centers AI" },
+  IREN:  { name: "Iris Energy",    domain: "irisenergy.co",    sector: "energy",
+           activity: "Pivot mining → cloud GPU AI" },
+  CRWV:  { name: "CoreWeave",      domain: "coreweave.com",    sector: "cloud",
+           activity: "Cloud GPU spécialisé inference AI" },
+  NBIS:  { name: "Nebius",         domain: "nebius.com",       sector: "cloud",
+           activity: "Successeur Yandex côté GPU EU" },
+  APLD:  { name: "Applied Digital", domain: "applieddigital.com", sector: "industrial",
+           activity: "Constructeur DC HPC/AI" },
+  SMCI:  { name: "Super Micro",    domain: "supermicro.com",   sector: "tech",
+           activity: "OEM serveurs AI hyperscalers" },
+  ALAB:  { name: "Astera Labs",    domain: "asteralabs.com",   sector: "semi",
+           activity: "Connectivité haut-débit AI servers" },
+  ANET:  { name: "Arista Networks", domain: "arista.com",      sector: "tech",
+           activity: "Networking 400/800G data centers" },
+  DELL:  { name: "Dell",           domain: "dell.com",         sector: "tech",
+           activity: "Pivot AI servers (XAI/Tesla)" },
+  ARM:   { name: "ARM Holdings",   domain: "arm.com",          sector: "semi",
+           activity: "IP CPU edge/inference" },
+  IRM:   { name: "Iron Mountain",  domain: "ironmountain.com", sector: "reits",
+           activity: "Pivot DC/cloud" },
+  // Énergie pour AI — nucléaire renaissance
+  CEG:   { name: "Constellation",  domain: "constellationenergy.com", sector: "energy",
+           activity: "Leader nuclear US, deal Microsoft" },
+  VST:   { name: "Vistra",         domain: "vistracorp.com",   sector: "energy",
+           activity: "Gas + nuclear, deal MSFT TMI" },
+  TLN:   { name: "Talen Energy",   domain: "talenenergy.com",  sector: "energy",
+           activity: "Nuclear, deal AWS Susquehanna" },
+  OKLO:  { name: "Oklo",           domain: "oklo.com",         sector: "energy",
+           activity: "Small Modular Reactor (SMR)" },
+  SMR:   { name: "NuScale",        domain: "nuscalepower.com", sector: "energy",
+           activity: "Small Modular Reactor (SMR)" },
+  BWXT:  { name: "BWX Tech",       domain: "bwxt.com",         sector: "energy",
+           activity: "Composants nuclear (US Navy)" },
+  GEV:   { name: "GE Vernova",     domain: "gevernova.com",    sector: "energy",
+           activity: "Turbines gas/éolien/nuclear" },
+  ETN:   { name: "Eaton",          domain: "eaton.com",        sector: "industrial",
+           activity: "Power management électrique" },
+  PWR:   { name: "Quanta",         domain: "quantaservices.com", sector: "industrial",
+           activity: "Réseau & infra énergie" },
+  MYRG:  { name: "MYR Group",      domain: "myrgroup.com",     sector: "industrial",
+           activity: "Construction électrique grid" },
+  // Uranium
+  CCJ:   { name: "Cameco",         domain: "cameco.com",       sector: "materials",
+           activity: "Leader minier uranium" },
+  DNN:   { name: "Denison",        domain: "denisonmines.com", sector: "materials",
+           activity: "Junior uranium canadien" },
+  UEC:   { name: "Uranium Energy", domain: "uraniumenergy.com", sector: "materials",
+           activity: "Junior uranium US" },
+  LEU:   { name: "Centrus",        domain: "centrusenergy.com", sector: "materials",
+           activity: "Enrichissement uranium" },
+  KAP:   { name: "Kazatomprom",    domain: "kazatomprom.kz",   sector: "materials",
+           activity: "1er producteur uranium mondial" },
+  NXE:   { name: "NexGen Energy",  domain: "nexgenenergy.com", sector: "materials",
+           activity: "Junior uranium grade élevé" },
+  // Battery / storage
+  FLNC:  { name: "Fluence",        domain: "fluenceenergy.com", sector: "energy",
+           activity: "Leader storage utility scale" },
+  STEM:  { name: "Stem",           domain: "stem.com",         sector: "energy",
+           activity: "Software AI optimisation grid" },
+  // Optique / photonique
+  CIEN:  { name: "Ciena",          domain: "ciena.com",        sector: "tech",
+           activity: "Optical transport DC" },
+  LITE:  { name: "Lumentum",       domain: "lumentum.com",     sector: "semi",
+           activity: "Composants optiques AI" },
+  COHR:  { name: "Coherent",       domain: "coherent.com",     sector: "tech",
+           activity: "Photonique, lasers" },
+  AAOI:  { name: "Applied Opto",   domain: "ao-inc.com",       sector: "semi",
+           activity: "Transceivers AI/datacenter" },
+  IPGP:  { name: "IPG Photonics",  domain: "ipgphotonics.com", sector: "tech",
+           activity: "Lasers fibre industriels" },
+  // Robotics
+  SYM:   { name: "Symbotic",       domain: "symbotic.com",     sector: "industrial",
+           activity: "Robotique entrepôts" },
+  ROK:   { name: "Rockwell",       domain: "rockwellautomation.com", sector: "industrial",
+           activity: "Automation industrielle" },
+  KTOS:  { name: "Kratos",         domain: "kratosdefense.com", sector: "industrial",
+           activity: "Drones/defense AI" },
+  ENTG:  { name: "Entegris",       domain: "entegris.com",     sector: "semi",
+           activity: "Matériaux/filtration semi-cond." },
+  APP:   { name: "AppLovin",       domain: "applovin.com",     sector: "tech",
+           activity: "Plateforme adtech AI mobile" },
 };
 
 /* ── Région géographique : dérivée du suffixe + tickers spéciaux ──────── */

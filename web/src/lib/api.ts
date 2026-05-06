@@ -343,6 +343,64 @@ export interface ScannerStatus {
 
 export const getScannerStatus = () => request<ScannerStatus>("/scanner/status");
 
+// ── Earnings Trade — Opérations court terme ─────────────────────────────────
+
+export interface EarningsTrade {
+  id: number;
+  ticker: string;
+  earnings_date: string;
+  days_until_earnings: number;
+  claude_verdict: "buy" | "skip";
+  claude_conviction: "faible" | "moyen" | "élevé";
+  expected_surprise_pct: number | null;
+  target_buy_price: number | null;
+  target_sell_price: number | null;
+  stop_loss_price: number | null;
+  rationale: string | null;
+  key_signals: string[];
+  status: "pending" | "triggered" | "closed_win" | "closed_loss" | "missed";
+  generated_at: string | null;
+  notes: string | null;
+}
+
+export interface EarningsTradePromptResponse {
+  prompt: string;
+  candidates: { ticker: string; earnings_date: string; source: string }[];
+  days_ahead: number;
+  n_candidates?: number;
+}
+
+export interface EarningsTradeImportResult {
+  created: number;
+  updated: number;
+  skipped: number;
+  items: { ticker: string; status: string; id?: number }[];
+  warning?: string;
+  error?: string;
+}
+
+export const getEarningsTradePrompt = (daysAhead = 14) =>
+  request<EarningsTradePromptResponse>(`/earnings-trade/prompt?days_ahead=${daysAhead}`);
+
+export const importEarningsTradeResponse = (responseText: string) =>
+  request<EarningsTradeImportResult>("/earnings-trade/import", {
+    method: "POST",
+    body: JSON.stringify({ response_text: responseText }),
+  });
+
+export const getActiveEarningsTrades = () =>
+  request<{ count: number; trades: EarningsTrade[] }>("/earnings-trade/active");
+
+export const updateEarningsTradeStatus = (
+  id: number,
+  status: EarningsTrade["status"],
+  notes?: string,
+) =>
+  request<{ ok: boolean; id: number; status: string }>(`/earnings-trade/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status, notes }),
+  });
+
 // ── Liste unifiée scanner + radar (fusion partagée home / /opportunities) ────
 
 export type UnifiedSource = "scanner" | "radar" | "both";

@@ -309,6 +309,43 @@ class WeeklySelection(SQLModel, table=True):
     generated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class EarningsTrade(SQLModel, table=True):
+    """
+    Une "Opération court terme" autour d'une publication de résultats.
+
+    Workflow :
+      1. L'utilisateur clique "Générer le prompt" sur /operations-ct.
+      2. Le backend assemble la liste des earnings dans 14j (portfolio + idées + opps)
+         + données contextuelles, et retourne un mégaprompt.
+      3. L'utilisateur le colle dans claude.ai (web), récupère la réponse.
+      4. L'utilisateur colle la réponse dans la page → on parse et on stocke
+         un EarningsTrade par ticker recommandé.
+      5. La page affiche les trades actifs avec compte à rebours earnings,
+         target buy/sell, conviction.
+
+    Pas d'exécution automatique — l'utilisateur passe les ordres lui-même.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    ticker: str = Field(index=True)
+    earnings_date: date
+    # Verdict Claude
+    claude_verdict: str          # "buy" (anticiper le bump) | "skip" (ne rien faire)
+    claude_conviction: str       # "faible" | "moyen" | "élevé"
+    # Hypothèse Claude sur la surprise (positive)
+    expected_surprise_pct: Optional[float] = None  # % de beat vs consensus attendu
+    # Recommandations de prix
+    target_buy_price: Optional[float] = None
+    target_sell_price: Optional[float] = None  # post-earnings
+    stop_loss_price: Optional[float] = None
+    # Texte libre (rationale + signaux clés)
+    rationale: Optional[str] = None
+    key_signals: Optional[str] = None  # JSON list (revenue trend, options flow, news, etc.)
+    # Méta
+    status: str = "pending"      # "pending" | "triggered" | "closed_win" | "closed_loss" | "missed"
+    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    notes: Optional[str] = None  # Notes user post-trade
+
+
 class LLMUsageLog(SQLModel, table=True):
     """
     Log de chaque appel à l'API Claude — pour le suivi budget.

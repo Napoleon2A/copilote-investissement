@@ -18,7 +18,7 @@ import logging
 
 from app.database import init_db
 from app.config import get_settings
-from app.routers import companies, watchlist, portfolio, ideas, brief, scanner, chat, earnings, alerts, risk, analyst, news, finnhub_data, sec_edgar_router, discovery_router
+from app.routers import companies, watchlist, portfolio, ideas, brief, scanner, chat, earnings, alerts, risk, analyst, news, finnhub_data, sec_edgar_router, discovery_router, earnings_trade_router
 from app.services.scanner import trigger_background_scan
 from app.services.rss_aggregator import trigger_background_refresh as trigger_news_refresh
 from app.services.finnhub_calendar import trigger_background_refresh as trigger_finnhub_refresh, is_configured as finnhub_configured
@@ -152,6 +152,7 @@ app.include_router(news.router)
 app.include_router(finnhub_data.router)
 app.include_router(sec_edgar_router.router)
 app.include_router(discovery_router.router)
+app.include_router(earnings_trade_router.router)
 
 
 @app.get("/", tags=["health"])
