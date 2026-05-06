@@ -4,16 +4,21 @@ ETF Holdings — découverte dynamique de candidats via composition d'ETF théma
 Idée : les gestionnaires d'ETF AI/robotics/uranium font le travail de curation
 thématique en continu. On hérite gratuitement de leur sélection.
 
-Sources combinées :
-  1. stockanalysis.com (full holdings, ~50-300 lignes) — source primaire scrappée
-  2. yfinance.Ticker(etf).funds_data.top_holdings (top ~10) — fallback / complément
+Sources par priorité (fallback en cascade) :
+  1. CSV officiel issuer (GlobalX expose la liste COMPLÈTE quotidiennement
+     en CSV public, ex: AIQ ~95 holdings, BOTZ ~45, URA ~50). Couvre AIQ,
+     BOTZ, URA. URL pattern : assets.globalxetfs.com/funds/holdings/{etf}_full-holdings_{YYYYMMDD}.csv
+  2. stockanalysis.com (top ~25, paginé côté JS donc inaccessible plus loin)
+  3. yfinance top_holdings (~10 max) — dernier filet
 
-Important pour la thèse small/mid caps : yfinance seul rate les positions
-au-delà du top 10 (Vertiv, Iris Energy, etc.) qui sont précisément ce qu'on
-cherche. La source stockanalysis donne la liste complète.
+Pourquoi cette cascade : yfinance et stockanalysis ratent VRT, IREN, CRWV et
+autres small/mid caps de la chaîne IA qui sont précisément la cible. Le CSV
+GlobalX donne la liste complète et résout ce trou pour les 3 ETF GlobalX.
 
-Cache 24h par ETF pour éviter le scraping inutile.
+Cache 24h par ETF.
 """
+import csv as csvmod
+import io
 import logging
 import re
 import threading
@@ -22,25 +27,131 @@ from typing import Optional
 
 import httpx
 
+# ETF dont l'émetteur expose un CSV complet officiel (GlobalX). On préfère
+# toujours cette source quand elle existe : c'est la référence légale.
+GLOBALX_ETFS = {"AIQ", "BOTZ", "URA"}
+
 logger = logging.getLogger(__name__)
 
-# ETF thématiques cibles — couvrent la chaîne de valeur IA
+# ETF thématiques cibles — couvrent la chaîne de valeur IA.
+# Plusieurs ETF par sous-thème pour combler les angles morts : un ticker présent
+# dans 1 seul ETF "lointain" (ex: NUKZ) peut être raté si on n'a que NLR.
 THEMED_ETFS: dict[str, str] = {
-    "AIQ":  "iShares AI & Tech",
-    "BOTZ": "Global X Robotics & AI",
+    # AI mainstream
+    "AIQ":  "Global X AI & Technology",
     "CHAT": "Roundhill Generative AI & Tech",
+    "ARKQ": "ARK Autonomous Tech & Robotics",
+    # Robotics & automation
+    "BOTZ": "Global X Robotics & AI",
     "ROBO": "Robo Global Robotics & Automation",
+    # Semiconductors (3 angles : iShares vs VanEck vs quantum)
     "SOXX": "iShares Semiconductor",
+    "SMH":  "VanEck Semiconductor",
+    "QTUM": "Defiance Quantum",
+    # Software
     "IGV":  "iShares Software",
+    # Uranium / nuclear (4 angles)
     "URNM": "Sprott Uranium Miners",
     "URA":  "Global X Uranium",
     "NLR":  "Sprott Nuclear Energy",
+    "NUKZ": "Range Nuclear Renaissance",
+    # Power / grid pour l'AI energy
+    "GRID": "First Trust Smart Grid Infrastructure",
+    "PAVE": "Global X US Infrastructure Development",
+    # Clean energy (transition)
     "ICLN": "iShares Global Clean Energy",
+    # Data centers, cloud, digital infra (capture VRT/IREN/APLD/DELL/SMCI
+    # qui ne sont pas dans les ETF AI core)
+    "DTCR": "Pacer Data Center REITs",
+    "VPN":  "Global X Data Center & Digital Infra REIT",
+    "DAPP": "VanEck Digital Transformation",
+    "SKYY": "First Trust Cloud Computing",
 }
 
 _TTL = timedelta(hours=24)
 _cache: dict[str, tuple[list[dict], datetime]] = {}
 _lock = threading.Lock()
+
+
+def _fetch_globalx_csv(etf_ticker: str) -> list[dict]:
+    """
+    Récupère le CSV officiel des holdings depuis GlobalX (AIQ/BOTZ/URA).
+
+    Étape 1 : scrape la page funds/{etf}/ pour extraire l'URL CSV daté.
+    Étape 2 : télécharge et parse le CSV.
+
+    Le CSV a la forme :
+      Header info (2 lignes)
+      "% of Net Assets,Ticker,Name,SEDOL,Market Price ($),Shares Held,Market Value ($)"
+      data rows...
+
+    Skip les listings non-US (ticker contient un espace ou un suffixe " KS",
+    " HK" etc. comme "000660 KS" pour SK Hynix).
+    """
+    page_url = f"https://www.globalxetfs.com/funds/{etf_ticker.lower()}/"
+    try:
+        page = httpx.get(
+            page_url,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; AusterlitzBot/1.0)"},
+            timeout=10.0,
+            follow_redirects=True,
+        )
+        if page.status_code != 200:
+            return []
+        # Extrait le lien CSV daté (pattern : aiq_full-holdings_YYYYMMDD.csv)
+        m = re.search(
+            r'https://assets\.globalxetfs\.com/funds/holdings/[a-z]+_full-holdings_\d{8}\.csv',
+            page.text,
+        )
+        if not m:
+            return []
+        csv_url = m.group(0)
+
+        csv_resp = httpx.get(
+            csv_url,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; AusterlitzBot/1.0)"},
+            timeout=15.0,
+        )
+        if csv_resp.status_code != 200:
+            return []
+
+        out: list[dict] = []
+        seen: set[str] = set()
+        reader = csvmod.reader(io.StringIO(csv_resp.text))
+        in_data = False
+        for row in reader:
+            if not row:
+                continue
+            # Skip jusqu'à trouver la ligne d'entête
+            if not in_data:
+                if row[0].startswith("%") or "of Net Assets" in row[0]:
+                    in_data = True
+                continue
+            # Lignes data : % | Ticker | Name | SEDOL | ...
+            if len(row) < 3:
+                continue
+            try:
+                weight_pct = float(row[0])
+            except ValueError:
+                continue
+            ticker = row[1].strip().upper()
+            # Skip listings non-US (espace dans le ticker = code marché étranger
+            # type "000660 KS"). Les 13-F SEC ne couvrent pas ces titres.
+            if " " in ticker or not ticker:
+                continue
+            if ticker in seen:
+                continue
+            seen.add(ticker)
+            name = row[2].strip()
+            out.append({
+                "symbol": ticker,
+                "name": name,
+                "weight": weight_pct / 100.0,
+            })
+        return out
+    except Exception as e:
+        logger.debug(f"globalx CSV '{etf_ticker}' failed: {e}")
+        return []
 
 
 def _fetch_full_holdings_stockanalysis(etf_ticker: str) -> list[dict]:
@@ -128,8 +239,8 @@ def _fetch_top_holdings_yfinance(etf_ticker: str) -> list[dict]:
 
 def get_etf_holdings(etf_ticker: str) -> list[dict]:
     """
-    Retourne les holdings d'un ETF. Source : stockanalysis.com (complet),
-    avec fallback yfinance (top 10) si le scraping échoue. Cache 24h.
+    Retourne les holdings d'un ETF. Cascade de sources, on garde la plus
+    complète disponible. Cache 24h.
 
     Format : [{"symbol": "NVDA", "name": "Nvidia", "weight": 0.082}, ...]
     """
@@ -139,9 +250,19 @@ def get_etf_holdings(etf_ticker: str) -> list[dict]:
         if cached and (datetime.utcnow() - cached[1]) < _TTL:
             return cached[0]
 
-    holdings = _fetch_full_holdings_stockanalysis(etf_ticker)
+    holdings: list[dict] = []
+    # Source #1 : CSV officiel GlobalX (full holdings) si applicable
+    if etf_ticker in GLOBALX_ETFS:
+        holdings = _fetch_globalx_csv(etf_ticker)
+
+    # Source #2 : stockanalysis (top ~25) si #1 vide ou non-applicable
     if len(holdings) < 5:
-        # Suspect (ETF qui ne devrait jamais avoir < 5 holdings) → fallback
+        sa = _fetch_full_holdings_stockanalysis(etf_ticker)
+        if len(sa) > len(holdings):
+            holdings = sa
+
+    # Source #3 : yfinance (top ~10) — dernier filet
+    if len(holdings) < 5:
         yf_holdings = _fetch_top_holdings_yfinance(etf_ticker)
         if len(yf_holdings) > len(holdings):
             holdings = yf_holdings
