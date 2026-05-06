@@ -58,8 +58,9 @@ async def etf_top_holdings(etf_ticker: str):
 @router.get("/cross-signals")
 async def cross_signals(
     min_etf_count: int = Query(default=1, ge=1, description="Nb minimum d'ETF où le ticker apparaît"),
-    min_whales: int = Query(default=1, ge=1, description="Nb minimum de super-investisseurs détenant le ticker"),
+    min_whales: int = Query(default=1, ge=1, description="Nb minimum de fonds détenant le ticker"),
     exclude_mega: bool = Query(default=True, description="Exclure les 30 mégacaps S&P (Apple, Microsoft, etc.)"),
+    concentrated_only: bool = Query(default=True, description="Ne compter que les fonds high-conviction (exclut Citadel, Renaissance, Two Sigma, Millennium, AQR, DE Shaw, Point72, Bridgewater)"),
     limit: int = Query(default=30, ge=1, le=100),
 ):
     """
@@ -92,14 +93,24 @@ async def cross_signals(
         else:
             whales_data = sec_edgar.get_whales_for_ticker(symbol, fallback_name=c["name"])
 
-        whales_count = whales_data["count"]
+        # Filtre concentrated : ne garde que les fonds high-conviction
+        all_holders = whales_data["holders"]
+        if concentrated_only:
+            holders = [h for h in all_holders if sec_edgar.is_concentrated_fund(h["fund_cik"])]
+        else:
+            holders = all_holders
+
+        whales_count = len(holders)
         if whales_count < min_whales:
             continue
 
-        # Top 5 holders pour ne pas alourdir la réponse
+        # Top 5 holders triés par concentration de portefeuille (position_pct)
+        # plutôt que par valeur absolue : un fonds qui met 10% de son book sur
+        # une position est un signal plus fort qu'un fonds qui met 1%.
+        sorted_holders = sorted(holders, key=lambda h: -h["position_pct"])
         top_holders = [
             {"fund_name": h["fund_name"], "value_usd": h["value_usd"], "position_pct": h["position_pct"]}
-            for h in whales_data["holders"][:5]
+            for h in sorted_holders[:5]
         ]
         enriched.append({
             "symbol": symbol,

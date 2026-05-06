@@ -73,6 +73,27 @@ WHALES: list[tuple[str, str]] = [
 # Dédoublonnage défensif
 WHALES = list({cik: name for cik, name in WHALES}.items())
 
+# Fonds "lissage de risque" : multi-strat, quant, market-neutral. Détiennent
+# des centaines de positions par convenance/couverture, donc leur présence
+# sur un ticker n'est PAS un signal de conviction. À exclure quand on cherche
+# du "smart money concentré". Identifiés par CIK pour être robuste aux changements
+# de naming.
+DIVERSIFIED_FUND_CIKS: set[str] = {
+    "0001423053",  # Citadel Advisors (Griffin) — multi-strat
+    "0001037389",  # Renaissance Technologies — quant HFT
+    "0001478735",  # Two Sigma Investments — quant
+    "0001273087",  # Millennium Management — multi-strat
+    "0001167557",  # AQR Capital Management — quant systematic
+    "0001009207",  # D.E. Shaw — multi-strat / quant
+    "0001603466",  # Point72 Asset Management (Cohen) — multi-manager
+    "0001350694",  # Bridgewater Associates (Dalio) — macro multi-strat
+}
+
+
+def is_concentrated_fund(cik: str) -> bool:
+    """Retourne True si le fonds est de type 'high-conviction' (pas multi-strat/quant)."""
+    return cik not in DIVERSIFIED_FUND_CIKS
+
 _cache: dict = {}
 _lock = threading.Lock()
 
