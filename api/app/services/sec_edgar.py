@@ -73,26 +73,60 @@ WHALES: list[tuple[str, str]] = [
 # Dédoublonnage défensif
 WHALES = list({cik: name for cik, name in WHALES}.items())
 
-# Fonds "lissage de risque" : multi-strat, quant, market-neutral. Détiennent
-# des centaines de positions par convenance/couverture, donc leur présence
-# sur un ticker n'est PAS un signal de conviction. À exclure quand on cherche
-# du "smart money concentré". Identifiés par CIK pour être robuste aux changements
-# de naming.
-DIVERSIFIED_FUND_CIKS: set[str] = {
-    "0001423053",  # Citadel Advisors (Griffin) — multi-strat
-    "0001037389",  # Renaissance Technologies — quant HFT
-    "0001478735",  # Two Sigma Investments — quant
-    "0001273087",  # Millennium Management — multi-strat
-    "0001167557",  # AQR Capital Management — quant systematic
-    "0001009207",  # D.E. Shaw — multi-strat / quant
-    "0001603466",  # Point72 Asset Management (Cohen) — multi-manager
-    "0001350694",  # Bridgewater Associates (Dalio) — macro multi-strat
+# Seuil par défaut au-delà duquel un fonds est considéré comme "diversifié"
+# (couverture/lissage de risque) plutôt que "concentré" (high-conviction).
+# Empiriquement : Pershing ~10 positions, Druckenmiller ~30, Akre ~25,
+# Berkshire ~40-50, Klarman ~30, Tepper ~50, Lone Pine ~30, ValueAct ~10.
+# Coatue ~80, Tiger ~80, Citadel ~7000+, Renaissance ~4000+.
+DEFAULT_CONCENTRATION_THRESHOLD = 40
+
+# Exceptions : fonds "légendes" reconnus comme high-conviction même si leur
+# 13-F dépasse le seuil (rare). Berkshire est l'exemple type.
+ALWAYS_CONCENTRATED_CIKS: set[str] = {
+    "0001067983",  # Berkshire Hathaway (Buffett)
+}
+
+# Backstop hardcodé pour les fonds quant/multi-strat connus, au cas où le
+# count de positions n'est pas dispo (cache miss / erreur SEC).
+KNOWN_DIVERSIFIED_CIKS: set[str] = {
+    "0001423053",  # Citadel Advisors (Griffin)
+    "0001037389",  # Renaissance Technologies
+    "0001478735",  # Two Sigma Investments
+    "0001273087",  # Millennium Management
+    "0001167557",  # AQR Capital Management
+    "0001009207",  # D.E. Shaw
+    "0001603466",  # Point72 Asset Management (Cohen)
+    "0001350694",  # Bridgewater Associates (Dalio)
 }
 
 
-def is_concentrated_fund(cik: str) -> bool:
-    """Retourne True si le fonds est de type 'high-conviction' (pas multi-strat/quant)."""
-    return cik not in DIVERSIFIED_FUND_CIKS
+def get_fund_position_count(cik: str) -> Optional[int]:
+    """Nombre de positions distinctes du dernier 13-F d'un fonds. None si data indispo."""
+    fund_name = next((n for c, n in WHALES if c == cik), "")
+    whale = get_whale_positions(cik, fund_name)
+    if whale is None:
+        return None
+    return len(whale.get("positions") or [])
+
+
+def is_concentrated_fund(cik: str, threshold: int = DEFAULT_CONCENTRATION_THRESHOLD) -> bool:
+    """
+    Retourne True si le fonds est high-conviction (peu de positions, fortes convictions).
+
+    Logique :
+      - Exception explicite (Berkshire) -> toujours True
+      - Backstop hardcodé (Citadel, Renaissance...) -> toujours False
+      - Sinon, count dynamique : <= threshold => concentrated
+      - Si count indispo (cache miss), conservatif : False
+    """
+    if cik in ALWAYS_CONCENTRATED_CIKS:
+        return True
+    if cik in KNOWN_DIVERSIFIED_CIKS:
+        return False
+    count = get_fund_position_count(cik)
+    if count is None:
+        return False
+    return count <= threshold
 
 _cache: dict = {}
 _lock = threading.Lock()
@@ -206,29 +240,38 @@ def _names_match(a: str, b: str) -> bool:
 # 13-F filings
 # ─────────────────────────────────────────────────────────────────────
 
-def _find_latest_13f(cik: str) -> Optional[dict]:
-    """Cherche le dernier 13F-HR via submissions API. Retourne {accession, filing_date}."""
+def _find_recent_13fs(cik: str, n: int = 2) -> list[dict]:
+    """Retourne les N derniers 13F-HR (du plus récent au plus ancien)."""
     cik_clean = cik.lstrip("0").zfill(10)
     url = f"https://data.sec.gov/submissions/CIK{cik_clean}.json"
     txt = _http_get(url)
     if not txt:
-        return None
+        return []
     import json
     try:
         data = json.loads(txt)
     except Exception:
-        return None
+        return []
 
     recent = data.get("filings", {}).get("recent", {})
     forms = recent.get("form", []) or []
+    out: list[dict] = []
     for i, form in enumerate(forms):
         if form == "13F-HR":
-            return {
+            out.append({
                 "accession": recent["accessionNumber"][i],
                 "filing_date": recent["filingDate"][i],
                 "report_date": recent.get("reportDate", [None] * len(forms))[i],
-            }
-    return None
+            })
+            if len(out) >= n:
+                break
+    return out
+
+
+def _find_latest_13f(cik: str) -> Optional[dict]:
+    """Cherche le dernier 13F-HR via submissions API. Retourne {accession, filing_date}."""
+    recent = _find_recent_13fs(cik, n=1)
+    return recent[0] if recent else None
 
 
 def _find_infotable_url(cik: str, accession: str) -> Optional[str]:
@@ -315,6 +358,26 @@ def _parse_13f_xml(xml_text: str) -> list[dict]:
     return list(aggregated.values())
 
 
+def _load_13f(cik: str, fund_name: str, filing: dict) -> Optional[dict]:
+    """Charge un 13-F donné. Helper utilisé par get_whale_positions et get_previous_whale_positions."""
+    info_url = _find_infotable_url(cik, filing["accession"])
+    if not info_url:
+        return None
+    xml_text = _http_get(info_url, timeout=30)
+    if not xml_text:
+        return None
+    positions = _parse_13f_xml(xml_text)
+    total_value = sum(p["value_usd"] for p in positions)
+    return {
+        "fund_name": fund_name,
+        "cik": cik,
+        "filing_date": filing["filing_date"],
+        "report_date": filing.get("report_date"),
+        "total_value_usd": total_value,
+        "positions": positions,
+    }
+
+
 def get_whale_positions(cik: str, fund_name: str) -> Optional[dict]:
     """
     Retourne les positions du dernier 13-F d'un fonds.
@@ -329,28 +392,84 @@ def get_whale_positions(cik: str, fund_name: str) -> Optional[dict]:
     latest = _find_latest_13f(cik)
     if not latest:
         return None
-
-    info_url = _find_infotable_url(cik, latest["accession"])
-    if not info_url:
+    result = _load_13f(cik, fund_name, latest)
+    if result is None:
         return None
-
-    xml_text = _http_get(info_url, timeout=30)
-    if not xml_text:
-        return None
-
-    positions = _parse_13f_xml(xml_text)
-    total_value = sum(p["value_usd"] for p in positions)
-
-    result = {
-        "fund_name": fund_name,
-        "cik": cik,
-        "filing_date": latest["filing_date"],
-        "report_date": latest.get("report_date"),
-        "total_value_usd": total_value,
-        "positions": positions,
-    }
     _cache_set(cache_key, result)
     return result
+
+
+def get_previous_whale_positions(cik: str, fund_name: str) -> Optional[dict]:
+    """
+    Retourne les positions de l'AVANT-DERNIER 13-F d'un fonds (pour comparaison).
+    Cache 7 jours.
+    """
+    cache_key = f"13f-prev::{cik}"
+    cached = _cache_get(cache_key, TTL_FILINGS)
+    if cached is not None:
+        return cached
+
+    recent = _find_recent_13fs(cik, n=2)
+    if len(recent) < 2:
+        return None
+    result = _load_13f(cik, fund_name, recent[1])
+    if result is None:
+        return None
+    _cache_set(cache_key, result)
+    return result
+
+
+def get_position_changes(cik: str, fund_name: str) -> dict[str, dict]:
+    """
+    Compare le dernier 13-F avec le précédent et retourne le statut de chaque
+    position du dernier filing.
+
+    Format : {cusip: {"status": "initiated"|"increased"|"stable"|"decreased",
+                       "prev_value_usd": int, "current_value_usd": int,
+                       "delta_pct": float (variation valeur en %)}}
+
+    Statuts :
+      - initiated : position absente du 13-F précédent (nouvelle conviction)
+      - increased : valeur en hausse > 10% (conviction renforcée)
+      - decreased : valeur en baisse > 10% (sortie partielle)
+      - stable   : variation < 10% (maintien)
+    """
+    current = get_whale_positions(cik, fund_name)
+    previous = get_previous_whale_positions(cik, fund_name)
+    if not current:
+        return {}
+
+    prev_by_cusip: dict[str, int] = {}
+    if previous:
+        for p in previous.get("positions") or []:
+            if p.get("cusip"):
+                prev_by_cusip[p["cusip"]] = p["value_usd"]
+
+    out: dict[str, dict] = {}
+    for p in current.get("positions") or []:
+        cusip = p.get("cusip")
+        if not cusip:
+            continue
+        cur_val = p["value_usd"]
+        prev_val = prev_by_cusip.get(cusip)
+        if prev_val is None or prev_val == 0:
+            status = "initiated"
+            delta_pct = None
+        else:
+            delta_pct = (cur_val - prev_val) / prev_val * 100
+            if delta_pct > 10:
+                status = "increased"
+            elif delta_pct < -10:
+                status = "decreased"
+            else:
+                status = "stable"
+        out[cusip] = {
+            "status": status,
+            "prev_value_usd": prev_val,
+            "current_value_usd": cur_val,
+            "delta_pct": round(delta_pct, 1) if delta_pct is not None else None,
+        }
+    return out
 
 
 def _resolve_cusip(sec_name: str, all_whales: list[dict]) -> Optional[str]:
@@ -404,11 +523,14 @@ def get_whales_for_ticker(ticker: str, fallback_name: Optional[str] = None) -> d
     holders = []
     for whale in all_whales:
         total = whale["total_value_usd"] or 1
+        # Charge les changements de positions (comparaison N vs N-1) une fois par fonds
+        changes = get_position_changes(whale["cik"], whale["fund_name"])
         # Match prioritaire par CUSIP (gère les variantes de nom), fallback par name strict
         for pos in whale["positions"]:
             cusip_match = bool(target_cusip) and pos["cusip"] == target_cusip
             name_match = (not target_cusip) and bool(sec_name) and _names_match(pos["name"], sec_name)
             if cusip_match or name_match:
+                change = changes.get(pos["cusip"]) or {}
                 holders.append({
                     "fund_name": whale["fund_name"],
                     "fund_cik": whale["cik"],
@@ -419,6 +541,10 @@ def get_whales_for_ticker(ticker: str, fallback_name: Optional[str] = None) -> d
                     "position_pct": round(pos["value_usd"] / total * 100, 2),
                     "filing_date": whale["filing_date"],
                     "report_date": whale["report_date"],
+                    # Comparaison vs 13-F précédent : "initiated" / "increased" / "stable" / "decreased"
+                    "status": change.get("status"),
+                    "prev_value_usd": change.get("prev_value_usd"),
+                    "delta_pct": change.get("delta_pct"),
                 })
                 break  # positions déjà agrégées par (name, cusip) — une seule entrée par fonds
 

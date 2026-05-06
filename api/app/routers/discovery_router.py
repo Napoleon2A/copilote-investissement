@@ -60,7 +60,8 @@ async def cross_signals(
     min_etf_count: int = Query(default=1, ge=1, description="Nb minimum d'ETF où le ticker apparaît"),
     min_whales: int = Query(default=1, ge=1, description="Nb minimum de fonds détenant le ticker"),
     exclude_mega: bool = Query(default=True, description="Exclure les 30 mégacaps S&P (Apple, Microsoft, etc.)"),
-    concentrated_only: bool = Query(default=True, description="Ne compter que les fonds high-conviction (exclut Citadel, Renaissance, Two Sigma, Millennium, AQR, DE Shaw, Point72, Bridgewater)"),
+    concentrated_only: bool = Query(default=True, description="Ne compter que les fonds high-conviction (peu de positions)"),
+    max_fund_positions: int = Query(default=60, ge=5, le=500, description="Si concentrated_only=True : nb max de positions pour qu'un fonds compte (40=ultra-strict ne garde que Pershing/Akre/Klarman/Tepper/Lone Pine/Berkshire ; 60=strict inclut Loeb/Coatue/Tiger/Druckenmiller ; 100=large)"),
     limit: int = Query(default=30, ge=1, le=100),
 ):
     """
@@ -96,7 +97,10 @@ async def cross_signals(
         # Filtre concentrated : ne garde que les fonds high-conviction
         all_holders = whales_data["holders"]
         if concentrated_only:
-            holders = [h for h in all_holders if sec_edgar.is_concentrated_fund(h["fund_cik"])]
+            holders = [
+                h for h in all_holders
+                if sec_edgar.is_concentrated_fund(h["fund_cik"], threshold=max_fund_positions)
+            ]
         else:
             holders = all_holders
 
@@ -109,9 +113,19 @@ async def cross_signals(
         # une position est un signal plus fort qu'un fonds qui met 1%.
         sorted_holders = sorted(holders, key=lambda h: -h["position_pct"])
         top_holders = [
-            {"fund_name": h["fund_name"], "value_usd": h["value_usd"], "position_pct": h["position_pct"]}
+            {
+                "fund_name": h["fund_name"],
+                "value_usd": h["value_usd"],
+                "position_pct": h["position_pct"],
+                # Comparaison N vs N-1 : permet de détecter les "initiated"
+                # (vraie nouvelle conviction, pas juste position héritée)
+                "status": h.get("status"),
+                "delta_pct": h.get("delta_pct"),
+            }
             for h in sorted_holders[:5]
         ]
+        # Compte des positions naissantes (signal "smart money entre maintenant")
+        initiated_count = sum(1 for h in holders if h.get("status") == "initiated")
         enriched.append({
             "symbol": symbol,
             "name": c["name"],
@@ -119,8 +133,10 @@ async def cross_signals(
             "etfs": c["etfs"],
             "avg_etf_weight": c["avg_weight"],
             "whales_count": whales_count,
+            "initiated_count": initiated_count,
             "top_holders": top_holders,
-            "combined_score": c["etf_count"] + whales_count * 0.5,
+            # Score boosté par les initiations : 0.3 par position naissante
+            "combined_score": c["etf_count"] + whales_count * 0.5 + initiated_count * 0.3,
         })
 
     enriched.sort(key=lambda x: -x["combined_score"])
