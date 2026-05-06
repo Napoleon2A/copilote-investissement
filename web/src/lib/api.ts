@@ -269,11 +269,30 @@ export interface PoliticalSignal {
   source_available: boolean;
 }
 
+export interface AnalystSignal {
+  present: boolean;
+  buy_pct: number | null;
+  trend_6m_pp: number | null;
+  consensus: "strong_buy" | "buy" | "hold" | "sell" | null;
+  n_analysts: number;
+  upside_pct: number | null;
+  is_strong_buy: boolean;
+  error?: string;
+}
+
+export interface SignalStrength {
+  score: number;
+  label: "fort" | "moyen" | "faible" | "absent" | "indispo" | string;
+  components: Record<string, number>;
+}
+
 export interface TickerSignals {
   etf: EtfSignal;
   smart_money: SmartMoneySignal;
   insider: InsiderSignal;
+  analyst: AnalystSignal;
   political: PoliticalSignal;
+  signal_strength: SignalStrength;
 }
 
 export const getDiscoverySignals = (tickers: string[]) =>
@@ -323,6 +342,42 @@ export interface ScannerStatus {
 }
 
 export const getScannerStatus = () => request<ScannerStatus>("/scanner/status");
+
+// ── Liste unifiée scanner + radar (fusion partagée home / /opportunities) ────
+
+export type UnifiedSource = "scanner" | "radar" | "both";
+
+export interface UnifiedItem {
+  ticker: string;
+  source: UnifiedSource;
+  scanner?: ScanOpportunity;
+  radar?: SmartMoneyRadarItem;
+}
+
+export function buildUnifiedList(
+  scanner: ScanOpportunity[] | undefined,
+  radar: SmartMoneyRadarItem[] | undefined,
+): UnifiedItem[] {
+  const out: UnifiedItem[] = (scanner ?? []).map((o) => ({
+    ticker: o.ticker,
+    source: "scanner",
+    scanner: o,
+  }));
+  const seen = new Set(out.map((x) => x.ticker));
+  for (const r of radar ?? []) {
+    if (seen.has(r.symbol)) {
+      const existing = out.find((x) => x.ticker === r.symbol);
+      if (existing) {
+        existing.source = "both";
+        existing.radar = r;
+      }
+    } else {
+      out.push({ ticker: r.symbol, source: "radar", radar: r });
+      seen.add(r.symbol);
+    }
+  }
+  return out;
+}
 
 // ── Ideas ─────────────────────────────────────────────────────────────────────
 

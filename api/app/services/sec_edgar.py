@@ -131,6 +131,16 @@ def is_concentrated_fund(cik: str, threshold: int = DEFAULT_CONCENTRATION_THRESH
 _cache: dict = {}
 _lock = threading.Lock()
 
+# SEC EDGAR rate limit officiel : 10 req/s. On tient une marge — 5 calls
+# concurrents max + 0.12s minimum entre 2 calls = ~8 req/s de pic. Évite les
+# 429 systématiques observés quand le radar parallélise via to_thread sur
+# 75-242 candidats × N fonds.
+import time as _time
+_sec_semaphore = threading.Semaphore(5)
+_last_call_lock = threading.Lock()
+_last_call_at: float = 0.0
+_MIN_INTERVAL_S = 0.12  # 8.3 req/s max
+
 
 def _cache_get(key: str, ttl: int):
     with _lock:
@@ -149,13 +159,31 @@ def _cache_set(key: str, data):
 
 
 def _http_get(url: str, timeout: int = 20) -> Optional[str]:
-    try:
-        resp = httpx.get(url, headers={"User-Agent": USER_AGENT, "Accept": "*/*"}, timeout=timeout)
-        resp.raise_for_status()
-        return resp.text
-    except Exception as e:
-        logger.warning(f"SEC fetch error {url}: {e}")
-        return None
+    """
+    GET SEC EDGAR throttlé. Acquiert un semaphore (max 5 concurrents) puis
+    impose un intervalle minimum entre 2 départs de requête. Évite les 429.
+    """
+    global _last_call_at
+    with _sec_semaphore:
+        with _last_call_lock:
+            now = _time.time()
+            wait = _MIN_INTERVAL_S - (now - _last_call_at)
+            if wait > 0:
+                _time.sleep(wait)
+            _last_call_at = _time.time()
+        try:
+            resp = httpx.get(url, headers={"User-Agent": USER_AGENT, "Accept": "*/*"}, timeout=timeout)
+            # Sur 429, on attend 1.5s et on retente une fois — c'est un signal
+            # explicite de SEC qu'on peut respecter sans tomber.
+            if resp.status_code == 429:
+                logger.info(f"SEC 429 sur {url} — retry après 1.5s")
+                _time.sleep(1.5)
+                resp = httpx.get(url, headers={"User-Agent": USER_AGENT, "Accept": "*/*"}, timeout=timeout)
+            resp.raise_for_status()
+            return resp.text
+        except Exception as e:
+            logger.warning(f"SEC fetch error {url}: {e}")
+            return None
 
 
 # ─────────────────────────────────────────────────────────────────────

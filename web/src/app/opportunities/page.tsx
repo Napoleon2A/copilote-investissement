@@ -14,6 +14,9 @@ import {
   TickerSignals,
   SmartMoneyRadarResponse,
   SmartMoneyRadarItem,
+  UnifiedItem,
+  UnifiedSource,
+  buildUnifiedList,
 } from "@/lib/api";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -28,14 +31,8 @@ interface OpportunitiesResponse {
   scanning?: boolean;
 }
 
-// Item unifié de la liste : provient du scanner, du radar smart-money, ou des deux
-type ItemSource = "scanner" | "radar" | "both";
-interface UnifiedItem {
-  ticker: string;
-  source: ItemSource;
-  scanner?: ScanOpportunity;
-  radar?: SmartMoneyRadarItem;
-}
+// Alias local pour compatibilité avec l'ancien code de la page
+type ItemSource = UnifiedSource;
 
 // Un scan complet doit toucher 67 tickers via yfinance (rate-limité). Empiriquement
 // > 30s. Si le scan finit en moins de ce seuil, signaler à l'utilisateur que
@@ -133,34 +130,21 @@ export default function OpportunitiesPage() {
 
   const list: ScanOpportunity[] = opps?.opportunities ?? [];
 
-  // Liste unifiée : opportunités scanner + items du radar smart-money qui ne
-  // sont pas déjà couverts par le scanner. Le radar étend la couverture vers
-  // des tickers qui passent sous le seuil momentum mais que des fonds high-
-  // conviction viennent d'initier (signal contrarian fort).
+  // Liste unifiée scanner + radar (logique partagée avec la home, cf. lib/api.ts).
+  // Tri secondaire : quand les signaux multi-angles sont chargés, on re-trie
+  // pour faire remonter les opportunités à fort signal global, à conviction
+  // multi-source égale.
   const unifiedList: UnifiedItem[] = useMemo(() => {
-    const out: UnifiedItem[] = list.map((o) => ({
-      ticker: o.ticker,
-      source: "scanner",
-      scanner: o,
-    }));
-    const seen = new Set(out.map((x) => x.ticker));
-    if (radar) {
-      for (const r of radar.radar) {
-        if (seen.has(r.symbol)) {
-          // Présent dans les deux → marquer la card existante
-          const existing = out.find((x) => x.ticker === r.symbol);
-          if (existing) {
-            existing.source = "both";
-            existing.radar = r;
-          }
-        } else {
-          out.push({ ticker: r.symbol, source: "radar", radar: r });
-          seen.add(r.symbol);
-        }
-      }
-    }
-    return out;
-  }, [list, radar]);
+    const base = buildUnifiedList(list, radar?.radar);
+    if (Object.keys(signals).length === 0) return base;
+    return [...base].sort((a, b) => {
+      const sa = signals[a.ticker]?.signal_strength?.score ?? 0;
+      const sb = signals[b.ticker]?.signal_strength?.score ?? 0;
+      if (sa !== sb) return sb - sa;  // signal fort d'abord
+      // Ex aequo : on garde l'ordre original (scanner d'abord)
+      return base.indexOf(a) - base.indexOf(b);
+    });
+  }, [list, radar, signals]);
 
   // Enrichissement signaux pour la liste unifiée.
   useEffect(() => {
@@ -306,6 +290,7 @@ function OpportunityCard({ item, rank, signals }: OpportunityCardProps) {
               </span>
             )}
             <SourceBadge source={item.source} />
+            <SignalStrengthBadge signals={signals} />
           </div>
           {score != null && <ScoreGauge value={score} colorClass={scoreColor} size={48} />}
         </div>
@@ -374,6 +359,26 @@ function buildRadarHighlights(r: SmartMoneyRadarItem): string[] {
     const date = h.report_date ? ` · ${h.report_date}` : "";
     return `${h.fund_name} ${verb} à ${h.position_pct?.toFixed(1)}% du book${delta}${date}`;
   });
+}
+
+function SignalStrengthBadge({ signals }: { signals?: TickerSignals }) {
+  if (!signals?.signal_strength) return null;
+  const { score, label, components } = signals.signal_strength;
+  if (score <= 0) return null;
+  const tone = label === "fort" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/40"
+    : label === "moyen" ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
+    : "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30";
+  const breakdown = Object.entries(components)
+    .map(([k, v]) => `${k}: ${v >= 0 ? "+" : ""}${v}`)
+    .join(" · ");
+  return (
+    <span
+      title={`Score multi-angles : ${score} (${label})\n${breakdown}`}
+      className={`text-[0.625rem] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${tone}`}
+    >
+      Signal {label} {score.toFixed(1)}
+    </span>
+  );
 }
 
 function SourceBadge({ source }: { source: ItemSource }) {
@@ -463,6 +468,26 @@ function SignalBadges({ signals }: { signals?: TickerSignals }) {
       label: `Insider ${sign}$${formatM(Math.abs(net))}`,
       tooltip: `Net 90j${pctMcap}${recency} — ${breakdown}`,
       tone: net >= 0 ? "bull" : "bear",
+    });
+  }
+
+  // Analyst consensus
+  const an = signals.analyst;
+  if (an.present && an.is_strong_buy) {
+    const trend = an.trend_6m_pp != null
+      ? ` · trend 6m ${an.trend_6m_pp >= 0 ? "+" : ""}${an.trend_6m_pp}pp`
+      : "";
+    const upside = an.upside_pct != null ? ` · upside ${an.upside_pct >= 0 ? "+" : ""}${an.upside_pct}%` : "";
+    badges.push({
+      label: `Strong Buy (${an.n_analysts})`,
+      tooltip: `Consensus analystes ${an.buy_pct?.toFixed(0)}% Buy${trend}${upside}`,
+      tone: "bull",
+    });
+  } else if (an.present && an.consensus === "sell") {
+    badges.push({
+      label: `Consensus Sell`,
+      tooltip: `${an.buy_pct?.toFixed(0)}% Buy seulement (${an.n_analysts} analystes)`,
+      tone: "bear",
     });
   }
 

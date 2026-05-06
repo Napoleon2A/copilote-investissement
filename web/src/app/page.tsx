@@ -16,6 +16,7 @@ import { WhalePanel } from "@/components/dashboard/WhalePanel";
 import { InsideManagementPanel } from "@/components/dashboard/InsideManagementPanel";
 import { fetchJSON, API } from "@/components/dashboard/shared";
 import type { MarketSnapshot } from "@/lib/macroExplainer";
+import { buildUnifiedList, getSmartMoneyRadar, SmartMoneyRadarResponse } from "@/lib/api";
 
 export default function HomePage() {
   const today = new Date().toLocaleDateString("fr-FR", {
@@ -34,11 +35,17 @@ export default function HomePage() {
   const [perTickerNews, setPerTickerNews] = useState<any>(undefined);
   const [tickerScores, setTickerScores] = useState<Record<string, any>>({});
   const [analystRecos, setAnalystRecos] = useState<Record<string, any> | undefined>(undefined);
+  const [radar, setRadar] = useState<SmartMoneyRadarResponse | undefined>(undefined);
 
   // Fetch initial — 8 endpoints en parallèle
   useEffect(() => {
     fetchJSON<any>(`${API}/brief`).then(setBrief);
-    fetchJSON<any>(`${API}/scanner/opportunities?max_results=5`).then(setOpps);
+    // 20 = la limite max de /scanner/opportunities ; suffit pour la liste scrollable
+    fetchJSON<any>(`${API}/scanner/opportunities?max_results=20`).then(setOpps);
+    // Radar smart-money en parallèle (long au premier appel mais cache 24h ensuite)
+    getSmartMoneyRadar({ limit: 30 }).then(setRadar).catch(() => setRadar({
+      total: 0, limit: 0, min_funds: 0, max_fund_positions: 0, duration_seconds: 0, radar: [],
+    }));
     // Earnings : 10 jours, tickers additionnels passés dans le 2e useEffect
     fetchJSON<any>(`${API}/alerts`).then(setAlerts);
     fetchJSON<any[]>(`${API}/watchlists`).then(setWatchlists);
@@ -99,7 +106,13 @@ export default function HomePage() {
     }
   }, [portfolio, ideas, opps]);
 
-  const topPicks = opps?.opportunities?.slice(0, 3) ?? [];
+  // Liste unifiée scanner + radar (même logique que /opportunities, partagée via lib/api.ts).
+  // On limite à 30 items pour ne pas saturer la card sur la home (scrollable).
+  const unifiedPicks = useMemo(
+    () => buildUnifiedList(opps?.opportunities, radar?.radar).slice(0, 30),
+    [opps, radar],
+  );
+  const topPicks = opps?.opportunities?.slice(0, 3) ?? [];  // conservé pour le filtre news
 
   // Construit le snapshot macro pour les analyses contextuelles
   const snapshot: MarketSnapshot | null = useMemo(() => {
@@ -162,7 +175,12 @@ export default function HomePage() {
       {/* Picks de la semaine — descendu juste sous le bandeau (côté gauche) ↔ Actualité macro (côté droit) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:h-[460px]">
         <div className="min-h-0">
-          <PicksHero picks={topPicks} loading={opps === undefined} scanning={opps?.scanning} />
+          <PicksHero
+            items={unifiedPicks}
+            loading={opps === undefined}
+            scanning={opps?.scanning}
+            radarLoading={radar === undefined}
+          />
         </div>
         <div className="min-h-0">
           <MacroNewsPanel data={macroNewsRSS} />

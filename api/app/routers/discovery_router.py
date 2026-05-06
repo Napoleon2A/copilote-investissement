@@ -288,6 +288,80 @@ def _build_smart_money_signal(symbol: str, max_fund_positions: int = DEFAULT_MAX
     }
 
 
+def _build_analyst_signal(symbol: str) -> dict:
+    """
+    Consensus analystes Finnhub. Données brutes : distribution mensuelle
+    strongBuy/buy/hold/sell/strongSell sur ~12 derniers mois.
+
+    On calcule :
+      - buy_pct du dernier mois (signal absolu)
+      - trend = delta buy_pct entre dernier mois et il y a 6 mois
+        (signal de momentum analyste : amélioration → cible privilégiée)
+      - upside vs price target Finnhub (consensus mean)
+
+    Convention buy_pct = (strongBuy + buy) / total. Quand total = 0, présent=False.
+    """
+    if "." in symbol:
+        return {"present": False, "buy_pct": None, "trend_6m_pp": None, "consensus": None,
+                "n_analysts": 0, "upside_pct": None, "is_strong_buy": False}
+    recos = finnhub_ticker.get_recommendations(symbol)
+    if not recos:
+        return {"present": False, "buy_pct": None, "trend_6m_pp": None, "consensus": None,
+                "n_analysts": 0, "upside_pct": None, "is_strong_buy": False}
+
+    def _buy_pct(r: dict) -> Optional[float]:
+        total = (r.get("strongBuy") or 0) + (r.get("buy") or 0) + (r.get("hold") or 0) + (r.get("sell") or 0) + (r.get("strongSell") or 0)
+        if total == 0:
+            return None
+        return ((r.get("strongBuy") or 0) + (r.get("buy") or 0)) / total * 100
+
+    latest = recos[0]
+    buy_pct = _buy_pct(latest)
+    n_analysts = sum((latest.get(k) or 0) for k in ["strongBuy", "buy", "hold", "sell", "strongSell"])
+
+    # Trend 6 mois : compare au reco le plus proche de 6 mois
+    trend_pp = None
+    if len(recos) >= 6:
+        old = recos[5]  # 6e plus récent ≈ 6 mois en arrière (recos mensuels)
+        old_pct = _buy_pct(old)
+        if buy_pct is not None and old_pct is not None:
+            trend_pp = round(buy_pct - old_pct, 1)
+
+    # Consensus label
+    if buy_pct is None:
+        consensus = None
+    elif buy_pct >= 75:
+        consensus = "strong_buy"
+    elif buy_pct >= 55:
+        consensus = "buy"
+    elif buy_pct >= 40:
+        consensus = "hold"
+    else:
+        consensus = "sell"
+
+    # Upside vs target price
+    upside_pct = None
+    target = finnhub_ticker.get_price_target(symbol) or {}
+    target_mean = target.get("targetMean") or 0
+    profile = finnhub_ticker.get_profile(symbol) or {}
+    last_close = profile.get("lastPrice") or 0  # peut être absent ; on fallback yfinance via scanner si besoin
+    if not last_close:
+        # Fallback : prix du target (ratio implicite)
+        last_close = target.get("lastPrice") or 0
+    if target_mean and last_close:
+        upside_pct = round((target_mean / last_close - 1) * 100, 1)
+
+    return {
+        "present": True,
+        "buy_pct": round(buy_pct, 1) if buy_pct is not None else None,
+        "trend_6m_pp": trend_pp,
+        "consensus": consensus,
+        "n_analysts": n_analysts,
+        "upside_pct": upside_pct,
+        "is_strong_buy": consensus == "strong_buy",
+    }
+
+
 def _build_insider_signal(symbol: str) -> dict:
     """
     Insider top management : net achats / ventes 90j via Finnhub.
@@ -415,18 +489,22 @@ async def signals_batch(
         # to_thread car les services sous-jacents sont synchrones (httpx sync,
         # parsing XML). Permet d'occuper le worker pool pendant les I/O réseau
         # plutôt que de bloquer l'event loop sur N tickers en série.
-        etf, smart, insider, political = await asyncio.gather(
+        etf, smart, insider, analyst, political = await asyncio.gather(
             asyncio.to_thread(_safe, "etf", sym, _build_etf_signal, sym, etf_index),
             asyncio.to_thread(_safe, "smart_money", sym, _build_smart_money_signal, sym, max_fund_positions),
             asyncio.to_thread(_safe, "insider", sym, _build_insider_signal, sym),
+            asyncio.to_thread(_safe, "analyst", sym, _build_analyst_signal, sym),
             asyncio.to_thread(_safe, "political", sym, political_trades.get_political_trades_for_ticker, sym),
         )
-        return sym, {
+        signals = {
             "etf": etf,
             "smart_money": smart,
             "insider": insider,
+            "analyst": analyst,
             "political": political,
         }
+        signals["signal_strength"] = _compute_signal_strength(signals)
+        return sym, signals
 
     # return_exceptions=True : si un ticker plante au niveau gather, on continue
     # quand même les autres et on retourne un placeholder pour celui qui plante.
@@ -442,12 +520,80 @@ async def signals_batch(
                 "etf": {"present": False, "etf_count": 0, "etfs": []},
                 "smart_money": {"present": False, "concentrated_holders": 0, "initiated": 0, "highlights": []},
                 "insider": {"present": False, "is_significant": False},
+                "analyst": {"present": False, "buy_pct": None, "consensus": None},
                 "political": {"source_available": False, "count": 0, "highlights": []},
+                "signal_strength": {"score": 0, "label": "indispo", "components": {}},
                 "error": str(item)[:200],
             }
         else:
             out[item[0]] = item[1]
     return out
+
+
+def _compute_signal_strength(signals: dict) -> dict:
+    """
+    Score agrégé de validation multi-angles. Logique additive simple — chaque
+    angle positif ajoute des points, chaque angle négatif en retire. Permet de
+    trier visuellement les opportunités par force du faisceau de signaux.
+
+    Pondérations (justifiées) :
+      - ETF count × 0.5    (présence thématique, baseline)
+      - Smart-money initiated × 3 (signal le plus fort : conviction nouvelle)
+      - Smart-money holders × 0.7 (présence concentrée mais pas neuve)
+      - Insider net buy significatif × 2.5 (achat à conviction des dirigeants)
+      - Insider net sell significatif × -1.5 (warning, mais souvent rebalance)
+      - Analyst strong_buy × 1.5
+      - Analyst trend +10pp en 6m × 1.0 (rerating en cours)
+
+    Échelle indicative : 0-3 faible, 3-7 moyen, 7+ fort.
+    """
+    components: dict[str, float] = {}
+
+    # ETF
+    etf = signals.get("etf") or {}
+    etf_count = etf.get("etf_count") or 0
+    if etf_count:
+        components["etf"] = round(etf_count * 0.5, 2)
+
+    # Smart-money
+    sm = signals.get("smart_money") or {}
+    sm_init = sm.get("initiated") or 0
+    sm_holders = (sm.get("concentrated_holders") or 0) - sm_init
+    if sm_init:
+        components["smart_money_initiated"] = round(sm_init * 3.0, 2)
+    if sm_holders > 0:
+        components["smart_money_holders"] = round(sm_holders * 0.7, 2)
+
+    # Insider
+    ins = signals.get("insider") or {}
+    if ins.get("is_significant"):
+        net = ins.get("net_value_usd") or 0
+        if net > 0:
+            components["insider_buy"] = 2.5
+        elif net < 0:
+            components["insider_sell"] = -1.5
+
+    # Analyst
+    an = signals.get("analyst") or {}
+    if an.get("is_strong_buy"):
+        components["analyst_strong_buy"] = 1.5
+    trend = an.get("trend_6m_pp")
+    if trend is not None and trend >= 10:
+        components["analyst_trend_up"] = 1.0
+    elif trend is not None and trend <= -10:
+        components["analyst_trend_down"] = -1.0
+
+    score = round(sum(components.values()), 2)
+    if score >= 7:
+        label = "fort"
+    elif score >= 3:
+        label = "moyen"
+    elif score > 0:
+        label = "faible"
+    else:
+        label = "absent"
+
+    return {"score": score, "label": label, "components": components}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
