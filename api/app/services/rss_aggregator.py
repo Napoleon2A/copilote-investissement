@@ -29,25 +29,26 @@ logger = logging.getLogger(__name__)
 
 # ── Sources RSS gratuites ─────────────────────────────────────────────────
 RSS_SOURCES: list[dict] = [
-    # 🇫🇷 Français — qualité macro
-    {"name": "Les Échos · Finance",       "url": "https://services.lesechos.fr/rss/les-echos-finance-marches.xml",       "lang": "fr", "weight": 3},
-    {"name": "Les Échos · Économie",      "url": "https://services.lesechos.fr/rss/les-echos-economie.xml",              "lang": "fr", "weight": 3},
-    {"name": "Les Échos · International", "url": "https://services.lesechos.fr/rss/les-echos-monde.xml",                 "lang": "fr", "weight": 3},
-    {"name": "Boursorama",                "url": "https://www.boursorama.com/rss/news/all/news.xml",                     "lang": "fr", "weight": 2},
-    {"name": "Le Monde · Économie",       "url": "https://www.lemonde.fr/economie/rss_full.xml",                         "lang": "fr", "weight": 2},
-    {"name": "La Tribune",                "url": "https://www.latribune.fr/feed/rss",                                    "lang": "fr", "weight": 2},
-    {"name": "Le Figaro · Économie",      "url": "https://www.lefigaro.fr/rss/figaro_economie.xml",                      "lang": "fr", "weight": 2},
+    # macro_quality : "high" → flux macro premium ; "medium" → utilisable ; "low" → exclu du flux macro (sert pour /linked uniquement).
+    # 🇫🇷 Français
+    {"name": "Les Échos · Finance",       "url": "https://services.lesechos.fr/rss/les-echos-finance-marches.xml",       "lang": "fr", "weight": 3, "macro_quality": "high"},
+    {"name": "Les Échos · Économie",      "url": "https://services.lesechos.fr/rss/les-echos-economie.xml",              "lang": "fr", "weight": 3, "macro_quality": "high"},
+    {"name": "Les Échos · International", "url": "https://services.lesechos.fr/rss/les-echos-monde.xml",                 "lang": "fr", "weight": 3, "macro_quality": "high"},
+    {"name": "Boursorama",                "url": "https://www.boursorama.com/rss/news/all/news.xml",                     "lang": "fr", "weight": 2, "macro_quality": "low"},
+    {"name": "Le Monde · Économie",       "url": "https://www.lemonde.fr/economie/rss_full.xml",                         "lang": "fr", "weight": 2, "macro_quality": "low"},
+    {"name": "La Tribune",                "url": "https://www.latribune.fr/feed/rss",                                    "lang": "fr", "weight": 2, "macro_quality": "low"},
+    {"name": "Le Figaro · Économie",      "url": "https://www.lefigaro.fr/rss/figaro_economie.xml",                      "lang": "fr", "weight": 2, "macro_quality": "low"},
 
-    # 🇬🇧 Anglais — qualité macro
-    {"name": "CNBC · Markets",            "url": "https://www.cnbc.com/id/100003114/device/rss/rss.html",                "lang": "en", "weight": 3},
-    {"name": "CNBC · Economy",            "url": "https://www.cnbc.com/id/20910258/device/rss/rss.html",                 "lang": "en", "weight": 3},
-    {"name": "CNBC · World News",         "url": "https://www.cnbc.com/id/100727362/device/rss/rss.html",                "lang": "en", "weight": 3},
-    {"name": "MarketWatch · Top Stories", "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories",           "lang": "en", "weight": 2},
-    {"name": "Yahoo Finance",             "url": "https://finance.yahoo.com/news/rssindex",                              "lang": "en", "weight": 2},
-    {"name": "Investing.com · Economy",   "url": "https://www.investing.com/rss/news_25.rss",                            "lang": "en", "weight": 2},
-    {"name": "Investing.com · Forex",     "url": "https://www.investing.com/rss/news_1.rss",                             "lang": "en", "weight": 2},
-    {"name": "Reuters · Business",        "url": "https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best", "lang": "en", "weight": 3},
-    {"name": "BBC · Business",            "url": "https://feeds.bbci.co.uk/news/business/rss.xml",                       "lang": "en", "weight": 2},
+    # 🇬🇧 Anglais
+    {"name": "CNBC · Markets",            "url": "https://www.cnbc.com/id/100003114/device/rss/rss.html",                "lang": "en", "weight": 3, "macro_quality": "low"},
+    {"name": "CNBC · Economy",            "url": "https://www.cnbc.com/id/20910258/device/rss/rss.html",                 "lang": "en", "weight": 3, "macro_quality": "high"},
+    {"name": "CNBC · World News",         "url": "https://www.cnbc.com/id/100727362/device/rss/rss.html",                "lang": "en", "weight": 3, "macro_quality": "high"},
+    {"name": "MarketWatch · Top Stories", "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories",           "lang": "en", "weight": 2, "macro_quality": "medium"},
+    {"name": "Yahoo Finance",             "url": "https://finance.yahoo.com/news/rssindex",                              "lang": "en", "weight": 2, "macro_quality": "low"},
+    {"name": "Investing.com · Economy",   "url": "https://www.investing.com/rss/news_25.rss",                            "lang": "en", "weight": 2, "macro_quality": "medium"},
+    {"name": "Investing.com · Forex",     "url": "https://www.investing.com/rss/news_1.rss",                             "lang": "en", "weight": 2, "macro_quality": "medium"},
+    {"name": "Reuters · Business",        "url": "https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best", "lang": "en", "weight": 3, "macro_quality": "high"},
+    {"name": "BBC · Business",            "url": "https://feeds.bbci.co.uk/news/business/rss.xml",                       "lang": "en", "weight": 2, "macro_quality": "low"},
 ]
 
 # ── Classification ────────────────────────────────────────────────────────
@@ -231,6 +232,7 @@ def _fetch_one_feed(source: dict) -> list[dict]:
                 "publisher": source["name"],
                 "lang": source["lang"],
                 "weight": source["weight"],
+                "macro_quality": source.get("macro_quality", "medium"),
                 "published": published,
                 "category": category,
                 "tickers_mentioned": tickers_mentioned,

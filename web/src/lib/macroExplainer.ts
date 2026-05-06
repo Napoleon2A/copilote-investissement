@@ -29,6 +29,11 @@ export interface MarketSnapshot {
   gold_ytd: number | null;
   wti_ytd: number | null;
   wti_1m?: number | null;
+  // Indicateurs pros : signal récession, stress obligataire, conviction croissance, broad rally
+  rut_1m?: number | null;            // Russell 2000 1M (small caps US)
+  move?: number | null;              // MOVE index (volatilité bonds)
+  spread_10y_3m?: number | null;     // Spread courbe 10Y-3M (en points)
+  copper_gold_1m?: number | null;    // Ratio cuivre/or 1M (cyclique vs défensif)
 }
 
 /* ── Moyennes historiques (référence pour calibrage) ──────────────────── */
@@ -239,6 +244,11 @@ export function buildMarketReasoning(
   dxy_1m: number | null,
   wti_ytd: number | null,
   gold_ytd: number | null,
+  // Indicateurs pros (optionnels pour rétro-compatibilité)
+  rut_1m?: number | null,
+  move?: number | null,
+  spread_10y_3m?: number | null,
+  copper_gold_1m?: number | null,
 ): MarketReasoning {
   const positive: string[] = [];
   const negative: string[] = [];
@@ -269,13 +279,61 @@ export function buildMarketReasoning(
     negative.push(`Or +${gold_ytd.toFixed(0)}% YTD : signal de peur résiduelle`);
   }
 
+  // ── Spread 10Y-3M (signal récession Fed NY) ──
+  if (spread_10y_3m != null) {
+    if (spread_10y_3m < 0) {
+      negative.push(`Courbe inversée (10Y-3M = ${spread_10y_3m.toFixed(2)} pts) : signal historique de récession 12-18 mois (modèle Fed NY)`);
+    } else if (spread_10y_3m > 1.5) {
+      positive.push(`Courbe pentue (10Y-3M = +${spread_10y_3m.toFixed(2)} pts) : conditions de crédit normalisées, pas de signal récession`);
+    }
+  }
+
+  // ── Russell 2000 vs S&P (broad rally vs concentré) ──
+  if (rut_1m != null && sp500_1m != null) {
+    const diff = rut_1m - sp500_1m;
+    if (diff > 2) {
+      positive.push(`Russell 2000 surperforme le S&P de ${diff.toFixed(1)} pts sur 1M : élargissement du rally aux small caps US`);
+    } else if (diff < -3) {
+      negative.push(`Russell 2000 sous-performe le S&P de ${Math.abs(diff).toFixed(1)} pts sur 1M : inquiétude sur l'économie domestique US`);
+    }
+  }
+
+  // ── MOVE index (volatilité obligataire, annonciateur du VIX) ──
+  if (move != null) {
+    if (move > 130) {
+      negative.push(`MOVE à ${move.toFixed(0)} : forte volatilité sur les taux, stress qui précède souvent celui des actions`);
+    } else if (move < 80) {
+      positive.push(`MOVE à ${move.toFixed(0)} : marché obligataire calme, pas de stress en amont`);
+    }
+  }
+
+  // ── Cuivre/Or ratio (cyclique vs défensif) ──
+  if (copper_gold_1m != null) {
+    if (copper_gold_1m > 3) {
+      positive.push(`Cuivre/Or +${copper_gold_1m.toFixed(1)}% sur 1M : conviction croissance retrouvée (rotation cyclique)`);
+    } else if (copper_gold_1m < -3) {
+      negative.push(`Cuivre/Or ${copper_gold_1m.toFixed(1)}% sur 1M : rotation défensive vers les valeurs refuge`);
+    }
+  }
+
+  // Conclusion factuelle : on nomme le signal dominant + le contrepoids principal s'il existe
   let conclusion = "";
   if (positive.length > negative.length + 1) {
-    conclusion = `${positive.length} signaux favorables vs ${negative.length} défavorables.`;
+    conclusion = positive[0];
+    if (negative.length > 0) conclusion += `. Bémol : ${negative[0]}`;
+    conclusion += ".";
   } else if (negative.length > positive.length + 1) {
-    conclusion = `${negative.length} signaux défavorables vs ${positive.length} favorables.`;
+    conclusion = negative[0];
+    if (positive.length > 0) conclusion += `. Mais : ${positive[0]}`;
+    conclusion += ".";
+  } else if (positive.length > 0 && negative.length > 0) {
+    conclusion = `${positive[0]}. Cependant : ${negative[0]}.`;
+  } else if (positive.length > 0) {
+    conclusion = `${positive[0]}.`;
+  } else if (negative.length > 0) {
+    conclusion = `${negative[0]}.`;
   } else {
-    conclusion = `Signaux mitigés (${positive.length} positifs, ${negative.length} négatifs).`;
+    conclusion = "Données macro insuffisantes pour conclure.";
   }
   return { positive, negative, conclusion };
 }

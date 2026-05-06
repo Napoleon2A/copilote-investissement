@@ -526,10 +526,21 @@ export interface CompanyNarrative {
   catalyst_watch: string;
 }
 
+export interface CompanyIdentity {
+  long_business_summary?: string | null;
+  industry?: string | null;
+  country?: string | null;
+  employees?: number | null;
+  website?: string | null;
+  city?: string | null;
+  exchange?: string | null;
+}
+
 export interface CompanyBrief {
   ticker: string;
   name: string;
   sector?: string;
+  identity?: CompanyIdentity;
   current_price?: number;
   change_1d?: number;
   change_1m?: number;

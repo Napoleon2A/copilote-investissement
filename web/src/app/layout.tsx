@@ -3,7 +3,6 @@ import "./globals.css";
 import { TopBar } from "@/components/layout/TopBar";
 import { NavBar } from "@/components/layout/NavBar";
 import { ChatWidget } from "@/components/chat/ChatWidget";
-import { BackgroundLines } from "@/components/ui/BackgroundLines";
 import { ToastProvider } from "@/components/ui/Toast";
 
 export const metadata: Metadata = {
@@ -47,7 +46,6 @@ export default function RootLayout({
             <TopBar />
             <NavBar />
             <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-6 relative">
-              <BackgroundLines />
               <div className="relative z-10">{children}</div>
             </main>
           </div>

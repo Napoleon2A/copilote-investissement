@@ -2,8 +2,8 @@
  * Page fiche entreprise — /company/[ticker]
  */
 import type { Metadata } from "next";
-import { getCompanyBrief, getCompanyScores, getCompetitors } from "@/lib/api";
-import type { CompetitorEntry } from "@/lib/api";
+import { getCompanyBrief, getCompanyScores, getCompetitors, getAnalysis } from "@/lib/api";
+import type { CompetitorEntry, DeepAnalysis } from "@/lib/api";
 import { ChangeCell } from "@/components/ui/ChangeCell";
 import { ScoreBadge } from "@/components/ui/ScoreBadge";
 import Link from "next/link";
@@ -33,17 +33,22 @@ export default async function CompanyPage({ params }: Props) {
   let brief = null;
   let scores = null;
   let competitors: CompetitorEntry[] = [];
+  let deepAnalysis: DeepAnalysis | null = null;
 
   try {
     [brief, scores] = await Promise.all([
       getCompanyBrief(upperTicker),
       getCompanyScores(upperTicker),
     ]);
-    // Fetch concurrents en parallèle (non-bloquant)
+    // Fetch concurrents + analyse approfondie en parallèle (non-bloquants)
     try {
       const compData = await getCompetitors(upperTicker);
       competitors = compData.competitors;
     } catch { /* pas de concurrents trouvés — pas grave */ }
+    try {
+      const r = await getAnalysis(upperTicker);
+      deepAnalysis = r?.analysis ?? null;
+    } catch { /* pas d'analyse approfondie disponible — c'est OK */ }
   } catch {
     return (
       <div className="max-w-2xl mx-auto">
@@ -80,6 +85,14 @@ export default async function CompanyPage({ params }: Props) {
           → {brief.action_label}
         </div>
       </div>
+
+      {/* Activité — description enrichie de la société */}
+      <ActivityBlock
+        ticker={upperTicker}
+        identity={brief.identity}
+        sector={brief.sector}
+        analysis={deepAnalysis}
+      />
 
       {/* Prix + variations */}
       <div className="rounded-lg border border-edge bg-surface p-4 shadow-sm">
@@ -329,4 +342,109 @@ function MetricValue({ v, decimals = 2, suffix = "", pct = false, big = false }:
   }
 
   return <span className="text-sm font-mono text-primary font-medium">{display}</span>;
+}
+
+// ── Bloc "Activité" : combine identité yfinance + analyse approfondie si dispo ──
+
+interface Identity {
+  long_business_summary?: string | null;
+  industry?: string | null;
+  country?: string | null;
+  employees?: number | null;
+  website?: string | null;
+  city?: string | null;
+  exchange?: string | null;
+}
+
+function ActivityBlock({
+  ticker, identity, sector, analysis,
+}: {
+  ticker: string;
+  identity: Identity | undefined | null;
+  sector: string | null | undefined;
+  analysis: DeepAnalysis | null;
+}) {
+  const id: Identity = identity ?? {};
+  const hasDeep = !!(analysis && (analysis.business_summary || analysis.competitive_moat || analysis.value_chain));
+
+  return (
+    <div className="rounded-lg border border-edge bg-surface p-4 shadow-sm space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h3 className="text-[10px] font-semibold text-muted uppercase tracking-widest">Activité</h3>
+        <div className="flex items-center gap-3 text-[0.7rem] text-secondary">
+          {sector && <span>{sector}</span>}
+          {id.industry && <span className="text-muted">·</span>}
+          {id.industry && <span>{id.industry}</span>}
+          {id.country && <span className="text-muted">·</span>}
+          {id.country && <span>{id.country}</span>}
+          {id.employees ? <span className="text-muted">·</span> : null}
+          {id.employees ? <span>{id.employees.toLocaleString("fr-FR")} emp.</span> : null}
+          {id.website && (
+            <>
+              <span className="text-muted">·</span>
+              <a href={id.website} target="_blank" rel="noopener noreferrer"
+                className="text-navy dark:text-accent hover:underline">site ↗</a>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* PRIORITÉ 1 : analyse approfondie si elle existe */}
+      {hasDeep ? (
+        <div className="space-y-3">
+          {analysis!.business_summary && (
+            <Section title="Le business" text={analysis!.business_summary} />
+          )}
+          {analysis!.competitive_moat && (
+            <Section title="Avantage concurrentiel" text={analysis!.competitive_moat} />
+          )}
+          {analysis!.value_chain && (
+            <Section title="Chaîne de valeur" text={analysis!.value_chain} />
+          )}
+          <p className="text-[0.625rem] text-muted italic pt-1 border-t border-edge/30">
+            Source : analyse approfondie · {analysis!.generated_at?.slice(0, 10) ?? ""} ·{" "}
+            <Link href="/analyst" className="text-navy dark:text-accent hover:underline">mettre à jour →</Link>
+          </p>
+        </div>
+      ) : (
+        // PRIORITÉ 2 : description yfinance brute + invitation à l'analyse
+        <div className="space-y-3">
+          {id.long_business_summary ? (
+            <details className="text-xs text-secondary leading-relaxed">
+              <summary className="cursor-pointer text-primary font-medium select-none mb-1">
+                Description (yfinance, EN — clique pour déplier)
+              </summary>
+              <p className="mt-2 whitespace-pre-line">{id.long_business_summary}</p>
+              <a
+                href={`https://www.deepl.com/translator#en/fr/${encodeURIComponent(id.long_business_summary.slice(0, 1500))}`}
+                target="_blank" rel="noopener noreferrer"
+                className="text-[0.7rem] text-navy dark:text-accent hover:underline mt-2 inline-block"
+              >
+                Traduire avec DeepL ↗
+              </a>
+            </details>
+          ) : (
+            <p className="text-xs text-muted italic">Description non disponible.</p>
+          )}
+          <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2.5">
+            <p className="text-[0.7rem] text-secondary leading-relaxed">
+              <span className="font-medium text-primary">Aucune analyse approfondie pour {ticker}.</span>{" "}
+              Va sur la <Link href={`/analyst?ticker=${ticker}`} className="text-navy dark:text-accent font-medium hover:underline">page Analyste →</Link> pour générer un prompt structuré
+              à coller dans claude.ai (gratuit). Au retour, copie la réponse ; les sections « Le business », « Avantage concurrentiel »
+              et « Chaîne de valeur » s'afficheront ici.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Section({ title, text }: { title: string; text: string }) {
+  return (
+    <div>
+      <h4 className="text-xs font-semibold text-navy dark:text-accent mb-1">{title}</h4>
+      <p className="text-xs text-secondary leading-relaxed whitespace-pre-line">{text}</p>
+    </div>
+  );
 }

@@ -18,11 +18,12 @@ import logging
 
 from app.database import init_db
 from app.config import get_settings
-from app.routers import companies, watchlist, portfolio, ideas, brief, scanner, chat, earnings, alerts, risk, analyst, news, finnhub_data
+from app.routers import companies, watchlist, portfolio, ideas, brief, scanner, chat, earnings, alerts, risk, analyst, news, finnhub_data, sec_edgar_router
 from app.services.scanner import trigger_background_scan
 from app.services.rss_aggregator import trigger_background_refresh as trigger_news_refresh
 from app.services.finnhub_calendar import trigger_background_refresh as trigger_finnhub_refresh, is_configured as finnhub_configured
 from app.services.finnhub_economic import trigger_background_refresh as trigger_finnhub_eco_refresh
+from app.services.sec_edgar import trigger_background_refresh as trigger_sec_refresh
 
 logging.basicConfig(
     level=logging.INFO,
@@ -49,6 +50,8 @@ async def lifespan(app: FastAPI):
         logger.info("Finnhub calendars (earnings + economic): premiers fetches lancés.")
     else:
         logger.info("Finnhub: clé non configurée, fallback sur sources locales.")
+    trigger_sec_refresh()
+    logger.info("SEC EDGAR: warm-up des 13-F des super-investisseurs lancé.")
     yield
     logger.info("Arrêt de l'API.")
 
@@ -100,6 +103,7 @@ _CACHEABLE_PREFIXES = (
     "/brief", "/news/", "/earnings", "/alerts", "/watchlists",
     "/portfolio", "/ideas", "/scanner/opportunities",
     "/companies/",  # historique, fundamentals, etc.
+    "/sec/",        # whale watching 13-F
 )
 
 @app.middleware("http")
@@ -124,6 +128,7 @@ app.include_router(risk.router)
 app.include_router(analyst.router)
 app.include_router(news.router)
 app.include_router(finnhub_data.router)
+app.include_router(sec_edgar_router.router)
 
 
 @app.get("/", tags=["health"])

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { TickerBadge } from "@/components/ui/TickerBadge";
 import { getTickerMeta } from "@/lib/tickerMeta";
 import { ListSkeleton, BADGE_COLORS } from "./shared";
-import { IcEarnings, IcPortfolio, IcWatchlist, IcAlerts } from "./icons";
+import { IcEarnings, IcPortfolio, IcWatchlist, IcAlerts, IcAnalystVue } from "./icons";
 
 /* ════════════════════════════════════════════════════════════════════════
  * Compact card wrapper — utilisé par les 4 cards stats à droite
@@ -40,6 +40,75 @@ function CompactHeader({ Icon, label, badge, badgeColor = "default" }: {
         </span>
       )}
     </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Vue analystes — synthèse buy/hold/sell par ticker (compact)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+interface RecoEntry {
+  ticker: string;
+  recommendations: Array<{ strongBuy: number; buy: number; hold: number; sell: number; strongSell: number }>;
+}
+
+export function RichAnalystCard({ recos }: { recos: Record<string, RecoEntry> | null | undefined }) {
+  if (recos === undefined || recos === null) {
+    return (
+      <CompactCard href="/analyst">
+        <CompactHeader Icon={IcAnalystVue} label="Vue analystes" badge="..." />
+        <ListSkeleton rows={3} />
+      </CompactCard>
+    );
+  }
+
+  // Aggrégation : pour chaque ticker, calcul du % buy (mois le plus récent)
+  const rows = Object.values(recos)
+    .map((d) => {
+      const r = d.recommendations?.[0];
+      if (!r) return null;
+      const total = r.strongBuy + r.buy + r.hold + r.sell + r.strongSell;
+      if (total === 0) return null;
+      const buyPct = (r.strongBuy + r.buy) / total;
+      const sellPct = (r.sell + r.strongSell) / total;
+      const sentiment: "buy" | "hold" | "sell" =
+        buyPct > 0.6 ? "buy" : sellPct > 0.4 ? "sell" : buyPct > sellPct ? "buy" : "hold";
+      return { ticker: d.ticker, total, buyPct, sentiment };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+    .sort((a, b) => b.buyPct - a.buyPct);
+
+  return (
+    <CompactCard href="/analyst">
+      <CompactHeader Icon={IcAnalystVue} label="Vue analystes" badge={rows.length > 0 ? `${rows.length} sociétés` : "—"} />
+      {rows.length > 0 ? (
+        <ul className="space-y-1.5 flex-1">
+          {rows.slice(0, 5).map((r) => (
+            <li key={r.ticker} className="flex items-center gap-2 py-1 border-b border-edge/30 last:border-0">
+              <TickerBadge ticker={r.ticker} size="xs" showName={false} />
+              <span className="font-mono font-bold text-[0.7rem] text-navy dark:text-accent">{r.ticker}</span>
+              <span className="flex-1 h-1.5 rounded bg-surface-alt overflow-hidden">
+                <span className={`block h-full ${
+                  r.sentiment === "buy" ? "bg-emerald-500"
+                  : r.sentiment === "sell" ? "bg-red-500"
+                  : "bg-amber-500"
+                }`} style={{ width: `${Math.round(r.buyPct * 100)}%` }} />
+              </span>
+              <span className={`text-[0.625rem] font-bold whitespace-nowrap ${
+                r.sentiment === "buy" ? "text-emerald-700 dark:text-emerald-400"
+                : r.sentiment === "sell" ? "text-red-700 dark:text-red-400"
+                : "text-amber-700 dark:text-amber-400"
+              }`}>
+                {Math.round(r.buyPct * 100)}% Buy
+              </span>
+              <span className="text-[0.55rem] text-muted whitespace-nowrap">{r.total}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-muted italic">Aucune recommandation disponible.</p>
+      )}
+    </CompactCard>
   );
 }
 

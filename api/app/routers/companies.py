@@ -25,6 +25,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/companies", tags=["companies"])
 
 
+@router.get("/holders-batch")
+async def get_holders_batch(tickers: str):
+    """
+    Top détenteurs institutionnels pour un batch de tickers (séparés par virgule).
+    Doit être déclaré avant /{ticker} sinon FastAPI matche `holders-batch` comme ticker.
+    """
+    tickers_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    if not tickers_list:
+        return {"data": {}, "count": 0}
+    out: dict[str, dict] = {}
+    for t in tickers_list[:25]:
+        try:
+            out[t] = data_service.get_institutional_holders(t, top_n=8)
+        except Exception:
+            out[t] = {"ticker": t, "report_date": None, "pct_insiders": None, "pct_institutions": None, "holders": []}
+    return {"data": out, "count": len(out)}
+
+
 @router.get("/search")
 async def search_company(q: str, session: AsyncSession = Depends(get_session)):
     """
@@ -192,6 +210,52 @@ async def get_company_brief(ticker: str):
     ticker = ticker.upper()
     brief = brief_service.generate_company_brief(ticker)
     return brief
+
+
+@router.get("/{ticker}/officers")
+async def get_officers(ticker: str):
+    """
+    Top management de la société (CEO, CFO, COO, etc.) via yfinance companyOfficers.
+
+    Retourne aussi des slots vides 'x_handle' / 'linkedin_handle' que le frontend
+    pourra utiliser pour stocker manuellement les handles (à connecter plus tard
+    à un feed Twitter/X et LinkedIn changes).
+    """
+    ticker = ticker.upper()
+    info = data_service.get_company_info(ticker)
+    if not info:
+        raise HTTPException(404, f"Société '{ticker}' introuvable")
+
+    raw = info.get("companyOfficers", []) or []
+    officers = []
+    for o in raw[:8]:
+        officers.append({
+            "name": o.get("name"),
+            "title": o.get("title"),
+            "age": o.get("age"),
+            "total_pay": o.get("totalPay"),
+            "year_born": o.get("yearBorn"),
+            "fiscal_year": o.get("fiscalYear"),
+            # Placeholders pour futur enrichissement manuel
+            "x_handle": None,
+            "linkedin_url": None,
+        })
+
+    return {
+        "ticker": ticker,
+        "count": len(officers),
+        "officers": officers,
+    }
+
+
+@router.get("/{ticker}/holders")
+async def get_holders(ticker: str, top_n: int = 10):
+    """
+    Top détenteurs institutionnels via yfinance (BlackRock, Vanguard, ...).
+    Inclut le pctChange Q/Q (signal d'accumulation/désinvestissement).
+    """
+    ticker = ticker.upper()
+    return data_service.get_institutional_holders(ticker, top_n=min(top_n, 25))
 
 
 @router.get("/{ticker}/news")

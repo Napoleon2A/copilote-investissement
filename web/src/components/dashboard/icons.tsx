@@ -10,7 +10,7 @@ import {
   Wallet, Eye, CalendarDays, Lightbulb, Bot, Sparkles, BookOpen,
   RotateCw, TrendingUp, DollarSign, Factory, Building2,
   AlertOctagon, AlertTriangle, CheckCircle2, ArrowUp, ArrowDown,
-  Crosshair, Briefcase, Earth, Coins, Fuel,
+  Crosshair, Briefcase, Earth, Coins, Fuel, Users, UserCog,
 } from "lucide-react";
 
 interface IconProps {
@@ -31,6 +31,8 @@ export const IcWatchlist  = (p: IconProps) => <Eye          {...p} />; // Watchl
 export const IcAlerts     = (p: IconProps) => <Zap          {...p} />; // Alertes
 export const IcIdea       = (p: IconProps) => <Lightbulb    {...p} />; // Recherche / Idée
 export const IcAnalyst    = (p: IconProps) => <Bot          {...p} />; // Analyste IA
+export const IcAnalystVue = (p: IconProps) => <Users        {...p} />; // Vue analystes (recos buy/hold/sell)
+export const IcInsideMgmt = (p: IconProps) => <UserCog      {...p} />; // Inside management
 
 /* ── News categories ────────────────────────────────────────────────── */
 export const IcMacro        = (p: IconProps) => <Landmark   {...p} />; // Banques centrales

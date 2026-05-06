@@ -44,7 +44,7 @@ export function MacroNewsPanel({ data }: MacroNewsPanelProps) {
       )}
 
       <p className="text-[0.7rem] text-muted mt-3 pt-2 border-t border-edge/40 flex-shrink-0">
-        Sources gratuites : Les Échos · Boursorama · Le Monde · CNBC · MarketWatch · Reuters · BBC · La Tribune · Le Figaro · Yahoo · Investing.com
+        Sources premium : Les Échos · CNBC Economy/World · Reuters · MarketWatch · Investing.com Eco/Forex
       </p>
     </div>
   );

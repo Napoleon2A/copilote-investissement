@@ -7,12 +7,13 @@ import { MarketContextPanel } from "@/components/dashboard/MarketContextPanel";
 import { MacroNewsPanel } from "@/components/dashboard/MacroNewsPanel";
 import { LinkedNewsPanel } from "@/components/dashboard/LinkedNewsPanel";
 import {
-  RichEarningsCard, RichPortfolioCard, RichWatchlistCard, RichAlertsCard,
+  RichAnalystCard, RichPortfolioCard, RichWatchlistCard, RichAlertsCard,
 } from "@/components/dashboard/StatCards";
 import { EarningsCalendarPanel } from "@/components/dashboard/EarningsCalendarPanel";
 import { EconomicCalendarPanel } from "@/components/dashboard/EconomicCalendarPanel";
 import { InsiderTradingPanel } from "@/components/dashboard/InsiderTradingPanel";
-import { AnalystRecosPanel } from "@/components/dashboard/AnalystRecosPanel";
+import { WhalePanel } from "@/components/dashboard/WhalePanel";
+import { InsideManagementPanel } from "@/components/dashboard/InsideManagementPanel";
 import { fetchJSON, API } from "@/components/dashboard/shared";
 import type { MarketSnapshot } from "@/lib/macroExplainer";
 
@@ -32,6 +33,7 @@ export default function HomePage() {
   const [linkedNewsRSS, setLinkedNewsRSS] = useState<any>(undefined);
   const [perTickerNews, setPerTickerNews] = useState<any>(undefined);
   const [tickerScores, setTickerScores] = useState<Record<string, any>>({});
+  const [analystRecos, setAnalystRecos] = useState<Record<string, any> | undefined>(undefined);
 
   // Fetch initial — 8 endpoints en parallèle
   useEffect(() => {
@@ -75,10 +77,25 @@ export default function HomePage() {
         }
         setTickerScores(map);
       });
+
+      // Fetch des recommandations analystes pour la stat-card Vue analystes
+      Promise.all(
+        tickersList.map(async (t) => {
+          const data = await fetchJSON<any>(`${API}/finnhub/recommendations/${t}`);
+          return [t, data] as const;
+        })
+      ).then((results) => {
+        const map: Record<string, any> = {};
+        for (const [t, data] of results) {
+          if (data) map[t] = data;
+        }
+        setAnalystRecos(map);
+      });
     } else {
       setLinkedNewsRSS({ count: 0, articles: [] });
       setPerTickerNews({ count: 0, articles: [] });
       setTickerScores({});
+      setAnalystRecos({});
     }
   }, [portfolio, ideas, opps]);
 
@@ -130,9 +147,27 @@ export default function HomePage() {
 
   return (
     <div className="space-y-6 pb-6">
-      <MoonHeader today={today} />
+      {/* Full-bleed : 100vw recentré pour que le header touche les bords malgré la scrollbar */}
+      <div className="relative left-1/2 right-1/2 -mx-[50vw] w-screen">
+        <MoonHeader today={today} />
+      </div>
 
-      <PicksHero picks={topPicks} loading={opps === undefined} scanning={opps?.scanning} />
+      {/* Bandeau de tuiles marché — pleine largeur, lecture rapide en accroche */}
+      <MarketContextPanel
+        ctx={brief?.market_context}
+        marketSummary={brief?.market_summary}
+        loading={brief === undefined}
+      />
+
+      {/* Pick du jour — descendu juste sous le bandeau (côté gauche) ↔ Actualité macro (côté droit) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:h-[460px]">
+        <div className="min-h-0">
+          <PicksHero picks={topPicks} loading={opps === undefined} scanning={opps?.scanning} />
+        </div>
+        <div className="min-h-0">
+          <MacroNewsPanel data={macroNewsRSS} />
+        </div>
+      </div>
 
       {/* Row 1 : Actualité des cibles (50%) ↔ Calendrier earnings (50%) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:h-[520px]">
@@ -154,20 +189,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Row 2 : Comprendre marché ↔ Actualité macro */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:h-[460px]">
-        <div className="min-h-0">
-          <MarketContextPanel
-            ctx={brief?.market_context}
-            marketSummary={brief?.market_summary}
-            loading={brief === undefined}
-          />
-        </div>
-        <div className="min-h-0">
-          <MacroNewsPanel data={macroNewsRSS} />
-        </div>
-      </div>
-
       {/* Row 3 : Calendrier économique (50%) + Insider trading (50%) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <EconomicCalendarPanel />
@@ -177,15 +198,21 @@ export default function HomePage() {
         />
       </div>
 
-      {/* Row 3 bis : Vue analystes (pleine largeur) */}
-      <AnalystRecosPanel
-        portfolioTickers={portfolioTickers}
-        ideasTickers={ideasTickers}
-      />
+      {/* Row 3 bis : Inside management (50%) + Super-investisseurs 13-F (50%) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <InsideManagementPanel
+          portfolioTickers={portfolioTickers}
+          ideasTickers={ideasTickers}
+        />
+        <WhalePanel
+          portfolioTickers={portfolioTickers}
+          ideasTickers={ideasTickers}
+        />
+      </div>
 
       {/* Row 4 : Stats grille 4 cards en pleine largeur */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" style={{ gridAutoRows: "1fr" }}>
-        <RichEarningsCard earnings={earnings} />
+        <RichAnalystCard recos={analystRecos} />
         <RichPortfolioCard portfolio={portfolio} />
         <RichWatchlistCard watchlists={watchlists} />
         <RichAlertsCard alerts={alerts} />

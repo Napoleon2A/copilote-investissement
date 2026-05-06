@@ -696,11 +696,20 @@ def _get_market_summary() -> dict:
         "SP500": "^GSPC",
         "CAC40": "^FCHI",
         "NASDAQ": "^IXIC",
+        "RUT": "^RUT",        # Russell 2000 — small caps US (économie domestique)
         "VIX": "^VIX",
+        "MOVE": "^MOVE",      # Volatilité obligataire (équivalent VIX bonds)
         "US10Y": "^TNX",      # Taux US 10 ans — signal macro clé
+        "US3M": "^IRX",       # T-bill 3M — pour spread courbe (10Y-3M = signal récession Fed NY)
         "DXY": "DX-Y.NYB",    # Dollar index — force du dollar
+        "EUR": "EURUSD=X",    # EUR/USD — devise principale Europe
         "Or": "GC=F",         # Or (futures) — valeur refuge
+        "Cuivre": "HG=F",     # Cuivre (futures) — pour ratio cuivre/or (cyclique vs défensif)
         "WTI": "CL=F",        # Pétrole WTI (futures)
+        "BTC": "BTC-USD",     # Bitcoin — proxy risk-on / liquidité
+        "ITA": "ITA",         # iShares U.S. Aerospace & Defense — secteur défense
+        "SMH": "SMH",         # VanEck Semiconductors — proxy hardware IA
+        "GRID": "GRID",       # First Trust Smart Grid Infrastructure — réseau électrique modernisé / stockage
     }
 
     for name, ticker in indices.items():
@@ -715,6 +724,50 @@ def _get_market_summary() -> dict:
                 }
         except Exception:
             pass  # Indice non disponible → on l'ignore silencieusement
+
+    # ── Indicateurs dérivés : spread courbe + ratio cuivre/or ──────────────
+    # Spread 10Y-3M : indicateur de récession le plus suivi par les pros
+    # (Fed NY l'utilise dans son modèle de probabilité de récession).
+    # < 0 = courbe inversée (signal de récession 12-18 mois historiquement).
+    us10y_p = summary.get("US10Y", {}).get("price")
+    us3m_p  = summary.get("US3M",  {}).get("price")
+    if us10y_p is not None and us3m_p is not None:
+        spread = us10y_p - us3m_p
+        # Approximation du change 1M sur le spread
+        us10y_1m = summary.get("US10Y", {}).get("change_1m")
+        us3m_1m  = summary.get("US3M",  {}).get("change_1m")
+        spread_1m = None
+        if us10y_1m is not None and us3m_1m is not None:
+            # change_1m est un % de variation du yield → on reconstitue les yields il y a 1M
+            try:
+                y10_1m = us10y_p / (1 + us10y_1m / 100)
+                y3m_1m = us3m_p / (1 + us3m_1m / 100)
+                spread_1m = round(spread - (y10_1m - y3m_1m), 2)
+            except Exception:
+                pass
+        summary["SPREAD_10Y_3M"] = {
+            "price": round(spread, 2),
+            "change_1d": None,
+            "change_1m": spread_1m,
+            "change_ytd": None,
+        }
+
+    # Ratio cuivre/or : cyclique / défensif. Monte = conviction croissance.
+    gold_p   = summary.get("Or",     {}).get("price")
+    copper_p = summary.get("Cuivre", {}).get("price")
+    if gold_p and copper_p and gold_p > 0:
+        ratio = copper_p / gold_p * 1000  # ×1000 pour lisibilité
+        copper_1m = summary.get("Cuivre", {}).get("change_1m")
+        gold_1m   = summary.get("Or",     {}).get("change_1m")
+        ratio_1m = None
+        if copper_1m is not None and gold_1m is not None:
+            ratio_1m = round(((1 + copper_1m / 100) / (1 + gold_1m / 100) - 1) * 100, 1)
+        summary["COPPER_GOLD"] = {
+            "price": round(ratio, 2),
+            "change_1d": None,
+            "change_1m": ratio_1m,
+            "change_ytd": None,
+        }
 
     # ── ETFs sectoriels — pour la rotation sectorielle ──────────────────────
     sector_etfs = {
@@ -844,10 +897,22 @@ def generate_company_brief(ticker: str) -> dict:
     else:
         horizon = "à définir"
 
+    # Identité enrichie : description longue + industrie + pays + employés + site
+    identity = {
+        "long_business_summary": info.get("longBusinessSummary"),
+        "industry": info.get("industry"),
+        "country": info.get("country"),
+        "employees": info.get("fullTimeEmployees"),
+        "website": info.get("website"),
+        "city": info.get("city"),
+        "exchange": info.get("exchange"),
+    }
+
     return {
         "ticker": ticker.upper(),
         "name": info.get("longName") or info.get("shortName", ticker),
         "sector": info.get("sector"),
+        "identity": identity,
         "generated_at": datetime.utcnow().isoformat(),
         "current_price": changes.get("current_price"),
         "change_1d": changes.get("change_1d"),

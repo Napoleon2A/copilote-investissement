@@ -528,6 +528,81 @@ def get_deep_profile(ticker: str) -> dict:
     return result
 
 
+def get_institutional_holders(ticker: str, top_n: int = 10) -> dict:
+    """
+    Top détenteurs institutionnels via yfinance (BlackRock, Vanguard, etc.).
+    Inclut le pctChange Q/Q quand dispo (signal d'accumulation/désinvestissement).
+
+    Retourne {
+        "ticker": "EOSE",
+        "report_date": "2025-12-31",
+        "pct_insiders": 0.012,   # part des initiés
+        "pct_institutions": 0.525,
+        "holders": [{name, pct_held, shares, value, pct_change_qoq}, ...]
+    }
+    """
+    key = ("institutional_holders", ticker.upper(), top_n)
+    cached = _cache_get(key, 3600)  # 1h : données trimestrielles, peu volatiles
+    if cached is not None:
+        return cached
+
+    result: dict = {
+        "ticker": ticker.upper(),
+        "report_date": None,
+        "pct_insiders": None,
+        "pct_institutions": None,
+        "holders": [],
+    }
+    try:
+        stock = yf.Ticker(ticker)
+
+        # Major holders : pourcentages globaux insiders/institutions
+        try:
+            mh = stock.major_holders
+            if mh is not None and not mh.empty:
+                # Le DataFrame a un index "Breakdown" et une col "Value"
+                vals = mh["Value"].to_dict() if "Value" in mh.columns else {}
+                result["pct_insiders"] = _to_float_safe(vals.get("insidersPercentHeld"))
+                result["pct_institutions"] = _to_float_safe(vals.get("institutionsPercentHeld"))
+        except Exception:
+            pass
+
+        # Top holders détaillés
+        ih = stock.institutional_holders
+        if ih is not None and not ih.empty:
+            for _, row in ih.head(top_n).iterrows():
+                date_reported = row.get("Date Reported")
+                if result["report_date"] is None and date_reported is not None:
+                    try:
+                        result["report_date"] = str(date_reported)[:10]
+                    except Exception:
+                        pass
+                result["holders"].append({
+                    "name": str(row.get("Holder", "")).strip(),
+                    "pct_held": _to_float_safe(row.get("pctHeld")),
+                    "shares": int(row.get("Shares", 0) or 0),
+                    "value": _to_float_safe(row.get("Value")),
+                    "pct_change_qoq": _to_float_safe(row.get("pctChange")),
+                })
+    except Exception as e:
+        logger.debug(f"Holders {ticker} indispo: {e}")
+
+    _cache_set(key, result)
+    return result
+
+
+def _to_float_safe(v) -> Optional[float]:
+    if v is None:
+        return None
+    try:
+        f = float(v)
+        if f != f:  # NaN
+            return None
+        return f
+    except (TypeError, ValueError):
+        return None
+
+
 def search_ticker(query: str) -> list[dict]:
     """
     Recherche de tickers par nom ou symbole.

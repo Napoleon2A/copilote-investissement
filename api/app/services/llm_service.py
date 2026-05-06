@@ -15,7 +15,15 @@ Règles strictes :
 import logging
 from datetime import datetime, timezone
 
-import anthropic
+# Import optionnel : si le package n'est pas installé, on continue à charger
+# le module. Seules les fonctions qui appellent Claude API échoueront avec
+# un message clair. Les autres (budget tracker, logs, get_budget_status)
+# restent utilisables — important car elles servent au flux gratuit copier-coller.
+try:
+    import anthropic
+except ImportError:
+    anthropic = None  # type: ignore[assignment]
+
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -153,6 +161,13 @@ async def analyze_with_claude(
         AnalysisError: si l'appel API échoue (réseau, timeout, erreur Anthropic).
     """
     settings = get_settings()
+
+    # --- Vérification que le SDK est dispo ---
+    if anthropic is None:
+        raise RuntimeError(
+            "Le SDK anthropic n'est pas installé. "
+            "Installe-le avec : pip install anthropic"
+        )
 
     # --- Vérification clé API ---
     if not settings.anthropic_api_key:

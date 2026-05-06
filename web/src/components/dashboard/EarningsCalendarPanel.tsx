@@ -17,13 +17,9 @@ type FilterMode = "all" | "mine" | "today" | "week";
 export function EarningsCalendarPanel({ earnings, portfolioTickers, ideasTickers }: EarningsCalendarPanelProps) {
   const [filter, setFilter] = useState<FilterMode>("all");
 
-  if (earnings === undefined) {
-    return <div className="card-premium card-aura relative p-5 h-full animate-pulse" />;
-  }
-
+  // ⚠ Tous les hooks doivent être appelés AVANT tout return early (Rules of Hooks)
   const allEarnings: any[] = earnings?.earnings ?? [];
 
-  // Annoter chaque earning avec son rôle (position / idée / autre)
   const annotated = useMemo(() => {
     return allEarnings.map((e) => {
       const t = e.ticker?.toUpperCase();
@@ -36,7 +32,6 @@ export function EarningsCalendarPanel({ earnings, portfolioTickers, ideasTickers
     });
   }, [allEarnings, portfolioTickers, ideasTickers]);
 
-  // Filtrage
   const filtered = useMemo(() => {
     if (filter === "mine")  return annotated.filter(e => e.isMine);
     if (filter === "today") return annotated.filter(e => e.days_until === 0);
@@ -44,7 +39,6 @@ export function EarningsCalendarPanel({ earnings, portfolioTickers, ideasTickers
     return annotated;
   }, [annotated, filter]);
 
-  // Counts
   const counts = useMemo(() => ({
     all:   annotated.length,
     mine:  annotated.filter(e => e.isMine).length,
@@ -52,7 +46,6 @@ export function EarningsCalendarPanel({ earnings, portfolioTickers, ideasTickers
     week:  annotated.filter(e => e.days_until <= 7).length,
   }), [annotated]);
 
-  // Groupement par date
   const grouped = useMemo(() => {
     const groups: Record<string, any[]> = {};
     for (const e of filtered) {
@@ -66,6 +59,11 @@ export function EarningsCalendarPanel({ earnings, portfolioTickers, ideasTickers
       return da - db;
     });
   }, [filtered]);
+
+  // Loading state — APRÈS les hooks
+  if (earnings === undefined) {
+    return <div className="card-premium card-aura relative p-5 h-full animate-pulse" />;
+  }
 
   return (
     <div className="card-premium card-aura relative p-5 h-full flex flex-col">

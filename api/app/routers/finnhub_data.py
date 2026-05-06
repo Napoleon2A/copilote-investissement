@@ -18,15 +18,29 @@ router = APIRouter(prefix="/finnhub", tags=["finnhub"])
 @router.get("/economic-calendar")
 async def economic_calendar(
     max_days: int = Query(default=15, ge=1, le=60),
+    lookback_days: int = Query(default=7, ge=0, le=30),
     only_high: bool = Query(default=True),
     countries: Optional[str] = Query(default=None, description="ISO codes séparés par virgule (ex: US,EU,FR)"),
 ):
-    """Events macro à venir (Fed meetings, CPI, NFP, GDP, etc.)."""
+    """
+    Events macro : passés (avec actual + interprétation) + à venir (consensus).
+    `lookback_days` : nb de jours d'events passés à inclure.
+    """
     countries_list = [c.strip().upper() for c in countries.split(",")] if countries else None
-    events = finnhub_economic.get_cached_events(max_days=max_days, only_high=only_high, countries=countries_list)
+    events = finnhub_economic.get_cached_events(
+        max_days=max_days,
+        lookback_days=lookback_days,
+        only_high=only_high,
+        countries=countries_list,
+    )
+    # Annoter chaque event passé d'une phrase d'interprétation
+    for e in events:
+        if e.get("is_past"):
+            e["interpretation"] = finnhub_economic.interpret_economic_event(e)
     return {
         "count": len(events),
         "max_days": max_days,
+        "lookback_days": lookback_days,
         "only_high": only_high,
         "countries": countries_list,
         "events": events,

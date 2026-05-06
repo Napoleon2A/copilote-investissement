@@ -3,9 +3,9 @@
  * Vue tableau avec prix, variations et scores pour tous les tickers suivis.
  */
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { getWatchlists, getWatchlistSnapshot, createWatchlist, addToWatchlist, removeFromWatchlist } from "@/lib/api";
+import { getWatchlists, getWatchlistSnapshot, createWatchlist, addToWatchlist, removeFromWatchlist, createAlert } from "@/lib/api";
 import type { Watchlist, WatchlistSnapshotItem } from "@/lib/api";
 import { ChangeCell } from "@/components/ui/ChangeCell";
 import { ScoreBadge } from "@/components/ui/ScoreBadge";
@@ -177,15 +177,117 @@ export default function WatchlistPage() {
                       : <span className="text-muted">—</span>}
                   </td>
                   <td className="px-4 py-2.5">
-                    <button onClick={() => handleRemove(item.ticker)}
-                      className="text-xs text-muted hover:text-red-700 transition-colors">
-                      ×
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <QuickAlertButton ticker={item.ticker} currentPrice={item.price ?? null} onDone={(msg) => toast(msg, "success")} />
+                      <button onClick={() => handleRemove(item.ticker)}
+                        title="Retirer de la watchlist"
+                        className="text-xs text-muted hover:text-red-700 transition-colors">
+                        ×
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Quick "+ alerte" depuis la watchlist ───────────────────────────────
+type AlertType = "price_above" | "price_below" | "change_pct" | "earnings";
+
+function QuickAlertButton({ ticker, currentPrice, onDone }: {
+  ticker: string;
+  currentPrice: number | null;
+  onDone: (msg: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [type, setType] = useState<AlertType>("price_below");
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Pré-remplir une valeur sensée selon le type quand le popover s'ouvre
+  useEffect(() => {
+    if (!open) return;
+    if (type === "price_below" && currentPrice) setValue((currentPrice * 0.95).toFixed(2));
+    else if (type === "price_above" && currentPrice) setValue((currentPrice * 1.05).toFixed(2));
+    else if (type === "change_pct") setValue("5");
+    else if (type === "earnings") setValue("7");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, type]);
+
+  // Click outside pour fermer
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const submit = async () => {
+    const num = parseFloat(value);
+    if (Number.isNaN(num)) return;
+    setBusy(true);
+    try {
+      await createAlert({ ticker, type, condition_value: num });
+      setOpen(false);
+      onDone(`Alerte créée sur ${ticker}`);
+    } catch (err) {
+      onDone(err instanceof Error ? err.message : "Erreur création alerte");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        title="Créer une alerte sur ce ticker"
+        className="text-xs text-navy hover:text-accent transition-colors px-1.5 py-0.5 rounded border border-edge hover:border-navy"
+      >
+        + alerte
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-50 w-64 rounded-lg border border-edge bg-surface shadow-xl p-3 text-left">
+          <p className="text-[0.65rem] font-bold uppercase tracking-wider text-muted mb-2">Alerte sur {ticker}</p>
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value as AlertType)}
+            className="w-full rounded border border-edge bg-bg px-2 py-1 text-xs text-primary mb-2"
+          >
+            <option value="price_below">Prix descend sous…</option>
+            <option value="price_above">Prix monte au-dessus de…</option>
+            <option value="change_pct">Variation 1J ≥ ± X%</option>
+            <option value="earnings">Earnings dans ≤ X jours</option>
+          </select>
+          <input
+            type="number"
+            step="0.01"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={type === "earnings" ? "7" : type === "change_pct" ? "5" : "prix"}
+            className="w-full rounded border border-edge bg-bg px-2 py-1 text-xs text-primary mb-2"
+          />
+          {currentPrice && (type === "price_below" || type === "price_above") && (
+            <p className="text-[0.625rem] text-muted mb-2">Prix actuel : {currentPrice.toFixed(2)}</p>
+          )}
+          <div className="flex gap-2">
+            <button onClick={submit} disabled={busy || !value}
+              className="flex-1 rounded bg-navy text-white text-xs px-2 py-1 hover:bg-navy-hover disabled:opacity-50">
+              {busy ? "…" : "Créer"}
+            </button>
+            <button onClick={() => setOpen(false)}
+              className="rounded border border-edge text-xs px-2 py-1 text-secondary hover:bg-surface-alt">
+              Annuler
+            </button>
+          </div>
         </div>
       )}
     </div>

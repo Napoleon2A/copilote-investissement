@@ -10,7 +10,7 @@ interface MoonHeaderProps {
 
 export function MoonHeader({ today }: MoonHeaderProps) {
   return (
-    <div className="relative h-[160px] sm:h-[180px] rounded-2xl overflow-hidden shadow-md"
+    <div className="relative h-[160px] sm:h-[180px] overflow-hidden shadow-md"
       style={{
         background:
           "radial-gradient(ellipse at center, rgb(22, 38, 62) 0%, rgb(11, 25, 41) 70%, rgb(8, 18, 30) 100%)",
