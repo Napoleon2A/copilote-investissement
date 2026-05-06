@@ -65,3 +65,7 @@ logs/
 dist/
 build/
 .claude/
+
+# Caches disque (regenerés au runtime)
+api/data/cache/*.pkl
+
