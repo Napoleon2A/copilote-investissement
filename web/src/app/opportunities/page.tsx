@@ -18,10 +18,12 @@ async function fetchJSON<T>(url: string): Promise<T | null> {
 
 export default function OpportunitiesPage() {
   const [opps, setOpps] = useState<any>(undefined);
+  const [signals, setSignals] = useState<Record<string, any>>({});
   const [refreshing, setRefreshing] = useState(false);
 
   const load = async () => {
     setOpps(undefined);
+    setSignals({});
     const d = await fetchJSON<any>(`${API}/scanner/opportunities?max_results=15`);
     setOpps(d);
   };
@@ -38,6 +40,15 @@ export default function OpportunitiesPage() {
   useEffect(() => { load(); }, []);
 
   const list: any[] = opps?.opportunities ?? [];
+
+  // Enrichissement signaux (ETF, smart-money, insider) — chargement en
+  // arrière-plan, jamais bloquant pour l'affichage de la liste.
+  useEffect(() => {
+    if (list.length === 0) return;
+    const tickers = list.map((o: any) => o.ticker).join(",");
+    fetchJSON<Record<string, any>>(`${API}/discovery/signals?tickers=${encodeURIComponent(tickers)}`)
+      .then(d => { if (d) setSignals(d); });
+  }, [opps]);
 
   return (
     <div className="space-y-5 pb-6">
@@ -86,7 +97,9 @@ export default function OpportunitiesPage() {
       {/* Liste des opportunités */}
       {!opps?.scanning && list.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {list.map((opp, i) => <OpportunityCard key={opp.ticker} opp={opp} rank={i + 1} />)}
+          {list.map((opp, i) => (
+            <OpportunityCard key={opp.ticker} opp={opp} rank={i + 1} signals={signals[opp.ticker]} />
+          ))}
         </div>
       )}
 
@@ -110,7 +123,7 @@ export default function OpportunitiesPage() {
   );
 }
 
-function OpportunityCard({ opp, rank }: { opp: any; rank: number }) {
+function OpportunityCard({ opp, rank, signals }: { opp: any; rank: number; signals?: any }) {
   const meta = getTickerMeta(opp.ticker);
   const sector = meta.sector;
   const sectorStyle = sector ? SECTOR_COLORS[sector] : null;
@@ -168,6 +181,9 @@ function OpportunityCard({ opp, rank }: { opp: any; rank: number }) {
           </ul>
         )}
 
+        {/* Signaux complémentaires (informatifs, non bloquants) */}
+        <SignalBadges signals={signals} />
+
         {/* Bottom : change + sparkline + upside */}
         <div className="flex items-center justify-between gap-2 pt-3 border-t border-edge/40">
           <div>
@@ -189,6 +205,104 @@ function OpportunityCard({ opp, rank }: { opp: any; rank: number }) {
       </div>
     </Link>
   );
+}
+
+/**
+ * Badges informatifs : ETF thématiques, smart money 13-F, insider trading.
+ * Ne masquent JAMAIS la card si absents — c'est un complément, pas un filtre.
+ */
+function SignalBadges({ signals }: { signals?: any }) {
+  if (!signals) return null;
+
+  const badges: Array<{ label: string; tooltip: string; tone: "info" | "bull" | "bear" | "warn" }> = [];
+
+  // ETF thématique
+  if (signals.etf?.present) {
+    badges.push({
+      label: `ETF×${signals.etf.etf_count}`,
+      tooltip: `Présent dans : ${(signals.etf.etfs || []).join(", ")}`,
+      tone: "info",
+    });
+  }
+
+  // Smart money — initiated en priorité (signal le plus fort)
+  if (signals.smart_money?.initiated > 0) {
+    const initFunds = (signals.smart_money.highlights || [])
+      .filter((h: any) => h.status === "initiated")
+      .map((h: any) => h.fund_name)
+      .join(", ");
+    badges.push({
+      label: `${signals.smart_money.initiated} fonds initiated`,
+      tooltip: `Vient d'ouvrir une position : ${initFunds || "fonds high-conviction"}`,
+      tone: "bull",
+    });
+  } else if (signals.smart_money?.concentrated_holders > 0) {
+    const top = signals.smart_money.highlights?.[0];
+    const tooltip = top
+      ? `${top.fund_name} ${top.position_pct?.toFixed(1)}% du book${top.delta_pct != null ? ` (Δ ${top.delta_pct >= 0 ? "+" : ""}${top.delta_pct.toFixed(0)}%)` : ""}`
+      : "";
+    badges.push({
+      label: `${signals.smart_money.concentrated_holders} fonds`,
+      tooltip,
+      tone: "info",
+    });
+  }
+
+  // Insider top management — net signé
+  if (signals.insider?.present) {
+    const net = signals.insider.net_value_usd ?? 0;
+    if (net > 100_000) {
+      badges.push({
+        label: `Insider +$${formatM(net)}`,
+        tooltip: `${signals.insider.buy_count} achat(s), ${signals.insider.sell_count} vente(s) sur 90j`,
+        tone: "bull",
+      });
+    } else if (net < -100_000) {
+      badges.push({
+        label: `Insider -$${formatM(Math.abs(net))}`,
+        tooltip: `${signals.insider.buy_count} achat(s), ${signals.insider.sell_count} vente(s) sur 90j`,
+        tone: "bear",
+      });
+    }
+  }
+
+  // Politique : signal stub pour l'instant — affiché uniquement si source branchée
+  if (signals.political?.source_available && signals.political?.count > 0) {
+    badges.push({
+      label: `${signals.political.count} trade pol.`,
+      tooltip: (signals.political.highlights || []).map((h: any) => `${h.name}: ${h.transaction}`).join(" | "),
+      tone: "warn",
+    });
+  }
+
+  if (badges.length === 0) return null;
+
+  const toneClass: Record<string, string> = {
+    info: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30",
+    bull: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
+    bear: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30",
+    warn: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30",
+  };
+
+  return (
+    <div className="flex flex-wrap gap-1 mb-3">
+      {badges.map((b, i) => (
+        <span
+          key={i}
+          title={b.tooltip}
+          className={`text-[0.625rem] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${toneClass[b.tone]}`}
+        >
+          {b.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function formatM(v: number): string {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(0)}k`;
+  return v.toFixed(0);
 }
 
 function ScoreGauge({ value, colorClass, size = 48 }: { value: number; colorClass: string; size?: number }) {

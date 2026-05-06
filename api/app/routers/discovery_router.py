@@ -6,7 +6,7 @@ Routes : découverte d'opportunités via composition d'ETF thématiques.
 """
 from fastapi import APIRouter, Query
 
-from app.services import etf_holdings, sec_edgar
+from app.services import etf_holdings, sec_edgar, finnhub_ticker, political_trades
 
 router = APIRouter(prefix="/discovery", tags=["discovery"])
 
@@ -146,3 +146,96 @@ async def cross_signals(
         "min_whales": min_whales,
         "candidates": enriched[:limit],
     }
+
+
+def _build_etf_signal(symbol: str, etf_index: dict) -> dict:
+    """ETF signal pour un ticker : présence dans les ETF thématiques."""
+    info = etf_index.get(symbol)
+    if not info:
+        return {"present": False, "etf_count": 0, "etfs": []}
+    return {
+        "present": True,
+        "etf_count": info["etf_count"],
+        "etfs": info["etfs"],
+        "avg_weight": info["avg_weight"],
+    }
+
+
+def _build_smart_money_signal(symbol: str, max_fund_positions: int = 60) -> dict:
+    """Smart money 13-F : holders concentrés + initiations."""
+    if "." in symbol or "-" in symbol[3:]:
+        return {"present": False, "concentrated_holders": 0, "initiated": 0, "highlights": []}
+    data = sec_edgar.get_whales_for_ticker(symbol)
+    holders = [
+        h for h in data["holders"]
+        if sec_edgar.is_concentrated_fund(h["fund_cik"], threshold=max_fund_positions)
+    ]
+    initiated = [h for h in holders if h.get("status") == "initiated"]
+    # Top 3 highlights par concentration de portefeuille
+    sorted_h = sorted(holders, key=lambda h: -h["position_pct"])
+    highlights = [
+        {
+            "fund_name": h["fund_name"],
+            "status": h.get("status"),
+            "position_pct": h["position_pct"],
+            "delta_pct": h.get("delta_pct"),
+        }
+        for h in sorted_h[:3]
+    ]
+    return {
+        "present": bool(holders),
+        "concentrated_holders": len(holders),
+        "initiated": len(initiated),
+        "highlights": highlights,
+    }
+
+
+def _build_insider_signal(symbol: str) -> dict:
+    """Insider top management : net achats / ventes 90j via Finnhub."""
+    if "." in symbol:
+        return {"present": False, "net_value_usd": 0, "buy_count": 0, "sell_count": 0}
+    transactions = finnhub_ticker.get_insider_transactions(symbol)
+    summary = finnhub_ticker.insider_summary(transactions)
+    # On compte achats/ventes en transactions (pas en shares) pour l'UI
+    buys = sum(1 for t in transactions if (t.get("change") or 0) > 0 and t.get("transactionCode") == "P")
+    sells = sum(1 for t in transactions if (t.get("change") or 0) < 0 and t.get("transactionCode") == "S")
+    return {
+        "present": summary["count"] > 0,
+        "net_value_usd": summary["net_value_usd"],
+        "buy_count": buys,
+        "sell_count": sells,
+        "transactions_count": summary["count"],
+    }
+
+
+@router.get("/signals")
+async def signals_batch(
+    tickers: str = Query(..., description="Liste de tickers séparés par virgule (ex: VRT,IREN,EOSE)"),
+    max_fund_positions: int = Query(default=60, ge=5, le=500),
+):
+    """
+    Enrichissement batch d'une liste de tickers avec 4 angles de validation :
+      1. ETF thématiques : présence dans AIQ/BOTZ/CHAT/SOXX/URNM/...
+      2. Smart money 13-F : fonds high-conviction qui détiennent (avec status initiated/increased)
+      3. Insider top management : net achats / ventes (90j via Finnhub)
+      4. Trades politiques : Pelosi & Co (STUB pour l'instant, source à brancher)
+
+    PRINCIPE : ces signaux annotent, ils ne filtrent JAMAIS. Une opportunité
+    sans aucun signal coché reste une opportunité valide — c'est juste qu'on
+    n'a pas d'information complémentaire dessus.
+
+    Format : { ticker: { etf, smart_money, insider, political } }
+    """
+    ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    # Pré-charge l'index ETF une fois (au lieu d'itérer 75 candidats × N tickers)
+    etf_index = {c["symbol"]: c for c in etf_holdings.get_unique_candidates()}
+
+    out: dict[str, dict] = {}
+    for sym in ticker_list:
+        out[sym] = {
+            "etf": _build_etf_signal(sym, etf_index),
+            "smart_money": _build_smart_money_signal(sym, max_fund_positions=max_fund_positions),
+            "insider": _build_insider_signal(sym),
+            "political": political_trades.get_political_trades_for_ticker(sym),
+        }
+    return out
