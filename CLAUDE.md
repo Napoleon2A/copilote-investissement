@@ -15,17 +15,19 @@ Le DataProvider Protocol est prêt pour brancher d'autres sources de données.
 
 ## Stack
 
-- **Backend** : Python 3.12 + FastAPI + SQLModel + SQLite (aiosqlite) + yfinance
+- **Backend** : Python 3.12 + FastAPI + SQLModel + SQLite (aiosqlite) + yfinance + httpx + BeautifulSoup + feedparser
 - **Frontend** : Next.js 15 (App Router) + TypeScript strict + Tailwind CSS
-- **Tests** : pytest (backend) — pas encore implémentés, priorité prochaine
+- **Tests** : pytest — 29 tests sur les helpers de validation multi-angles (api/tests/)
 - **Infra** : lancement local (uvicorn + npm run dev)
 - **Repo** : github.com/Napoleon2A/copilote-investissement
+- **Dépendances optionnelles à vérifier** : `feedparser` (RSS), `bs4` (scraping ETF). Au boot, `_check_optional_deps()` warn explicitement si manquantes.
 
 ## Architecture backend
 
-### Routers (13)
+### Routers (16)
 `companies`, `watchlist`, `portfolio`, `ideas`, `brief`, `scanner`, `chat`,
-`earnings`, `alerts`, `risk`, `analyst` + health/root
+`earnings`, `alerts`, `risk`, `analyst`, `news`, `finnhub_data`,
+`sec_edgar_router`, `discovery_router`, `earnings_trade_router` + health/root
 
 ### Services
 | Service | Rôle |
@@ -45,12 +47,19 @@ Le DataProvider Protocol est prêt pour brancher d'autres sources de données.
 | `llm_service.py` | Client Claude API avec hard-cap 3$/mois, BudgetTracker, logging tokens |
 | `investment_analyst.py` | Agent Warren Buffett : collecte multi-sources → prompt → Claude → thèse. Prompt clipboard gratuit |
 | `data_provider.py` | Interface Protocol pour futurs providers (IBKR) |
+| `etf_holdings.py` | Composition d'ETF thématiques (20 ETF AI/semi/uranium/DC). Cascade GlobalX CSV → stockanalysis.com → yfinance. ANCHOR_TICKERS pour les trous (VRT, etc.). Mapping ADR US (CCO CN→CCJ). |
+| `sec_edgar.py` | 13-F des 25 super-investisseurs. Throttle (semaphore 5 + 0.12s/req) pour éviter 429. Cache disque persistant. |
+| `finnhub_ticker.py` | Données par société : insider tx, recommandations, target price, profile, news. Cache disque. |
+| `finnhub_calendar.py` / `finnhub_economic.py` | Calendriers earnings + macro events. |
+| `political_trades.py` | STUB — sources gratuites bloquées 06/05/2026, plan dans memory/project_todo_political_trades. |
+| `_disk_cache.py` | Persistance pickle légère pour les caches process (sec_edgar, etf_holdings, finnhub_ticker). Flush périodique 60-300s. Évite les 30-90s "cache cold" au restart. |
+| `earnings_trade_service.py` | **Module Opérations CT** — workflow prompt clipboard pour trader les earnings. build_prompt → user→claude.ai → parse_response → DB. Aucune exécution auto. |
 
 ### Modèles DB (models.py)
 Company, Watchlist, WatchlistItem, Portfolio, Position, Transaction,
 InvestmentThesis, UserIdea, IdeaRevision, PriceSnapshot, Alert,
 SeenOpportunity, AnalysisLog, Prediction, InvestmentAnalysis,
-WeeklySelection, LLMUsageLog
+WeeklySelection, EarningsTrade, LLMUsageLog
 
 ### Données yfinance — clés snake_case
 `get_fundamentals()` retourne des clés snake_case (ex: `operating_margin`, `debt_to_equity`,
@@ -60,7 +69,9 @@ WeeklySelection, LLMUsageLog
 ## Architecture frontend
 
 ### Pages (app/)
-`/` (Brief), `/opportunities`, `/earnings`, `/alerts`, `/watchlist`,
+`/` (Brief), `/opportunities` (scanner + radar smart-money fusionnés, filtres),
+`/operations-ct` (earnings trades — workflow prompt clipboard),
+`/earnings`, `/alerts`, `/watchlist`,
 `/portfolio` (avec calculateur de risque), `/idea` (recherche + idée fusionnées),
 `/chat`, `/company/[ticker]`, `/analyst` (analyse deep + sélection hebdo)
 
@@ -149,13 +160,54 @@ Claude API (Sonnet) est utilisé pour les analyses deep — avec gardes-fous str
 Le système privilégie la génération de prompts à copier-coller dans claude.ai (gratuit avec
 l'abonnement) plutôt que l'API Claude payante. Le flux :
 
-1. L'utilisateur clique "Générer le prompt" sur la page Analyste
+1. L'utilisateur clique "Générer le prompt" sur la page Analyste / Opérations CT
 2. Le backend collecte 12+ sources gratuites (yfinance deep, Google News, SEC EDGAR, site corporate, macro)
 3. Un prompt de ~20k caractères est construit avec toutes les données + instructions pour Claude
 4. L'utilisateur copie → colle dans claude.ai → Claude analyse + complète avec ses propres recherches
-5. L'utilisateur colle la réponse dans la zone d'import → stockée en DB → affichée dans Brief + Analyste
+5. L'utilisateur colle la réponse dans la zone d'import → stockée en DB → affichée dans Brief + Analyste / Opérations CT
 
 L'option API (0.15$/analyse) reste disponible mais secondaire.
+
+Deux modules suivent ce pattern :
+- **investment_analyst.py** — analyses fondamentales deep (sélection hebdo)
+- **earnings_trade_service.py** — earnings trades court terme (Opérations CT)
+
+## Validation multi-angles (/discovery/signals)
+
+Pour chaque ticker, le système agrège 5 angles de validation indépendants
+(annotent, ne filtrent JAMAIS — cf. memory feedback_inform_dont_filter) :
+
+1. **ETF thématiques** — présence dans 20 ETF AI/semi/uranium/datacenter
+2. **Smart-money 13-F** — fonds high-conviction (≤30 positions, cf. feedback_fund_filter)
+   qui détiennent ou viennent d'initier
+3. **Insider top management** — net achats/ventes 90j, significativité calibrée
+   sur 5 bps du market cap (pas un seuil absolu trompeur cross-cap), pondération
+   exp-decay (demi-vie 30j) pour favoriser le récent
+4. **Consensus analystes** — Finnhub strong_buy, trend 6m (pp), upside vs target
+5. **Trades politiques** — STUB (sources gratuites bloquées, plan dans memory)
+
+Score agrégé `signal_strength` : addition pondérée documentée
+(ETF×0.5, sm_initiated×3, holders×0.7, insider buy ±2.5, sell -1.5, analyst SB×1.5, trend ±1.0)
+→ label `fort` (≥7) / `moyen` (≥3) / `faible` (>0) / `absent`.
+
+### Smart-money radar (/discovery/smart-money-radar)
+
+Canal de découverte **indépendant** du scanner momentum. Remonte les tickers
+où ≥ N fonds high-conviction ont **initié** ou **augmenté ≥ 50%** au dernier 13-F,
+même si le score scanner est faible (signal contrarian). Default seuil 40 positions
+(plus tolérant que cross-signals strict à 30, sinon vide en pratique).
+
+### Module Opérations CT (/operations-ct)
+
+Trade des publications de résultats : entrer avant earnings, sortir après le bump
+si Claude estime un beat probable. Workflow prompt clipboard intégral :
+1. `GET /earnings-trade/prompt` → mégaprompt assemblé (earnings 14j × portfolio + idées + opps)
+2. User colle dans claude.ai → réponse Markdown structurée par ticker
+3. `POST /earnings-trade/import` → parse + crée des EarningsTrade en DB
+4. `/operations-ct` affiche les trades pending/triggered avec target buy/sell/stop
+5. User marque Acheté/Vendu/Skip après exécution manuelle au broker
+
+**Aucune exécution automatique. Aucun appel API Claude payant.**
 
 ## Stratégie de découverte d'opportunités
 
