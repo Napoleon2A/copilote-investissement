@@ -77,7 +77,7 @@ export function LinkedNewsPanel({
 
       <p className="text-xs text-muted mb-3 leading-relaxed flex-shrink-0">
         Actualités RSS mentionnant les sociétés de votre <span className="font-semibold text-secondary">portefeuille</span>,
-        de vos <span className="font-semibold text-secondary">idées en suivi</span> ou des <span className="font-semibold text-secondary">picks du jour</span>.
+        de vos <span className="font-semibold text-secondary">idées en suivi</span> ou des <span className="font-semibold text-secondary">picks de la semaine</span>.
       </p>
 
       <div className="flex items-center gap-2 mb-3 flex-shrink-0">
@@ -93,7 +93,7 @@ export function LinkedNewsPanel({
           <option value="all">Tout ({counts.all})</option>
           <option value="portfolio">Portefeuille uniquement ({counts.portfolio})</option>
           <option value="ideas">Idées en suivi ({counts.ideas})</option>
-          <option value="picks">Picks du jour ({counts.picks})</option>
+          <option value="picks">Picks de la semaine ({counts.picks})</option>
         </select>
       </div>
 

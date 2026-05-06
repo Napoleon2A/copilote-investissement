@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { TickerBadge } from "@/components/ui/TickerBadge";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { getTickerMeta, SECTOR_COLORS, SECTOR_LABEL } from "@/lib/tickerMeta";
@@ -14,7 +14,6 @@ import {
   TickerSignals,
   SmartMoneyRadarResponse,
   SmartMoneyRadarItem,
-  SmartMoneyHighlight,
 } from "@/lib/api";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -27,6 +26,15 @@ interface OpportunitiesResponse {
   cache_age_minutes?: number;
   is_refreshing?: boolean;
   scanning?: boolean;
+}
+
+// Item unifié de la liste : provient du scanner, du radar smart-money, ou des deux
+type ItemSource = "scanner" | "radar" | "both";
+interface UnifiedItem {
+  ticker: string;
+  source: ItemSource;
+  scanner?: ScanOpportunity;
+  radar?: SmartMoneyRadarItem;
 }
 
 // Un scan complet doit toucher 67 tickers via yfinance (rate-limité). Empiriquement
@@ -125,15 +133,43 @@ export default function OpportunitiesPage() {
 
   const list: ScanOpportunity[] = opps?.opportunities ?? [];
 
-  // Enrichissement signaux (ETF, smart-money, insider) — chargement en
-  // arrière-plan, jamais bloquant pour l'affichage de la liste.
+  // Liste unifiée : opportunités scanner + items du radar smart-money qui ne
+  // sont pas déjà couverts par le scanner. Le radar étend la couverture vers
+  // des tickers qui passent sous le seuil momentum mais que des fonds high-
+  // conviction viennent d'initier (signal contrarian fort).
+  const unifiedList: UnifiedItem[] = useMemo(() => {
+    const out: UnifiedItem[] = list.map((o) => ({
+      ticker: o.ticker,
+      source: "scanner",
+      scanner: o,
+    }));
+    const seen = new Set(out.map((x) => x.ticker));
+    if (radar) {
+      for (const r of radar.radar) {
+        if (seen.has(r.symbol)) {
+          // Présent dans les deux → marquer la card existante
+          const existing = out.find((x) => x.ticker === r.symbol);
+          if (existing) {
+            existing.source = "both";
+            existing.radar = r;
+          }
+        } else {
+          out.push({ ticker: r.symbol, source: "radar", radar: r });
+          seen.add(r.symbol);
+        }
+      }
+    }
+    return out;
+  }, [list, radar]);
+
+  // Enrichissement signaux pour la liste unifiée.
   useEffect(() => {
-    if (list.length === 0) return;
-    const tickers = list.map((o) => o.ticker);
+    if (unifiedList.length === 0) return;
+    const tickers = unifiedList.map((o) => o.ticker);
     getDiscoverySignals(tickers)
       .then((d) => setSignals(d))
       .catch(() => setSignals({}));
-  }, [opps]);
+  }, [unifiedList]);
 
   return (
     <div className="space-y-5 pb-6">
@@ -147,10 +183,11 @@ export default function OpportunitiesPage() {
             </Link>
             <h1 className="text-2xl font-semibold tracking-[-0.02em] text-primary"
               style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-              Opportunités du jour
+              Opportunités de la semaine
             </h1>
             <p className="text-sm text-muted mt-1">
-              Scanner sur {opps?.universe_size ?? "67"} tickers · seuil score ≥ {opps?.min_score_applied ?? 6}
+              Scanner sur {opps?.universe_size ?? "67"} tickers (score ≥ {opps?.min_score_applied ?? 6}) +
+              radar smart-money (initiations 13-F par fonds high-conviction)
             </p>
           </div>
         </div>
@@ -189,20 +226,20 @@ export default function OpportunitiesPage() {
         </div>
       )}
 
-      {/* Liste des opportunités */}
-      {!opps?.scanning && list.length > 0 && (
+      {/* Liste unifiée scanner + radar */}
+      {!opps?.scanning && unifiedList.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {list.map((opp, i) => (
-            <OpportunityCard key={opp.ticker} opp={opp} rank={i + 1} signals={signals[opp.ticker]} />
+          {unifiedList.map((item, i) => (
+            <OpportunityCard key={item.ticker} item={item} rank={i + 1} signals={signals[item.ticker]} />
           ))}
         </div>
       )}
 
       {/* Empty state */}
-      {opps && !opps.scanning && list.length === 0 && (
+      {opps && !opps.scanning && unifiedList.length === 0 && (
         <div className="card-premium p-8 text-center">
           <p className="text-primary">Aucune opportunité détectée actuellement.</p>
-          <p className="text-sm text-muted mt-1">Les conditions de marché ne génèrent pas de signal au-dessus du seuil.</p>
+          <p className="text-sm text-muted mt-1">Ni le scanner momentum ni le radar smart-money 13-F ne remontent de signal.</p>
         </div>
       )}
 
@@ -214,36 +251,47 @@ export default function OpportunitiesPage() {
           ))}
         </div>
       )}
-
-      {/* Smart-money radar — canal indépendant des opportunités */}
-      <SmartMoneyRadarSection radar={radar} />
     </div>
   );
 }
 
 interface OpportunityCardProps {
-  opp: ScanOpportunity;
+  item: UnifiedItem;
   rank: number;
   signals?: TickerSignals;
 }
 
-function OpportunityCard({ opp, rank, signals }: OpportunityCardProps) {
-  const meta = getTickerMeta(opp.ticker);
+function OpportunityCard({ item, rank, signals }: OpportunityCardProps) {
+  const opp = item.scanner;
+  const radar = item.radar;
+  const ticker = item.ticker;
+  const meta = getTickerMeta(ticker);
   const sector = meta.sector;
   const sectorStyle = sector ? SECTOR_COLORS[sector] : null;
-  const change = opp.change_1d;
+  const change = opp?.change_1d;
   const isUp = (change ?? 0) >= 0;
-  const score = opp.scores?.composite;
-  const scoreColor = score >= 7.5 ? "text-emerald-600 dark:text-emerald-400 stroke-emerald-500"
+  const score = opp?.scores?.composite;
+  const scoreColor = score == null ? ""
+                  : score >= 7.5 ? "text-emerald-600 dark:text-emerald-400 stroke-emerald-500"
                   : score >= 6.5 ? "text-amber-600 dark:text-amber-400 stroke-amber-500"
                   :                "text-muted stroke-muted";
 
+  // Highlights : si scanner présent, ses highlights ; sinon dérivés du radar
+  const highlights: string[] = opp?.highlights?.length
+    ? opp.highlights.slice(0, 3)
+    : radar
+    ? buildRadarHighlights(radar)
+    : [];
+
+  const actionLabel = opp?.action_label
+    ?? (radar ? "Smart-money initiated" : "");
+
   return (
-    <Link href={`/company/${opp.ticker}`} className="block group">
+    <Link href={`/company/${ticker}`} className="block group">
       <div className="card-premium card-aura relative p-5 h-full flex flex-col">
-        {/* Header : rank + badges */}
+        {/* Header : rank + badges source */}
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[0.7rem] font-bold uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-400">
               #{rank}
             </span>
@@ -252,31 +300,32 @@ function OpportunityCard({ opp, rank, signals }: OpportunityCardProps) {
                 {SECTOR_LABEL[sector]}
               </span>
             )}
-            {opp.new_opportunity && (
+            {opp?.new_opportunity && (
               <span className="text-[0.625rem] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30">
                 Nouveau
               </span>
             )}
+            <SourceBadge source={item.source} />
           </div>
           {score != null && <ScoreGauge value={score} colorClass={scoreColor} size={48} />}
         </div>
 
         {/* Logo + nom */}
         <div className="flex items-center gap-3 mb-3">
-          <TickerBadge ticker={opp.ticker} size="lg" showName={false} />
+          <TickerBadge ticker={ticker} size="lg" showName={false} />
           <div className="min-w-0">
             <h3 className="text-lg font-bold text-primary leading-tight truncate"
               style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-              {meta.name}
+              {meta.name || radar?.name || ticker}
             </h3>
-            <p className="text-xs text-muted font-mono">{opp.ticker} · {opp.action_label}</p>
+            <p className="text-xs text-muted font-mono">{ticker}{actionLabel ? ` · ${actionLabel}` : ""}</p>
           </div>
         </div>
 
         {/* Highlights */}
-        {opp.highlights?.length > 0 && (
+        {highlights.length > 0 && (
           <ul className="space-y-1 mb-3 flex-1">
-            {opp.highlights.slice(0, 3).map((h: string, i: number) => (
+            {highlights.map((h, i) => (
               <li key={i} className="text-xs text-secondary leading-snug flex items-start gap-1.5">
                 <span className="text-emerald-600 dark:text-emerald-400 flex-shrink-0">▸</span>
                 <span className="line-clamp-2">{h}</span>
@@ -288,26 +337,58 @@ function OpportunityCard({ opp, rank, signals }: OpportunityCardProps) {
         {/* Signaux complémentaires (informatifs, non bloquants) */}
         <SignalBadges signals={signals} />
 
-        {/* Bottom : change + sparkline + upside */}
-        <div className="flex items-center justify-between gap-2 pt-3 border-t border-edge/40">
-          <div>
-            <p className="text-[0.625rem] uppercase tracking-widest text-muted">1 jour</p>
-            <p className={`text-sm font-bold font-mono ${isUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-              {isUp ? "+" : ""}{change?.toFixed(2)}%
-            </p>
-          </div>
-          <Sparkline ticker={opp.ticker} width={70} height={22} />
-          {opp.upside_vs_target != null && (
-            <div className="text-right">
-              <p className="text-[0.625rem] uppercase tracking-widest text-muted">Upside</p>
-              <p className={`text-sm font-bold font-mono ${opp.upside_vs_target >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                {opp.upside_vs_target > 0 ? "+" : ""}{opp.upside_vs_target.toFixed(0)}%
+        {/* Bottom : change + sparkline + upside (uniquement si scanner) */}
+        {opp ? (
+          <div className="flex items-center justify-between gap-2 pt-3 border-t border-edge/40">
+            <div>
+              <p className="text-[0.625rem] uppercase tracking-widest text-muted">1 jour</p>
+              <p className={`text-sm font-bold font-mono ${isUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                {isUp ? "+" : ""}{change?.toFixed(2)}%
               </p>
             </div>
-          )}
-        </div>
+            <Sparkline ticker={ticker} width={70} height={22} />
+            {opp.upside_vs_target != null && (
+              <div className="text-right">
+                <p className="text-[0.625rem] uppercase tracking-widest text-muted">Upside</p>
+                <p className={`text-sm font-bold font-mono ${opp.upside_vs_target >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                  {opp.upside_vs_target > 0 ? "+" : ""}{opp.upside_vs_target.toFixed(0)}%
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-2 pt-3 border-t border-edge/40">
+            <span className="text-[0.625rem] uppercase tracking-widest text-muted">Sparkline 1Y</span>
+            <Sparkline ticker={ticker} width={120} height={22} />
+          </div>
+        )}
       </div>
     </Link>
+  );
+}
+
+function buildRadarHighlights(r: SmartMoneyRadarItem): string[] {
+  return r.highlights.slice(0, 3).map((h) => {
+    const verb = h.status === "initiated" ? "ouvre" : "augmente";
+    const delta = h.delta_pct != null ? ` (Δ ${h.delta_pct >= 0 ? "+" : ""}${h.delta_pct.toFixed(0)}%)` : "";
+    const date = h.report_date ? ` · ${h.report_date}` : "";
+    return `${h.fund_name} ${verb} à ${h.position_pct?.toFixed(1)}% du book${delta}${date}`;
+  });
+}
+
+function SourceBadge({ source }: { source: ItemSource }) {
+  if (source === "scanner") return null;  // case par défaut, pas de badge
+  const label = source === "radar" ? "Smart-money" : "Smart-money +";
+  const tooltip = source === "radar"
+    ? "Détecté uniquement par le radar smart-money (initiation 13-F par fonds high-conviction)"
+    : "Détecté par le scanner ET le radar smart-money — double signal";
+  return (
+    <span
+      title={tooltip}
+      className="text-[0.625rem] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/30"
+    >
+      {label}
+    </span>
   );
 }
 
@@ -414,95 +495,6 @@ function SignalBadges({ signals }: { signals?: TickerSignals }) {
         </span>
       ))}
     </div>
-  );
-}
-
-// ─── Smart-money radar — section indépendante ──────────────────────────────
-
-function SmartMoneyRadarSection({ radar }: { radar?: SmartMoneyRadarResponse }) {
-  if (!radar) return null;
-  if (radar.radar.length === 0) {
-    return (
-      <div className="pt-8 mt-4 border-t border-edge/40">
-        <h2 className="text-lg font-semibold text-primary mb-1"
-          style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-          Radar smart-money
-        </h2>
-        <p className="text-xs text-muted mb-3">
-          Initiations & augmentations significatives par les fonds high-conviction (13-F).
-        </p>
-        <div className="card-premium p-6 text-center">
-          <p className="text-sm text-muted">
-            Aucun fonds high-conviction n'a initié de position récente sur les candidats ETF thématiques.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="pt-8 mt-4 border-t border-edge/40">
-      <div className="flex items-end justify-between gap-4 mb-3">
-        <div>
-          <h2 className="text-lg font-semibold text-primary"
-            style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-            Radar smart-money <span className="text-sm text-muted font-normal">— {radar.total} tickers détectés</span>
-          </h2>
-          <p className="text-xs text-muted">
-            Initiations & augmentations significatives par les fonds high-conviction (13-F),
-            indépendamment du score momentum classique. Seuil concentration ≤ {radar.max_fund_positions} positions.
-          </p>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-        {radar.radar.map((item) => (
-          <RadarCard key={item.symbol} item={item} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function RadarCard({ item }: { item: SmartMoneyRadarItem }) {
-  const meta = getTickerMeta(item.symbol);
-  return (
-    <Link href={`/company/${item.symbol}`} className="block">
-      <div className="card-premium p-4 h-full flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 min-w-0">
-            <TickerBadge ticker={item.symbol} size="md" showName={false} />
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-primary truncate">{meta.name || item.name}</p>
-              <p className="text-[0.65rem] text-muted font-mono">{item.symbol}</p>
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-0.5">
-            {item.initiated_count > 0 && (
-              <span className="text-[0.625rem] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
-                {item.initiated_count} initiated
-              </span>
-            )}
-            {item.increased_count > 0 && (
-              <span className="text-[0.625rem] font-semibold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30">
-                {item.increased_count} increased
-              </span>
-            )}
-          </div>
-        </div>
-        <ul className="space-y-0.5 text-[0.7rem] text-secondary">
-          {item.highlights.slice(0, 3).map((h, i) => (
-            <li key={i} className="truncate">
-              <span className="font-medium">{h.fund_name}</span>{" "}
-              <span className="text-muted">
-                {h.position_pct?.toFixed(1)}%
-                {h.delta_pct != null && ` (Δ ${h.delta_pct >= 0 ? "+" : ""}${h.delta_pct.toFixed(0)}%)`}
-                {h.report_date && ` · ${h.report_date}`}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </Link>
   );
 }
 

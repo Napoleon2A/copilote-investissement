@@ -159,7 +159,7 @@ export default function HomePage() {
         loading={brief === undefined}
       />
 
-      {/* Pick du jour — descendu juste sous le bandeau (côté gauche) ↔ Actualité macro (côté droit) */}
+      {/* Picks de la semaine — descendu juste sous le bandeau (côté gauche) ↔ Actualité macro (côté droit) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:h-[460px]">
         <div className="min-h-0">
           <PicksHero picks={topPicks} loading={opps === undefined} scanning={opps?.scanning} />

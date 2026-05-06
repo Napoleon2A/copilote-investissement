@@ -16,7 +16,7 @@ export function PicksHero({ picks, loading, scanning }: PicksHeroProps) {
   if (loading || scanning) {
     return (
       <div>
-        <SectionTitle title="Picks du jour" subtitle={scanning ? "Scan en cours · ~60s" : "Chargement..."} />
+        <SectionTitle title="Picks de la semaine" subtitle={scanning ? "Scan en cours · ~60s" : "Chargement..."} />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {[1, 2, 3].map((i) => <div key={i} className="rounded-xl border border-edge bg-surface h-24 animate-pulse" />)}
         </div>
@@ -27,7 +27,7 @@ export function PicksHero({ picks, loading, scanning }: PicksHeroProps) {
 
   return (
     <div>
-      <SectionTitle title="Picks du jour" subtitle={`Top ${picks.length} opportunités sélectionnées par le scanner`} />
+      <SectionTitle title="Picks de la semaine" subtitle={`Top ${picks.length} opportunités sélectionnées par le scanner`} />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {picks.map((p, i) => <CompactPick key={p.ticker} pick={p} rank={i + 1} />)}
       </div>

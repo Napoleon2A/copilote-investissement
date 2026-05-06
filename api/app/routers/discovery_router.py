@@ -20,14 +20,39 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/discovery", tags=["discovery"])
 
-# Top 30 S&P 500 — par convention détenus par tout fonds liquide. Exclus par
-# défaut pour focaliser sur les small/mid caps thématiques (vraies découvertes).
-MEGA_CAPS = {
+# Mégacaps statiques — fallback rapide si Finnhub indispo. La liste se périme
+# (TSM/LLY pas dedans alors qu'ils dépassent 800B$). On combine avec un check
+# dynamique market cap > MEGA_CAP_THRESHOLD via Finnhub.
+MEGA_CAPS_STATIC = {
     "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "NVDA", "META", "BRK-B",
     "TSLA", "AVGO", "JPM", "V", "MA", "JNJ", "WMT", "PG", "UNH", "XOM",
     "ORCL", "COST", "HD", "BAC", "MRK", "ABBV", "KO", "NFLX", "CRM",
     "PEP", "TMO", "AMD",
 }
+
+# Seuil dynamique : 200B$ de market cap = mégacap. Au-dessus, le ticker est
+# détenu par tout fonds liquide → la présence dans un 13-F ne porte plus
+# d'information thématique spécifique.
+MEGA_CAP_THRESHOLD_USD = 200_000_000_000
+
+
+def is_mega_cap(symbol: str) -> bool:
+    """
+    True si le ticker est une mégacap. Combine la liste statique (rapide,
+    fonctionne offline) et un check dynamique via Finnhub get_profile (cache 7j).
+
+    Le fallback statique évite que la liste se périme : un ticker au-dessus du
+    seuil sera détecté même s'il n'est pas dans MEGA_CAPS_STATIC.
+    """
+    if symbol in MEGA_CAPS_STATIC:
+        return True
+    profile = finnhub_ticker.get_profile(symbol) or {}
+    market_cap_musd = profile.get("marketCapitalization") or 0
+    return (market_cap_musd * 1_000_000) >= MEGA_CAP_THRESHOLD_USD
+
+
+# Conservé pour rétrocompatibilité (anciens tests/imports). Préférer is_mega_cap.
+MEGA_CAPS = MEGA_CAPS_STATIC
 
 # Default ultra-strict : ne garde que des fonds high-conviction (Pershing, Akre,
 # Klarman, Tepper, Lone Pine, Berkshire). Cohérent avec la doctrine produit :
@@ -134,7 +159,7 @@ async def cross_signals(
     candidates = etf_holdings.get_unique_candidates()
     candidates = [c for c in candidates if c["etf_count"] >= min_etf_count]
     if exclude_mega:
-        candidates = [c for c in candidates if c["symbol"] not in MEGA_CAPS]
+        candidates = [c for c in candidates if not is_mega_cap(c["symbol"])]
 
     enriched = []
     for c in candidates:
@@ -456,7 +481,7 @@ async def smart_money_radar(
     # de tous les fonds. Ça aligne le radar avec ta thèse (chaîne IA).
     candidates = etf_holdings.get_unique_candidates()
     if exclude_mega:
-        candidates = [c for c in candidates if c["symbol"] not in MEGA_CAPS]
+        candidates = [c for c in candidates if not is_mega_cap(c["symbol"])]
 
     def _scan(sym: str, name: str) -> Optional[dict]:
         if _is_foreign_listing(sym):

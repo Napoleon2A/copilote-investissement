@@ -31,6 +31,32 @@ import httpx
 # toujours cette source quand elle existe : c'est la référence légale.
 GLOBALX_ETFS = {"AIQ", "BOTZ", "URA"}
 
+# Mapping listing primaire étranger → ADR US équivalent (pour récupérer la
+# couverture 13-F SEC quand le CSV ETF expose le primary listing). Liste
+# extensible — n'inclure qu'un mapping si l'ADR US est suffisamment liquide
+# (CCJ ✓, KAP ✓ Kazatomprom ADR NASDAQ). Samsung 005930 KS n'a pas d'ADR US
+# liquide (SSNLF est OTC pink, exclu).
+FOREIGN_TO_US_ADR: dict[str, str] = {
+    "CCO CN":   "CCJ",   # Cameco Toronto → ADR NYSE
+    "NXE CN":   "NXE",   # NexGen Energy → US listing existe
+    "DML CN":   "DNN",   # Denison Mines → ADR
+    "KAP LI":   "KAP",   # Kazatomprom GDR LSE → ADR US existe (NYSE)
+    "FCU CN":   "FCUUF", # Fission Uranium OTC US (illiquide mais existe)
+}
+
+# Tickers AI value chain qu'on veut capturer dans le radar smart-money même
+# s'ils ne sont dans aucun ETF thématique (cas VRT : Vertiv, reclassé "AI infra"
+# récemment, présent uniquement dans XLI/VIS génériques qu'on ne veut pas
+# inclure pour éviter le bruit). Liste maintenue à la main, à étendre si on
+# détecte d'autres trous.
+AI_ANCHOR_TICKERS: dict[str, str] = {
+    "VRT":  "Vertiv Holdings",
+    "ETN":  "Eaton",
+    "PWR":  "Quanta Services",
+    "MYRG": "MYR Group",
+    "FLNC": "Fluence Energy",
+}
+
 logger = logging.getLogger(__name__)
 
 # ETF thématiques cibles — couvrent la chaîne de valeur IA.
@@ -134,12 +160,18 @@ def _fetch_globalx_csv(etf_ticker: str) -> list[dict]:
                 weight_pct = float(row[0])
             except ValueError:
                 continue
-            ticker = row[1].strip().upper()
-            # Skip listings non-US (espace dans le ticker = code marché étranger
-            # type "000660 KS"). Les 13-F SEC ne couvrent pas ces titres.
-            if " " in ticker or not ticker:
-                continue
-            if ticker in seen:
+            raw_ticker = row[1].strip().upper()
+            # Si le ticker est un primary listing étranger ("CCO CN", "KAP LI",
+            # "000660 KS"...), on tente un mapping vers son ADR US. Si pas de
+            # mapping, on skip (les 13-F SEC ne couvrent pas).
+            if " " in raw_ticker:
+                mapped = FOREIGN_TO_US_ADR.get(raw_ticker)
+                if not mapped:
+                    continue
+                ticker = mapped
+            else:
+                ticker = raw_ticker
+            if not ticker or ticker in seen:
                 continue
             seen.add(ticker)
             name = row[2].strip()
@@ -282,13 +314,17 @@ def get_themed_universe(etfs: Optional[list[str]] = None) -> dict[str, list[dict
     return {etf: get_etf_holdings(etf) for etf in target}
 
 
-def get_unique_candidates(etfs: Optional[list[str]] = None) -> list[dict]:
+def get_unique_candidates(etfs: Optional[list[str]] = None, include_anchors: bool = True) -> list[dict]:
     """
     Agrège tous les holdings uniques des ETF cibles avec compteur de présence.
 
     Si un ticker apparaît dans plusieurs ETF (ex: NVDA dans AIQ + SOXX + CHAT),
     c'est un signal fort de pertinence thématique. On retourne la liste triée
     par nombre d'ETF où le ticker apparaît (descendant) puis par poids moyen.
+
+    Si `include_anchors=True` (default), on injecte aussi AI_ANCHOR_TICKERS
+    avec etf_count=0 — pour que des tickers thèse-IA non couverts par les ETF
+    thématiques (ex: VRT) soient quand même candidats au radar smart-money.
 
     Format : [{"symbol": "NVDA", "name": "...", "etf_count": 3, "etfs": ["AIQ","SOXX","CHAT"], "avg_weight": 0.05}, ...]
     """
@@ -306,6 +342,11 @@ def get_unique_candidates(etfs: Optional[list[str]] = None) -> list[dict]:
                 }
             aggregated[sym]["etfs"].append(etf)
             aggregated[sym]["weights"].append(h["weight"])
+
+    if include_anchors:
+        for sym, name in AI_ANCHOR_TICKERS.items():
+            if sym not in aggregated:
+                aggregated[sym] = {"symbol": sym, "name": name, "etfs": [], "weights": []}
 
     candidates = []
     for sym, data in aggregated.items():
