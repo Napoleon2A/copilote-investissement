@@ -1,53 +1,138 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TickerBadge } from "@/components/ui/TickerBadge";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { getTickerMeta, SECTOR_COLORS, SECTOR_LABEL } from "@/lib/tickerMeta";
+import {
+  getScanOpportunities,
+  getDiscoverySignals,
+  getSmartMoneyRadar,
+  getScannerStatus,
+  ScanOpportunity,
+  TickerSignals,
+  SmartMoneyRadarResponse,
+  SmartMoneyRadarItem,
+  SmartMoneyHighlight,
+} from "@/lib/api";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-async function fetchJSON<T>(url: string): Promise<T | null> {
-  try {
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) return null;
-    return res.json();
-  } catch { return null; }
+interface OpportunitiesResponse {
+  count: number;
+  opportunities: ScanOpportunity[];
+  universe_size?: number;
+  min_score_applied?: number;
+  cache_age_minutes?: number;
+  is_refreshing?: boolean;
+  scanning?: boolean;
 }
 
+// Un scan complet doit toucher 67 tickers via yfinance (rate-limité). Empiriquement
+// > 30s. Si le scan finit en moins de ce seuil, signaler à l'utilisateur que
+// les résultats sont probablement servis de cache et ne reflètent pas un
+// vrai re-scan.
+const SUSPICIOUS_FAST_SCAN_SECONDS = 20;
+const SCAN_POLL_INTERVAL_MS = 2000;
+const SCAN_POLL_MAX_MS = 180_000;
+
 export default function OpportunitiesPage() {
-  const [opps, setOpps] = useState<any>(undefined);
-  const [signals, setSignals] = useState<Record<string, any>>({});
+  const [opps, setOpps] = useState<OpportunitiesResponse | undefined>(undefined);
+  const [signals, setSignals] = useState<Record<string, TickerSignals>>({});
+  const [radar, setRadar] = useState<SmartMoneyRadarResponse | undefined>(undefined);
   const [refreshing, setRefreshing] = useState(false);
+  const [scanElapsed, setScanElapsed] = useState(0);
+  const [lastScanWarning, setLastScanWarning] = useState<string | null>(null);
+  const pollAbort = useRef<{ stop: boolean }>({ stop: false });
 
   const load = async () => {
     setOpps(undefined);
     setSignals({});
-    const d = await fetchJSON<any>(`${API}/scanner/opportunities?max_results=15`);
-    setOpps(d);
+    try {
+      const d = await getScanOpportunities(15);
+      setOpps(d as OpportunitiesResponse);
+    } catch {
+      setOpps({ count: 0, opportunities: [] });
+    }
+  };
+
+  const loadRadar = async () => {
+    try {
+      const r = await getSmartMoneyRadar({ minFunds: 1, limit: 15 });
+      setRadar(r);
+    } catch {
+      setRadar(undefined);
+    }
+  };
+
+  // Polling propre du status scanner pendant un refresh
+  const pollUntilDone = async (startedAt: Date) => {
+    pollAbort.current.stop = false;
+    const start = Date.now();
+    while (!pollAbort.current.stop) {
+      if (Date.now() - start > SCAN_POLL_MAX_MS) {
+        setLastScanWarning("Scan trop long (>3min), affichage du dernier cache disponible.");
+        break;
+      }
+      await new Promise((r) => setTimeout(r, SCAN_POLL_INTERVAL_MS));
+      setScanElapsed(Math.round((Date.now() - start) / 1000));
+      try {
+        const s = await getScannerStatus();
+        if (!s.is_refreshing) {
+          // Garde-fou qualité : un scan déclenché qui se termine en quelques
+          // secondes est suspect (cache servi sans re-scan réel).
+          const elapsed = Math.round((Date.now() - start) / 1000);
+          if (elapsed < SUSPICIOUS_FAST_SCAN_SECONDS) {
+            setLastScanWarning(
+              `Scan terminé en ${elapsed}s — durée anormalement courte pour un scan ` +
+              `complet (${s.universe_size} tickers). Résultats probablement servis ` +
+              `depuis cache, vérifier la fraîcheur.`
+            );
+          } else {
+            setLastScanWarning(null);
+          }
+          break;
+        }
+      } catch {
+        // Erreur transitoire, on continue le poll
+      }
+    }
   };
 
   const refresh = async () => {
     setRefreshing(true);
-    await fetch(`${API}/scanner/refresh`, { method: "POST" });
-    setTimeout(async () => {
-      await load();
+    setScanElapsed(0);
+    setLastScanWarning(null);
+    const startedAt = new Date();
+    try {
+      await fetch(`${API}/scanner/refresh`, { method: "POST" });
+      await pollUntilDone(startedAt);
+    } finally {
+      await Promise.all([load(), loadRadar()]);
       setRefreshing(false);
-    }, 60000);  // attend 60s pour le re-scan
+      setScanElapsed(0);
+    }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    loadRadar();
+    return () => {
+      pollAbort.current.stop = true;
+    };
+  }, []);
 
-  const list: any[] = opps?.opportunities ?? [];
+  const list: ScanOpportunity[] = opps?.opportunities ?? [];
 
   // Enrichissement signaux (ETF, smart-money, insider) — chargement en
   // arrière-plan, jamais bloquant pour l'affichage de la liste.
   useEffect(() => {
     if (list.length === 0) return;
-    const tickers = list.map((o: any) => o.ticker).join(",");
-    fetchJSON<Record<string, any>>(`${API}/discovery/signals?tickers=${encodeURIComponent(tickers)}`)
-      .then(d => { if (d) setSignals(d); });
+    const tickers = list.map((o) => o.ticker);
+    getDiscoverySignals(tickers)
+      .then((d) => setSignals(d))
+      .catch(() => setSignals({}));
   }, [opps]);
 
   return (
@@ -70,27 +155,37 @@ export default function OpportunitiesPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {opps?.cache_age_minutes != null && (
+          {opps?.cache_age_minutes != null && !refreshing && (
             <span className="text-xs text-muted">
               Cache : {opps.cache_age_minutes < 1 ? "< 1 min" : `${Math.round(opps.cache_age_minutes)} min`}
             </span>
           )}
+          {refreshing && (
+            <span className="text-xs text-muted font-mono">Scan en cours · {scanElapsed}s</span>
+          )}
           <button
             onClick={refresh}
-            disabled={refreshing || opps?.is_refreshing}
+            disabled={refreshing}
             className="text-xs font-medium px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {refreshing || opps?.is_refreshing ? "Scan en cours..." : "↻ Relancer le scan"}
+            {refreshing ? `Scan en cours... (${scanElapsed}s)` : "↻ Relancer le scan"}
           </button>
         </div>
       </div>
+
+      {/* Warning scan suspect */}
+      {lastScanWarning && (
+        <div className="card-premium p-3 border-l-4 border-amber-500 bg-amber-500/5">
+          <p className="text-xs text-amber-700 dark:text-amber-400">{lastScanWarning}</p>
+        </div>
+      )}
 
       {/* État scan en cours */}
       {opps?.scanning && (
         <div className="card-premium p-8 text-center">
           <div className="text-4xl mb-3">🔍</div>
           <p className="text-primary font-medium">Premier scan en cours</p>
-          <p className="text-sm text-muted mt-1">~60 secondes — analyse de 67 tickers en parallèle</p>
+          <p className="text-sm text-muted mt-1">~30-60 secondes — analyse de {opps.universe_size ?? 67} tickers en parallèle</p>
         </div>
       )}
 
@@ -119,11 +214,20 @@ export default function OpportunitiesPage() {
           ))}
         </div>
       )}
+
+      {/* Smart-money radar — canal indépendant des opportunités */}
+      <SmartMoneyRadarSection radar={radar} />
     </div>
   );
 }
 
-function OpportunityCard({ opp, rank, signals }: { opp: any; rank: number; signals?: any }) {
+interface OpportunityCardProps {
+  opp: ScanOpportunity;
+  rank: number;
+  signals?: TickerSignals;
+}
+
+function OpportunityCard({ opp, rank, signals }: OpportunityCardProps) {
   const meta = getTickerMeta(opp.ticker);
   const sector = meta.sector;
   const sectorStyle = sector ? SECTOR_COLORS[sector] : null;
@@ -207,77 +311,91 @@ function OpportunityCard({ opp, rank, signals }: { opp: any; rank: number; signa
   );
 }
 
-/**
- * Badges informatifs : ETF thématiques, smart money 13-F, insider trading.
- * Ne masquent JAMAIS la card si absents — c'est un complément, pas un filtre.
- */
-function SignalBadges({ signals }: { signals?: any }) {
+type Tone = "info" | "bull" | "bear" | "warn";
+interface BadgeSpec {
+  label: string;
+  tooltip: string;
+  tone: Tone;
+}
+
+function SignalBadges({ signals }: { signals?: TickerSignals }) {
   if (!signals) return null;
 
-  const badges: Array<{ label: string; tooltip: string; tone: "info" | "bull" | "bear" | "warn" }> = [];
+  const badges: BadgeSpec[] = [];
 
-  // ETF thématique
-  if (signals.etf?.present) {
+  if (signals.etf.present) {
     badges.push({
       label: `ETF×${signals.etf.etf_count}`,
-      tooltip: `Présent dans : ${(signals.etf.etfs || []).join(", ")}`,
+      tooltip: `Présent dans : ${signals.etf.etfs.join(", ")}`,
       tone: "info",
     });
   }
 
-  // Smart money — initiated en priorité (signal le plus fort)
-  if (signals.smart_money?.initiated > 0) {
-    const initFunds = (signals.smart_money.highlights || [])
-      .filter((h: any) => h.status === "initiated")
-      .map((h: any) => h.fund_name)
+  // Smart money — tooltip enrichi avec date du 13-F (fraîcheur du signal)
+  const sm = signals.smart_money;
+  const freshness = sm.latest_filing_date
+    ? ` · 13-F filé le ${sm.latest_filing_date}` +
+      (sm.freshness_days != null ? ` (${sm.freshness_days}j)` : "")
+    : "";
+
+  if (sm.initiated > 0) {
+    const initFunds = sm.highlights
+      .filter((h) => h.status === "initiated")
+      .map((h) => h.fund_name)
       .join(", ");
     badges.push({
-      label: `${signals.smart_money.initiated} fonds initiated`,
-      tooltip: `Vient d'ouvrir une position : ${initFunds || "fonds high-conviction"}`,
+      label: `${sm.initiated} fonds initiated`,
+      tooltip: `Vient d'ouvrir : ${initFunds || "fonds high-conviction"}${freshness}`,
       tone: "bull",
     });
-  } else if (signals.smart_money?.concentrated_holders > 0) {
-    const top = signals.smart_money.highlights?.[0];
+  } else if (sm.concentrated_holders > 0) {
+    const top = sm.highlights[0];
     const tooltip = top
-      ? `${top.fund_name} ${top.position_pct?.toFixed(1)}% du book${top.delta_pct != null ? ` (Δ ${top.delta_pct >= 0 ? "+" : ""}${top.delta_pct.toFixed(0)}%)` : ""}`
+      ? `${top.fund_name} ${top.position_pct?.toFixed(1)}% du book` +
+        (top.delta_pct != null ? ` (Δ ${top.delta_pct >= 0 ? "+" : ""}${top.delta_pct.toFixed(0)}%)` : "") +
+        freshness
       : "";
     badges.push({
-      label: `${signals.smart_money.concentrated_holders} fonds`,
+      label: `${sm.concentrated_holders} fonds`,
       tooltip,
       tone: "info",
     });
   }
 
-  // Insider top management — net signé
-  if (signals.insider?.present) {
-    const net = signals.insider.net_value_usd ?? 0;
-    if (net > 100_000) {
-      badges.push({
-        label: `Insider +$${formatM(net)}`,
-        tooltip: `${signals.insider.buy_count} achat(s), ${signals.insider.sell_count} vente(s) sur 90j`,
-        tone: "bull",
-      });
-    } else if (net < -100_000) {
-      badges.push({
-        label: `Insider -$${formatM(Math.abs(net))}`,
-        tooltip: `${signals.insider.buy_count} achat(s), ${signals.insider.sell_count} vente(s) sur 90j`,
-        tone: "bear",
-      });
-    }
+  if (signals.insider.present && signals.insider.is_significant) {
+    const ins = signals.insider;
+    const net = ins.net_value_usd;
+    const sign = net >= 0 ? "+" : "-";
+    const pctMcap =
+      ins.net_pct_market_cap_bps != null
+        ? ` · ${(ins.net_pct_market_cap_bps / 100).toFixed(2)}% market cap`
+        : "";
+    const recency = ins.latest_transaction_date
+      ? ` · dernier ${ins.latest_transaction_date}`
+      : "";
+    const breakdown =
+      `${ins.buy_count} achat(s) ` +
+      (ins.buy_value_usd > 0 ? `($${formatM(ins.buy_value_usd)}) ` : "") +
+      `vs ${ins.sell_count} vente(s)` +
+      (ins.sell_value_usd > 0 ? ` ($${formatM(ins.sell_value_usd)})` : "");
+    badges.push({
+      label: `Insider ${sign}$${formatM(Math.abs(net))}`,
+      tooltip: `Net 90j${pctMcap}${recency} — ${breakdown}`,
+      tone: net >= 0 ? "bull" : "bear",
+    });
   }
 
-  // Politique : signal stub pour l'instant — affiché uniquement si source branchée
-  if (signals.political?.source_available && signals.political?.count > 0) {
+  if (signals.political.source_available && signals.political.count > 0) {
     badges.push({
       label: `${signals.political.count} trade pol.`,
-      tooltip: (signals.political.highlights || []).map((h: any) => `${h.name}: ${h.transaction}`).join(" | "),
+      tooltip: signals.political.highlights.map((h) => `${h.name}: ${h.transaction}`).join(" | "),
       tone: "warn",
     });
   }
 
   if (badges.length === 0) return null;
 
-  const toneClass: Record<string, string> = {
+  const toneClass: Record<Tone, string> = {
     info: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30",
     bull: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
     bear: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30",
@@ -296,6 +414,95 @@ function SignalBadges({ signals }: { signals?: any }) {
         </span>
       ))}
     </div>
+  );
+}
+
+// ─── Smart-money radar — section indépendante ──────────────────────────────
+
+function SmartMoneyRadarSection({ radar }: { radar?: SmartMoneyRadarResponse }) {
+  if (!radar) return null;
+  if (radar.radar.length === 0) {
+    return (
+      <div className="pt-8 mt-4 border-t border-edge/40">
+        <h2 className="text-lg font-semibold text-primary mb-1"
+          style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+          Radar smart-money
+        </h2>
+        <p className="text-xs text-muted mb-3">
+          Initiations & augmentations significatives par les fonds high-conviction (13-F).
+        </p>
+        <div className="card-premium p-6 text-center">
+          <p className="text-sm text-muted">
+            Aucun fonds high-conviction n'a initié de position récente sur les candidats ETF thématiques.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pt-8 mt-4 border-t border-edge/40">
+      <div className="flex items-end justify-between gap-4 mb-3">
+        <div>
+          <h2 className="text-lg font-semibold text-primary"
+            style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+            Radar smart-money <span className="text-sm text-muted font-normal">— {radar.total} tickers détectés</span>
+          </h2>
+          <p className="text-xs text-muted">
+            Initiations & augmentations significatives par les fonds high-conviction (13-F),
+            indépendamment du score momentum classique. Seuil concentration ≤ {radar.max_fund_positions} positions.
+          </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {radar.radar.map((item) => (
+          <RadarCard key={item.symbol} item={item} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RadarCard({ item }: { item: SmartMoneyRadarItem }) {
+  const meta = getTickerMeta(item.symbol);
+  return (
+    <Link href={`/company/${item.symbol}`} className="block">
+      <div className="card-premium p-4 h-full flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <TickerBadge ticker={item.symbol} size="md" showName={false} />
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-primary truncate">{meta.name || item.name}</p>
+              <p className="text-[0.65rem] text-muted font-mono">{item.symbol}</p>
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-0.5">
+            {item.initiated_count > 0 && (
+              <span className="text-[0.625rem] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                {item.initiated_count} initiated
+              </span>
+            )}
+            {item.increased_count > 0 && (
+              <span className="text-[0.625rem] font-semibold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30">
+                {item.increased_count} increased
+              </span>
+            )}
+          </div>
+        </div>
+        <ul className="space-y-0.5 text-[0.7rem] text-secondary">
+          {item.highlights.slice(0, 3).map((h, i) => (
+            <li key={i} className="truncate">
+              <span className="font-medium">{h.fund_name}</span>{" "}
+              <span className="text-muted">
+                {h.position_pct?.toFixed(1)}%
+                {h.delta_pct != null && ` (Δ ${h.delta_pct >= 0 ? "+" : ""}${h.delta_pct.toFixed(0)}%)`}
+                {h.report_date && ` · ${h.report_date}`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </Link>
   );
 }
 

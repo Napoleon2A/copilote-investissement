@@ -99,6 +99,29 @@ async def get_opportunities(
     }
 
 
+@router.get("/status")
+async def scanner_status():
+    """
+    État léger du scanner pour polling frontend (pas besoin de DB session).
+    Permet au bouton "Relancer" de remplacer un setTimeout 60s rigide par un
+    poll qui sait vraiment quand le scan est terminé.
+    """
+    cache = get_cached_opportunities()
+    computed_at = cache["computed_at"]
+    is_running = cache["is_running"]
+    return {
+        "is_refreshing": is_running,
+        "has_results": cache["opportunities"] is not None,
+        "count": len(cache["opportunities"]) if cache["opportunities"] is not None else 0,
+        "computed_at": computed_at.isoformat() if computed_at else None,
+        "cache_age_seconds": (
+            int((datetime.utcnow() - computed_at).total_seconds())
+            if computed_at else None
+        ),
+        "universe_size": sum(len(v) for v in SCAN_UNIVERSE.values()),
+    }
+
+
 @router.post("/refresh")
 async def refresh_opportunities(
     max_results: int = Query(default=10, ge=1, le=20),

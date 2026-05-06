@@ -216,6 +216,114 @@ export const getScanOpportunities = (maxResults = 10) =>
 
 export const getMacroScan = () => request<MacroScan>("/scanner/macro");
 
+// ── Discovery signals (validation multi-angles) ───────────────────────────────
+
+export interface EtfSignal {
+  present: boolean;
+  etf_count: number;
+  etfs: string[];
+  avg_weight?: number;
+}
+
+export interface SmartMoneyHighlight {
+  fund_name: string;
+  status?: "initiated" | "increased" | "decreased" | "exited" | string | null;
+  position_pct: number;
+  delta_pct?: number | null;
+  report_date?: string | null;
+  filing_date?: string | null;
+}
+
+export interface SmartMoneySignal {
+  present: boolean;
+  concentrated_holders: number;
+  initiated: number;
+  highlights: SmartMoneyHighlight[];
+  latest_report_date?: string | null;
+  latest_filing_date?: string | null;
+  freshness_days?: number | null;
+  error?: string;
+}
+
+export interface InsiderSignal {
+  present: boolean;
+  net_value_usd: number;
+  net_value_weighted_usd?: number;
+  buy_value_usd: number;
+  sell_value_usd: number;
+  buy_count: number;
+  sell_count: number;
+  transactions_count: number;
+  net_pct_market_cap_bps: number | null;
+  is_significant: boolean;
+  latest_transaction_date?: string | null;
+  error?: string;
+}
+
+export interface PoliticalSignal {
+  ticker: string;
+  count: number;
+  buy_count: number;
+  sell_count: number;
+  highlights: { name: string; transaction: string; amount_range?: string; date?: string }[];
+  source_available: boolean;
+}
+
+export interface TickerSignals {
+  etf: EtfSignal;
+  smart_money: SmartMoneySignal;
+  insider: InsiderSignal;
+  political: PoliticalSignal;
+}
+
+export const getDiscoverySignals = (tickers: string[]) =>
+  request<Record<string, TickerSignals>>(
+    `/discovery/signals?tickers=${encodeURIComponent(tickers.join(","))}`
+  );
+
+// Smart-money radar — opportunités issues directement des 13-F (initiations
+// récentes par fonds high-conviction). Canal de découverte indépendant du
+// scanner momentum classique.
+export interface SmartMoneyRadarItem {
+  symbol: string;
+  name: string;
+  initiated_count: number;
+  increased_count: number;
+  bullish_count: number;
+  concentrated_holders: number;
+  highlights: SmartMoneyHighlight[];
+  score: number;
+}
+
+export interface SmartMoneyRadarResponse {
+  total: number;
+  limit: number;
+  min_funds: number;
+  max_fund_positions: number;
+  duration_seconds: number;
+  radar: SmartMoneyRadarItem[];
+}
+
+export const getSmartMoneyRadar = (params?: { minFunds?: number; limit?: number }) => {
+  const qs = new URLSearchParams();
+  if (params?.minFunds) qs.set("min_funds", String(params.minFunds));
+  if (params?.limit) qs.set("limit", String(params.limit));
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return request<SmartMoneyRadarResponse>(`/discovery/smart-money-radar${suffix}`);
+};
+
+// Scanner status — endpoint léger pour polling pendant un refresh
+export interface ScannerStatus {
+  is_refreshing: boolean;
+  has_results: boolean;
+  count: number;
+  computed_at: string | null;
+  cache_age_seconds: number | null;
+  universe_size: number;
+}
+
+export const getScannerStatus = () => request<ScannerStatus>("/scanner/status");
+
 // ── Ideas ─────────────────────────────────────────────────────────────────────
 
 export const getIdeas = () => request<IdeaSummary[]>("/ideas");
